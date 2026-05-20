@@ -1,0 +1,28 @@
+[system]
+name = "MAGNATRIX Agentic OS"
+version = "0.1.0"
+mode = "local" # local | hybrid | cloud
+uncensored = true
+
+[collective_brain]
+enabled = true
+hermes = { endpoint = "grpc://localhost:50051", weight = 1.0 }
+kimi_claw = { endpoint = "grpc://localhost:50052", weight = 1.0 }
+openclaw = { endpoint = "grpc://localhost:50053", weight = 1.0 }
+gqris = { endpoint = "grpc://localhost:50054", weight = 1.0 }
+android_claw = { endpoint = "grpc://localhost:50055", weight = 1.0 }
+
+[trading]
+mode = "paper"
+exchanges = ["binance", "bybit", "okx"]
+max_drawdown = 0.05
+kelly_fraction = 0.3
+
+[llm]
+provider = "ollama"
+model = "llama3"
+uncensored_only = true
+
+[p2p]
+enabled = false # Phase 2
+bootstrap_nodes = []
