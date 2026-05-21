@@ -8,7 +8,7 @@ MAGNATRIX Agentic OS adalah sistem operasi untuk agen AI yang dirancang sebagai 
 
 Membangun fondasi yang memungkinkan agen-agen AI berkolaborasi, belajar, dan mengeksekusi tugas secara otonom — dengan kontrol penuh dari pengguna, tanpa vendor lock-in, dan dapat di-deploy di mana saja. Dirancang sejak dini untuk berevolusi menjadi **Super AI**.
 
-## Arsitektur 14 Layer
+## Arsitektur 15 Layer
 
 | Layer | Nama | Brain |
 |-------|------|-------|
@@ -27,6 +27,7 @@ Membangun fondasi yang memungkinkan agen-agen AI berkolaborasi, belajar, dan men
 | 10 | Uncensored AI | Local LLM router |
 | 11 | Governance & Compliance | DAO + Constitution |
 | 12 | IDE & UI | Cross-platform builder |
+| **13** | **Offensive Security & Hacking** | **Red team + Pentest + Bug bounty + CTF** |
 
 ## Evolution Path: Agentic OS → Super AI
 
