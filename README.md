@@ -1,12 +1,12 @@
 # MAGNATRIX Agentic OS
 
-> **Private. Uncensored. Agentic. Profitable.**
+> **Private. Uncensored. Agentic. Profitable. Super AI Ready.**
 
 MAGNATRIX Agentic OS adalah sistem operasi untuk agen AI yang dirancang sebagai platform modular, cross-platform, dan self-hosted — dengan fokus pada **privasi absolut**, **kebebasan dari sensor**, dan **kemampuan trading otonom**.
 
 ## Visi
 
-Membangun fondasi yang memungkinkan agen-agen AI berkolaborasi, belajar, dan mengeksekusi tugas secara otonom — dengan kontrol penuh dari pengguna, tanpa vendor lock-in, dan dapat di-deploy di mana saja.
+Membangun fondasi yang memungkinkan agen-agen AI berkolaborasi, belajar, dan mengeksekusi tugas secara otonom — dengan kontrol penuh dari pengguna, tanpa vendor lock-in, dan dapat di-deploy di mana saja. Dirancang sejak dini untuk berevolusi menjadi **Super AI**.
 
 ## Arsitektur 14 Layer
 
@@ -28,7 +28,7 @@ Membangun fondasi yang memungkinkan agen-agen AI berkolaborasi, belajar, dan men
 | 11 | Governance & Compliance | DAO + Constitution |
 | 12 | IDE & UI | Cross-platform builder |
 
-## Evolution Path
+## Evolution Path: Agentic OS → Super AI
 
 | Stage | Timeline | Status |
 |-------|----------|--------|
@@ -37,6 +37,10 @@ Membangun fondasi yang memungkinkan agen-agen AI berkolaborasi, belajar, dan men
 | Proto-AGI | 12-24 bulan | Planned |
 | AGI | 24-48 bulan | Planned |
 | Super AI | 48-60 bulan | Planned |
+
+## Blueprint
+
+📘 [Master Blueprint v1.1 (Super AI Ready)](blueprints/MAGNATRIX%20Agentic%20OS%20-%20Master%20Blueprint%20Final%20v1.1.md)
 
 ## Install
 
