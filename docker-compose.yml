@@ -1,0 +1,418 @@
+services:
+  kernel:
+    image: node:18-alpine
+    container_name: magnatrix-kernel
+    restart: unless-stopped
+    working_dir: /app/kernel
+    volumes:
+      - ./kernel:/app/kernel:ro
+      - magnatrix-data:/data
+    command: ["node", "index.js"]
+    networks:
+      - magnatrix-net
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+
+  protocol:
+    image: node:18-alpine
+    container_name: magnatrix-protocol
+    restart: unless-stopped
+    working_dir: /app/protocol
+    volumes:
+      - ./protocol:/app/protocol:ro
+      - magnatrix-data:/data
+    command: ["node", "grpc-server.js"]
+    networks:
+      - magnatrix-net
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:50051/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+
+  api-router:
+    image: python:3.11-slim
+    container_name: magnatrix-api-router
+    restart: unless-stopped
+    working_dir: /app/api-router
+    volumes:
+      - ./api-router:/app/api-router:ro
+      - magnatrix-data:/data
+    command: ["python", "-m", "fastapi", "run", "router.py", "--port", "8080"]
+    networks:
+      - magnatrix-net
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+
+  identity:
+    image: python:3.11-slim
+    container_name: magnatrix-identity
+    restart: unless-stopped
+    working_dir: /app/identity
+    volumes:
+      - ./identity:/app/identity:ro
+      - magnatrix-data:/data
+    command: ["python", "did_registry.py"]
+    networks:
+      - magnatrix-net
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8081/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: '0.3'
+          memory: 128M
+
+  runtime:
+    image: python:3.11-slim
+    container_name: magnatrix-runtime
+    restart: unless-stopped
+    working_dir: /app/runtime
+    volumes:
+      - ./runtime:/app/runtime:ro
+      - magnatrix-data:/data
+    command: ["python", "agent_lifecycle.py"]
+    networks:
+      - magnatrix-net
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8082/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+
+  p2p-mesh:
+    image: python:3.11-slim
+    container_name: magnatrix-p2p
+    restart: unless-stopped
+    working_dir: /app/p2p-mesh
+    volumes:
+      - ./p2p-mesh:/app/p2p-mesh:ro
+      - magnatrix-data:/data
+    command: ["python", "node.py"]
+    networks:
+      - magnatrix-net
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8083/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+
+  knowledge:
+    image: python:3.11-slim
+    container_name: magnatrix-knowledge
+    restart: unless-stopped
+    working_dir: /app/knowledge
+    volumes:
+      - ./knowledge:/app/knowledge:ro
+      - magnatrix-knowledge:/knowledge
+    command: ["python", "knowledge_graph.py"]
+    networks:
+      - magnatrix-net
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8084/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+
+  skills:
+    image: python:3.11-slim
+    container_name: magnatrix-skills
+    restart: unless-stopped
+    working_dir: /app/skills
+    volumes:
+      - ./skills:/app/skills:ro
+      - magnatrix-data:/data
+    command: ["python", "skill_system.py"]
+    networks:
+      - magnatrix-net
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8085/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: '0.3'
+          memory: 128M
+
+  browser:
+    image: python:3.11-slim
+    container_name: magnatrix-browser
+    restart: unless-stopped
+    working_dir: /app/browser
+    volumes:
+      - ./browser:/app/browser:ro
+      - magnatrix-data:/data
+    command: ["python", "browser_engine.py"]
+    networks:
+      - magnatrix-net
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8086/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+
+  trading:
+    image: python:3.11-slim
+    container_name: magnatrix-trading
+    restart: unless-stopped
+    working_dir: /app/trading
+    volumes:
+      - ./trading:/app/trading:ro
+      - magnatrix-data:/data
+      - magnatrix-logs:/logs
+    command: ["python", "autonomous_loop_v3.py"]
+    networks:
+      - magnatrix-net
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8087/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+
+  security:
+    image: python:3.11-slim
+    container_name: magnatrix-security
+    restart: unless-stopped
+    working_dir: /app/security
+    volumes:
+      - ./security:/app/security:ro
+      - magnatrix-data:/data
+    command: ["python", "real_scan.py"]
+    networks:
+      - magnatrix-net
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8088/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: '0.3'
+          memory: 128M
+
+  uncensored:
+    image: ollama/ollama:latest
+    container_name: magnatrix-uncensored
+    restart: unless-stopped
+    volumes:
+      - ollama-models:/root/.ollama
+      - ./uncensored:/app/uncensored:ro
+    ports:
+      - "11434:11434"
+    networks:
+      - magnatrix-net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
+
+  governance:
+    image: python:3.11-slim
+    container_name: magnatrix-governance
+    restart: unless-stopped
+    working_dir: /app/governance
+    volumes:
+      - ./governance:/app/governance:ro
+      - magnatrix-data:/data
+    command: ["python", "real_enforcer.py"]
+    networks:
+      - magnatrix-net
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8089/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: '0.3'
+          memory: 128M
+
+  ide:
+    image: node:18-alpine
+    container_name: magnatrix-ide
+    restart: unless-stopped
+    working_dir: /app/ide
+    volumes:
+      - ./ide:/app/ide:ro
+      - magnatrix-data:/data
+    command: ["node", "ide-server.js"]
+    networks:
+      - magnatrix-net
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8090/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: '0.3'
+          memory: 128M
+
+  offensive:
+    image: python:3.11-slim
+    container_name: magnatrix-offensive
+    restart: unless-stopped
+    working_dir: /app/security
+    volumes:
+      - ./security:/app/security:ro
+      - magnatrix-data:/data
+    command: ["python", "offensive_engine.py"]
+    networks:
+      - magnatrix-net
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8091/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+
+  hunter:
+    image: python:3.11-slim
+    container_name: magnatrix-hunter
+    restart: unless-stopped
+    working_dir: /app/hunter
+    volumes:
+      - ./hunter:/app/hunter:ro
+      - magnatrix-data:/data
+    command: ["python", "scheduler.py"]
+    networks:
+      - magnatrix-net
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8092/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: '0.3'
+          memory: 128M
+
+  collective-brain:
+    image: python:3.11-slim
+    container_name: magnatrix-collective-brain
+    restart: unless-stopped
+    working_dir: /app/collective-brain
+    volumes:
+      - ./collective-brain:/app/collective-brain:ro
+      - magnatrix-data:/data
+      - magnatrix-knowledge:/knowledge
+    command: ["python", "hermes_federation.py"]
+    networks:
+      - magnatrix-net
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8093/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+
+  self-evolve:
+    image: python:3.11-slim
+    container_name: magnatrix-self-evolve
+    restart: unless-stopped
+    working_dir: /app/scripts
+    volumes:
+      - ./scripts:/app/scripts:ro
+      - ./collective-brain:/app/collective-brain:ro
+      - ./trading:/app/trading:ro
+      - ./p2p-mesh:/app/p2p-mesh:ro
+      - ./knowledge:/app/knowledge:ro
+      - magnatrix-data:/data
+      - magnatrix-knowledge:/knowledge
+      - magnatrix-logs:/logs
+    command: ["python", "self_evolve.py", "--continuous"]
+    networks:
+      - magnatrix-net
+    depends_on:
+      - collective-brain
+      - trading
+      - knowledge
+      - p2p-mesh
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+
+networks:
+  magnatrix-net:
+    driver: bridge
+
+volumes:
+  magnatrix-data:
+    driver: local
+  magnatrix-knowledge:
+    driver: local
+  magnatrix-logs:
+    driver: local
+  ollama-models:
+    driver: local
