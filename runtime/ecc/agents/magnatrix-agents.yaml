@@ -1,0 +1,45 @@
+agents:
+  hermes:
+    role: ORACLE
+    capabilities: [prediction, analysis, planning, meta-cognition]
+    model: local-llama3-uncensored
+    memory: persistent
+    instincts: [think-before-act, recursive-improvement]
+    endpoint: grpc://localhost:50051
+    weight: 1.0
+
+  kimi_claw:
+    role: COORDINATOR
+    capabilities: [desktop-control, browser-automation, file-system]
+    model: local-codellama
+    memory: persistent
+    instincts: [surgical-change, ui-first]
+    endpoint: grpc://localhost:50052
+    weight: 1.0
+
+  gqris:
+    role: RESEARCHER
+    capabilities: [data-mining, trading-signals, deep-research]
+    model: local-wizardlm-uncensored
+    memory: persistent
+    instincts: [research-first, evidence-based]
+    endpoint: grpc://localhost:50054
+    weight: 1.0
+
+  android_claw:
+    role: MOBILE
+    capabilities: [mobile-automation, apk-building, device-bridge]
+    model: local-qwen3
+    memory: persistent
+    instincts: [edge-first, resource-aware]
+    endpoint: grpc://localhost:50055
+    weight: 1.0
+
+  openclaw:
+    role: INFRASTRUCTURE
+    capabilities: [gateway, api-routing, message-broker]
+    model: local-mistral
+    memory: persistent
+    instincts: [security-first, zero-telemetry]
+    endpoint: grpc://localhost:50053
+    weight: 1.0
