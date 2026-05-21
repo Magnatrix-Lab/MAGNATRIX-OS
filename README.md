@@ -41,7 +41,29 @@ Membangun fondasi yang memungkinkan agen-agen AI berkolaborasi, belajar, dan men
 
 ## Blueprint
 
-📘 [Master Blueprint v1.1 (Super AI Ready)](blueprints/MAGNATRIX%20Agentic%20OS%20-%20Master%20Blueprint%20Final%20v1.1.md)
+📘 [Master Blueprint v1.2 (Super AI + Hacking Layer)](blueprints/MAGNATRIX%20Agentic%20OS%20-%20Master%20Blueprint%20Final%20v1.2.md)
+
+## Adopted Repositories (90+)
+
+| Ecosystem | Repos | Layer | Value |
+|-----------|-------|-------|-------|
+| **AEON-7** | 27 | 1/10/12 | Uncensored models + media + voice |
+| **Affaan Mustafa** | 6 | 0.5/3/6/8/9 | ECC harness + security + engine + app |
+| **Luong Nguyen** | 3 | 1.5/6 | CCL router + context-stats monitor + skills |
+| **Karpathy** | 1 | 0.5 | Recursive self-improvement proof-of-concept |
+| **rohitg00** | 1 | 3/5 | Persistent memory (Hermes native) |
+| **nashsu** | 1 | 5 | Knowledge graph (Karpathy pattern) |
+| **Thysrael** | 1 | 5/8 | News radar + trading signal |
+| **shiahonb777** | 1 | 12 | APK builder on-device |
+| **eugeniughelbur** | 1 | 5/7 | Auto-synthesis + scheduled agents |
+| **ACHolding** | 1 | 9/10 | Jailbreak defense database |
+| **multica-ai** | 1 | 11 | Coding constitution (4 principles) |
+| **assafelovic** | 1 | 5 | Deep research engine |
+| **cline** | 1 | 12 | IDE agent (62.1k stars) |
+| **Doriandarko** | 1 | 0.5/6 | Self-improving tool creation |
+| **elizaOS** | 1 | 3/6/8 | Agent OS benchmark (18.4k stars) |
+| **pdyg** | 1 | docs | Training manual + MCP builder |
+| **godlike-kimi** | 200+ | 6 | Skills marketplace |
 
 ## Install
 
