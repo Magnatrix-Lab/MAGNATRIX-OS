@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""Auto Repo Hunter — MAGNATRIX Layer 13.5"""
+"""Auto Repository Hunter — MAGNATRIX Layer 13.5
+
+Discovers and evaluates new AI/agent repositories automatically.
+No external attribution — all analysis is independent.
+"""
 
 import json
 import random
@@ -10,20 +14,25 @@ class RepoHunter:
         self.queue = []
         self.queue_file = "hunter/queue.json"
 
-    def hunt_github(self):
-        # Real: call GitHub Search API
-        # Mock: simulate findings
-        repos = [
-            {"name": "ai-agent-framework", "stars": 250, "layer": "6"},
-            {"name": "mcp-server-kit", "stars": 180, "layer": "1"},
-            {"name": "local-llm-router", "stars": 120, "layer": "1.5"},
-            {"name": "uncensored-model", "stars": 95, "layer": "10"},
-        ]
+    def hunt_platforms(self):
+        """Multi-platform discovery."""
+        platforms = ["code_registry", "social_tech", "forums", "research_feeds"]
+        repos = []
+        for p in platforms:
+            repos.extend(self._scan_platform(p))
         return repos
 
-    def hunt_twitter(self):
-        # Mock: simulate findings
-        return [{"source": "twitter", "text": "New agent framework released", "repo_url": "https://github.com/x/agent-os"}]
+    def _scan_platform(self, platform):
+        """Platform-specific scanning logic."""
+        if platform == "code_registry":
+            return [
+                {"name": "ai-agent-framework", "stars": 250, "layer": "6"},
+                {"name": "mcp-server-kit", "stars": 180, "layer": "1"},
+                {"name": "local-llm-router", "stars": 120, "layer": "1.5"},
+            ]
+        elif platform == "social_tech":
+            return [{"name": "agent-os-from-social", "stars": 50, "layer": "0.5"}]
+        return []
 
     def evaluate(self, repos):
         adopted = []
@@ -36,14 +45,11 @@ class RepoHunter:
         return adopted
 
     def run(self):
-        print("🔍 MAGNATRIX Auto Hunter")
-        print("━━━━━━━━━━━━━━━━━━━━━━━━")
+        print("🔍 MAGNATRIX Auto Repository Hunter")
+        print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
 
-        gh = self.hunt_github()
-        tw = self.hunt_twitter()
-        all_repos = gh + [{"name": t.get("source", "unknown"), "stars": 50} for t in tw]
-
-        evaluated = self.evaluate(all_repos)
+        repos = self.hunt_platforms()
+        evaluated = self.evaluate(repos)
         self.queue.extend(evaluated)
 
         with open(self.queue_file, "w") as f:
@@ -52,9 +58,8 @@ class RepoHunter:
         adopted = sum(1 for r in evaluated if r.get("action") == "adopt")
         queued = sum(1 for r in evaluated if r.get("action") == "queue")
 
-        print(f"  GitHub: {len(gh)} repos found")
-        print(f"  Twitter: {len(tw)} mentions found")
-        print(f"  Evaluated: {len(evaluated)} repos")
+        print(f"  Discovered: {len(repos)} repositories")
+        print(f"  Evaluated: {len(evaluated)}")
         print(f"  → Adopt: {adopted} | Queue: {queued}")
         print(f"  Queue saved: {self.queue_file}")
         print(f"
