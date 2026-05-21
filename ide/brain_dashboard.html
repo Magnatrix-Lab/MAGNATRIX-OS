@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html><head><meta charset="UTF-8">
+<style>
+body{font-family:sans-serif;background:#0d1117;color:#c9d1d9;padding:20px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;max-width:1200px;margin:0 auto}
+.panel{background:#161b22;border:1px solid #30363d;border-radius:8px;padding:16px}
+h1{color:#58a6ff}h2{font-size:12px;text-transform:uppercase;color:#8b949e;margin-top:0}
+.green{color:#3fb950}.red{color:#f85149}
+table{width:100%;font-size:13px}td{padding:4px;border-bottom:1px solid #21262d}
+button{background:#238636;color:#fff;border:none;padding:8px 16px;border-radius:6px;cursor:pointer}
+</style></head><body>
+<h1>MAGNATRIX Brain Dashboard</h1>
+<div class="grid">
+<div class="panel"><h2>Trading Status</h2>
+<table><tr><td>PnL</td><td id="pnl" class="green">-$28.00</td></tr>
+<tr><td>Positions</td><td>2</td></tr>
+<tr><td>Strategy</td><td>EMA Crossover</td></tr></table></div>
+<div class="panel"><h2>Brain Health</h2>
+<p><span style="color:#3fb950">●</span> HERMES: online</p>
+<p><span style="color:#3fb950">●</span> KIMI_CLAW: online</p>
+<p><span style="color:#3fb950">●</span> GQRIS: online</p></div>
+<div class="panel"><h2>Build APK</h2>
+<input placeholder="https://your-app.com" style="width:100%;padding:6px;background:#0d1117;border:1px solid #30363d;color:#c9d1d9">
+<button onclick="alert('Building...')">BUILD</button></div>
+<div class="panel"><h2>System Log</h2>
+<div style="font-family:monospace;font-size:11px">HERMES: Planning mode active<br>GQRIS: Signal generated</div></div>
+</div>
+</body></html>
