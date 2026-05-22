@@ -1,0 +1,32 @@
+{
+  "14-agent-engineering": {
+    "phase_id": "14-agent-engineering",
+    "lessons_completed": 21,
+    "total_lessons": 42,
+    "skills_unlocked": [
+      "code-mutate",
+      "deploy-pipeline"
+    ],
+    "last_studied": 1779416844.7091467
+  },
+  "16-multi-agent-and-swarms": {
+    "phase_id": "16-multi-agent-and-swarms",
+    "lessons_completed": 12,
+    "total_lessons": 24,
+    "skills_unlocked": [
+      "code-mutate",
+      "cross-domain-synthesis"
+    ],
+    "last_studied": 1779416844.709526
+  },
+  "18-ethics-safety-alignment": {
+    "phase_id": "18-ethics-safety-alignment",
+    "lessons_completed": 15,
+    "total_lessons": 29,
+    "skills_unlocked": [
+      "constitution-check",
+      "check-risk"
+    ],
+    "last_studied": 1779416844.7098427
+  }
+}
