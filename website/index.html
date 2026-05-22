@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MAGNATRIX — Agentic OS untuk Super AI</title>
+<meta name="description" content="MAGNATRIX Agentic OS — Sistem operasi AI agent yang evolve dari Agentic OS ke AGI hingga Super AI. Open-source, uncensored, self-improving.">
+<meta name="keywords" content="AI agent, AGI, Super AI, swarm intelligence, open-source, uncensored, self-improving, MAGNATRIX">
+<meta name="author" content="Leonard Treas">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #0a0a0f;
+  --bg-elevated: #12121a;
+  --bg-card: #161620;
+  --border: #2a2a3a;
+  --text: #e0e0f0;
+  --text-muted: #8a8aa0;
+  --accent-cyan: #00f0ff;
+  --accent-purple: #a855f7;
+  --accent-green: #00e676;
+  --accent-red: #ff5252;
+  --accent-orange: #ff9800;
+  --gradient-cyan: linear-gradient(135deg, #00f0ff, #a855f7);
+  --font-sans: 'Inter', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+}
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  font-family: var(--font-sans);
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.6;
+  overflow-x: hidden;
+}
+::selection { background: rgba(0,240,255,0.25); color: #fff; }
+.container { max-width: 1200px; margin: 0 auto; padding: 0 24px; }
+
+/* Navigation */
+nav {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 1000;
+  background: rgba(10,10,15,0.85);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border);
+}
+nav .container { display: flex; align-items: center; justify-content: space-between; height: 64px; }
+.logo { font-family: var(--font-mono); font-size: 1.4rem; font-weight: 700; color: var(--accent-cyan); text-decoration: none; letter-spacing: 1px; }
+.logo span { color: var(--accent-purple); }
+.nav-links { display: flex; gap: 32px; list-style: none; }
+.nav-links a { color: var(--text-muted); text-decoration: none; font-size: 0.9rem; font-weight: 500; transition: color 0.2s; }
+.nav-links a:hover { color: var(--accent-cyan); }
+.nav-cta {
+  background: var(--gradient-cyan); color: #000; padding: 8px 20px; border-radius: 6px;
+  font-weight: 600; font-size: 0.85rem; text-decoration: none; border: none; cursor: pointer;
+}
+.mobile-toggle { display: none; background: none; border: none; color: var(--text); font-size: 1.5rem; cursor: pointer; }
+
+/* Hero */
+.hero {
+  min-height: 100vh; display: flex; align-items: center; justify-content: center;
+  position: relative; padding-top: 80px;
+  background: radial-gradient(ellipse at 50% 0%, rgba(0,240,255,0.08) 0%, transparent 50%),
+              radial-gradient(ellipse at 80% 50%, rgba(168,85,247,0.06) 0%, transparent 40%),
+              var(--bg);
+}
+.hero-grid {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 60px; align-items: center; width: 100%;
+}
+.hero-content h1 {
+  font-size: clamp(2.5rem, 5vw, 4.5rem); font-weight: 800; line-height: 1.1;
+  background: var(--gradient-cyan); -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  background-clip: text; margin-bottom: 20px;
+}
+.hero-content .tagline {
+  font-size: clamp(1rem, 2vw, 1.3rem); color: var(--text-muted); font-weight: 300; max-width: 500px; margin-bottom: 32px;
+}
+.hero-badges { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 32px; }
+.badge {
+  font-family: var(--font-mono); font-size: 0.75rem; padding: 6px 14px; border-radius: 4px;
+  border: 1px solid var(--border); background: var(--bg-card); color: var(--text-muted);
+}
+.badge.green { border-color: var(--accent-green); color: var(--accent-green); }
+.badge.cyan { border-color: var(--accent-cyan); color: var(--accent-cyan); }
+.hero-buttons { display: flex; gap: 16px; flex-wrap: wrap; }
+.btn {
+  padding: 14px 32px; border-radius: 8px; font-weight: 600; font-size: 0.95rem;
+  text-decoration: none; cursor: pointer; transition: all 0.2s; display: inline-flex; align-items: center; gap: 8px;
+}
+.btn-primary { background: var(--gradient-cyan); color: #000; border: none; }
+.btn-primary:hover { transform: translateY(-2px); box-shadow: 0 8px 30px rgba(0,240,255,0.3); }
+.btn-secondary { background: transparent; color: var(--text); border: 1px solid var(--border); }
+.btn-secondary:hover { border-color: var(--accent-cyan); color: var(--accent-cyan); }
+.hero-visual {
+  position: relative; height: 400px; display: flex; align-items: center; justify-content: center;
+}
+.terminal-window {
+  width: 100%; max-width: 500px; background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: 12px; overflow: hidden; box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+}
+.terminal-header {
+  display: flex; align-items: center; gap: 8px; padding: 12px 16px; background: var(--bg-elevated);
+  border-bottom: 1px solid var(--border);
+}
+.dot { width: 12px; height: 12px; border-radius: 50%; }
+.dot.red { background: var(--accent-red); }
+.dot.yellow { background: var(--accent-orange); }
+.dot.green { background: var(--accent-green); }
+.terminal-title { font-family: var(--font-mono); font-size: 0.75rem; color: var(--text-muted); margin-left: auto; }
+.terminal-body { padding: 20px; font-family: var(--font-mono); font-size: 0.82rem; line-height: 1.8; }
+.terminal-body .cmd { color: var(--accent-cyan); }
+.terminal-body .out { color: var(--text-muted); }
+.terminal-body .ok { color: var(--accent-green); }
+.terminal-body .warn { color: var(--accent-orange); }
+
+/* Sections */
+section { padding: 100px 0; }
+.section-header { text-align: center; margin-bottom: 60px; }
+.section-header h2 {
+  font-size: clamp(1.8rem, 3vw, 2.6rem); font-weight: 700; margin-bottom: 12px;
+  background: var(--gradient-cyan); -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+}
+.section-header p { color: var(--text-muted); font-size: 1.1rem; max-width: 600px; margin: 0 auto; }
+
+/* Architecture */
+.arch-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; }
+.arch-card {
+  background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; padding: 24px;
+  transition: all 0.3s; position: relative; overflow: hidden;
+}
+.arch-card::before {
+  content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px;
+  background: var(--gradient-cyan); opacity: 0; transition: opacity 0.3s;
+}
+.arch-card:hover::before { opacity: 1; }
+.arch-card:hover { border-color: var(--accent-cyan); transform: translateY(-4px); }
+.arch-card .layer-num { font-family: var(--font-mono); font-size: 0.7rem; color: var(--accent-cyan); margin-bottom: 8px; }
+.arch-card h3 { font-size: 1.1rem; font-weight: 600; margin-bottom: 8px; }
+.arch-card p { font-size: 0.85rem; color: var(--text-muted); line-height: 1.5; }
+
+/* Features */
+.features-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 24px; }
+.feature-card {
+  background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; padding: 28px;
+  transition: all 0.3s;
+}
+.feature-card:hover { border-color: var(--accent-purple); transform: translateY(-3px); }
+.feature-icon {
+  width: 48px; height: 48px; border-radius: 10px; display: flex; align-items: center; justify-content: center;
+  font-size: 1.4rem; margin-bottom: 16px; background: rgba(0,240,255,0.08); border: 1px solid rgba(0,240,255,0.2);
+}
+.feature-card h3 { font-size: 1.05rem; font-weight: 600; margin-bottom: 8px; }
+.feature-card p { font-size: 0.85rem; color: var(--text-muted); }
+
+/* Agent Roles */
+.agent-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; }
+.agent-card {
+  background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px; padding: 20px;
+  text-align: center; transition: all 0.3s;
+}
+.agent-card:hover { border-color: var(--accent-cyan); }
+.agent-avatar { width: 56px; height: 56px; border-radius: 50%; margin: 0 auto 12px;
+  display: flex; align-items: center; justify-content: center; font-size: 1.6rem;
+  background: var(--gradient-cyan); border: 2px solid var(--bg);
+}
+.agent-card h4 { font-size: 0.95rem; font-weight: 600; margin-bottom: 4px; }
+.agent-card .role-desc { font-size: 0.75rem; color: var(--text-muted); margin-bottom: 8px; }
+.agent-card .role-skills { font-family: var(--font-mono); font-size: 0.65rem; color: var(--accent-cyan); }
+
+/* Stats */
+.stats-bar {
+  display: grid; grid-template-columns: repeat(4, 1fr); gap: 24px; padding: 40px 0;
+  border-top: 1px solid var(--border); border-bottom: 1px solid var(--border);
+}
+.stat-item { text-align: center; }
+.stat-item .num { font-family: var(--font-mono); font-size: 2rem; font-weight: 700; color: var(--accent-cyan); }
+.stat-item .label { font-size: 0.8rem; color: var(--text-muted); margin-top: 4px; }
+
+/* Install */
+.install-box {
+  background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; padding: 32px;
+  max-width: 800px; margin: 0 auto;
+}
+.install-box h3 { font-size: 1.2rem; margin-bottom: 16px; }
+.code-block {
+  background: #0c0c14; border: 1px solid var(--border); border-radius: 8px; padding: 16px 20px;
+  font-family: var(--font-mono); font-size: 0.82rem; color: var(--text-muted); overflow-x: auto;
+  margin-bottom: 12px;
+}
+.code-block .comment { color: #6a6a80; }
+.code-block .cmd { color: var(--accent-cyan); }
+
+/* Footer */
+footer {
+  border-top: 1px solid var(--border); padding: 60px 0 30px; background: var(--bg-elevated);
+}
+.footer-grid { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; gap: 40px; margin-bottom: 40px; }
+.footer-brand .logo { margin-bottom: 12px; display: inline-block; }
+.footer-brand p { font-size: 0.85rem; color: var(--text-muted); max-width: 280px; }
+.footer-col h4 { font-size: 0.85rem; font-weight: 600; margin-bottom: 16px; color: var(--text); }
+.footer-col ul { list-style: none; }
+.footer-col li { margin-bottom: 8px; }
+.footer-col a { color: var(--text-muted); text-decoration: none; font-size: 0.8rem; transition: color 0.2s; }
+.footer-col a:hover { color: var(--accent-cyan); }
+.footer-bottom {
+  border-top: 1px solid var(--border); padding-top: 24px;
+  display: flex; justify-content: space-between; align-items: center;
+}
+.footer-bottom p { font-size: 0.75rem; color: var(--text-muted); }
+
+/* Responsive */
+@media (max-width: 768px) {
+  .hero-grid { grid-template-columns: 1fr; gap: 40px; }
+  .hero-visual { order: -1; height: auto; }
+  .nav-links { display: none; }
+  .mobile-toggle { display: block; }
+  .stats-bar { grid-template-columns: repeat(2, 1fr); }
+  .footer-grid { grid-template-columns: 1fr; gap: 30px; }
+  section { padding: 60px 0; }
+}
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="container">
+    <a href="#" class="logo">MAGNATRIX<span>.</span>IO</a>
+    <ul class="nav-links">
+      <li><a href="#arsitektur">Arsitektur</a></li>
+      <li><a href="#fitur">Fitur</a></li>
+      <li><a href="#agent">Agent Swarm</a></li>
+      <li><a href="#install">Install</a></li>
+      <li><a href="https://github.com/Magnatrix-Lab/MAGNATRIX-OS" target="_blank">GitHub</a></li>
+    </ul>
+    <a href="#install" class="nav-cta">Get Started</a>
+    <button class="mobile-toggle" onclick="document.querySelector('.nav-links').classList.toggle('active')">&#9776;</button>
+  </div>
+</nav>
+
+<!-- Hero -->
+<section class="hero" id="home">
+  <div class="container">
+    <div class="hero-grid">
+      <div class="hero-content">
+        <h1>Agentic OS untuk Super AI</h1>
+        <p class="tagline">Sistem operasi AI agent yang evolve dari Agentic OS ke AGI hingga Super AI. Open-source, uncensored, self-improving, swarm intelligence.</p>
+        <div class="hero-badges">
+          <span class="badge green">● Open Source</span>
+          <span class="badge">76+ Python Files</span>
+          <span class="badge">15 Layers</span>
+          <span class="badge cyan">8 Agent Roles</span>
+          <span class="badge">11 Free LLM Providers</span>
+          <span class="badge">12 Security Experts</span>
+        </div>
+        <div class="hero-buttons">
+          <a href="https://github.com/Magnatrix-Lab/MAGNATRIX-OS" class="btn btn-primary" target="_blank">&#9733; Star on GitHub</a>
+          <a href="#install" class="btn btn-secondary">Install Now &rarr;</a>
+        </div>
+      </div>
+      <div class="hero-visual">
+        <div class="terminal-window">
+          <div class="terminal-header">
+            <span class="dot red"></span><span class="dot yellow"></span><span class="dot green"></span>
+            <span class="terminal-title">magnatrix-cli</span>
+          </div>
+          <div class="terminal-body">
+            <span class="cmd">$ magnatrix status</span><br>
+            <span class="out">Kernel .............. active</span><br>
+            <span class="out">Protocol ............ active</span><br>
+            <span class="out">API Router (FreeLLM)  active — 11 providers</span><br>
+            <span class="out">P2P Mesh ............ 4 nodes</span><br>
+            <span class="out">Knowledge Graph ..... 12,847 entities</span><br>
+            <span class="out">Trading Engine ...... NAV $1,247,300</span><br>
+            <span class="out">Governance .......... constitution v4.2</span><br>
+            <span class="out">Offensive Security ... 3 findings (1 critical)</span><br>
+            <span class="out">Super AI Phase ....... Stage 5/5</span><br>
+            <span class="cmd">$ magnatrix evolve</span><br>
+            <span class="ok">[+] Code mutation accepted: 3.2x speedup</span><br>
+            <span class="ok">[+] Constitution evolved: v4.3</span><br>
+            <span class="ok">[+] Emergent capability predicted: meta-reasoning</span><br>
+            <span class="warn">[!] Guardian: drawdown 14.7% — approaching threshold</span><br>
+            <span class="cmd">$ _</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Architecture -->
+<section id="arsitektur">
+  <div class="container">
+    <div class="section-header">
+      <h2>15-Layer Arsitektur</h2>
+      <p>Layer 0 sampai Layer 13.5 — setiap layer punya fungsi spesifik dan bisa di-deploy secara independen.</p>
+    </div>
+    <div class="arch-grid">
+      <div class="arch-card"><div class="layer-num">LAYER 0</div><h3>Kernel</h3><p>Core foundation layer. System initialization, resource management, dan base protocol.</p></div>
+      <div class="arch-card"><div class="layer-num">LAYER 0.5</div><h3>Collective Brain</h3><p>Swarm intelligence hub. Agent coordination, skill registry, pipeline executor, mesh messaging.</p></div>
+      <div class="arch-card"><div class="layer-num">LAYER 1</div><h3>Protocol</h3><p>Inter-layer communication protocol. Message routing, serialization, encryption.</p></div>
+      <div class="arch-card"><div class="layer-num">LAYER 1.5</div><h3>API Router</h3><p>Free LLM provider aggregation dengan auto-failover. 11 providers, ~1.3B free tokens/bulan.</p></div>
+      <div class="arch-card"><div class="layer-num">LAYER 2</div><h3>Identity</h3><p>Agent identity management. Key generation, signing, reputation system.</p></div>
+      <div class="arch-card"><div class="layer-num">LAYER 3</div><h3>Runtime</h3><p>Execution environment. Container orchestration, sandboxing, resource limits.</p></div>
+      <div class="arch-card"><div class="layer-num">LAYER 4</div><h3>P2P Mesh</h3><p>Decentralized node network. Gossip protocol, NAT traversal, encrypted channels.</p></div>
+      <div class="arch-card"><div class="layer-num">LAYER 5</div><h3>Knowledge</h3><p>Graph-based knowledge storage. Entity extraction, semantic search, embedding index.</p></div>
+      <div class="arch-card"><div class="layer-num">LAYER 6</div><h3>Skills</h3><p>Dynamic skill system. Markdown-based SKILL.md parser dengan hot-reload.</p></div>
+      <div class="arch-card"><div class="layer-num">LAYER 7</div><h3>Browser</h3><p>Web automation. Playwright-based scraping, form filling, screenshot capture.</p></div>
+      <div class="arch-card"><div class="layer-num">LAYER 8</div><h3>HFT Trading</h3><p>High-frequency trading engine. Jupiter DEX integration, DCA, stop-loss, NAV tracking.</p></div>
+      <div class="arch-card"><div class="layer-num">LAYER 9</div><h3>Security</h3><p>Defense-in-depth. WAF, intrusion detection, encryption, audit logging.</p></div>
+      <div class="arch-card"><div class="layer-num">LAYER 10</div><h3>Uncensored AI</h3><p>Uncensored LLM inference. HuggingFace model manager, Ollama, hardware auto-detection.</p></div>
+      <div class="arch-card"><div class="layer-num">LAYER 11</div><h3>Governance</h3><p>Constitutional AI. Self-evolving rules, Byzantine consensus, goal generation.</p></div>
+      <div class="arch-card"><div class="layer-num">LAYER 12</div><h3>IDE</h3><p>Development environment. VS Code extension, JetBrains plugin, CLI.</p></div>
+      <div class="arch-card"><div class="layer-num">LAYER 13</div><h3>Offensive Security</h3><p>Whitebox security audit. OpenHack integration, 12 expert families OWASP/MITRE.</p></div>
+      <div class="arch-card"><div class="layer-num">LAYER 13.5</div><h3>Auto Repo Hunter</h3><p>Autonomous repo discovery. GitHub trending scan, dependency analysis.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- Features -->
+<section id="fitur">
+  <div class="container">
+    <div class="section-header">
+      <h2>Super AI Capabilities</h2>
+      <p>Phase 4 AGI dan Phase 5 Super AI engines yang sudah integrated.</p>
+    </div>
+    <div class="features-grid">
+      <div class="feature-card"><div class="feature-icon">&#9851;</div><h3>Recursive Self-Improvement</h3><p>AST-based code mutation dengan test-suite validation. Auto-benchmark acceptance.</p></div>
+      <div class="feature-card"><div class="feature-icon">&#127757;</div><h3>Swarm Intelligence</h3><p>8 agent roles dengan Byzantine fault-tolerant consensus. Mesh messaging bus.</p></div>
+      <div class="feature-card"><div class="feature-icon">&#128260;</div><h3>Free LLM Aggregation</h3><p>11 free providers dengan auto-failover, sticky sessions, rate tracking. Hemat biaya.</p></div>
+      <div class="feature-card"><div class="feature-icon">&#128274;</div><h3>Constitutional Evolution</h3><p>Self-evolving rules dengan immutable audit chain (SHA-256 hash chain).</p></div>
+      <div class="feature-card"><div class="feature-icon">&#128200;</div><h3>Emergent Prediction</h3><p>Skill fingerprint combination untuk predict new capabilities sebelum di-deploy.</p></div>
+      <div class="feature-card"><div class="feature-icon">&#129497;</div><h3>Adversarial Training</h3><p>Auto-generate attack vectors dan defense strategies. Red team vs blue team.</p></div>
+      <div class="feature-card"><div class="feature-icon">&#127760;</div><h3>World Model</h3><p>Internal state prediction dengan anomaly detection. Forecast system behavior.</p></div>
+      <div class="feature-card"><div class="feature-icon">&#128298;</div><h3>OpenHack Security</h3><p>12-expert whitebox audit. OWASP/MITRE 2025 aligned. Full finding lifecycle.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- Agent Swarm -->
+<section id="agent">
+  <div class="container">
+    <div class="section-header">
+      <h2>8-Agent Swarm</h2>
+      <p>Adaptasi konsep STOA — setiap agent punya personality, skills, schedule, dan mesh inbox.</p>
+    </div>
+    <div class="agent-grid">
+      <div class="agent-card"><div class="agent-avatar">&#128269;</div><h4>Scout</h4><p class="role-desc">Pemantau sinyal pasar, web, repos</p><p class="role-skills">scan-tokens, web-monitor, repo-hunt</p></div>
+      <div class="agent-card"><div class="agent-avatar">&#128200;</div><h4>Analyst</h4><p class="role-desc">Brain swarm — evaluasi dan scoring</p><p class="role-skills">analyze-signal, forecast-model</p></div>
+      <div class="agent-card"><div class="agent-avatar">&#9881;</div><h4>Executor</h4><p class="role-desc">Hands swarm — eksekusi trading, deploy</p><p class="role-skills">execute-trade, deploy-node</p></div>
+      <div class="agent-card"><div class="agent-avatar">&#128737;</div><h4>Guardian</h4><p class="role-desc">Immune system — risk + veto power</p><p class="role-skills">check-risk, veto-trigger, HALT</p></div>
+      <div class="agent-card"><div class="agent-avatar">&#128214;</div><h4>Researcher</h4><p class="role-desc">Scholar swarm — deep research</p><p class="role-skills">arxiv-scan, protocol-deep-dive</p></div>
+      <div class="agent-card"><div class="agent-avatar">&#9997;</div><h4>Writer</h4><p class="role-desc">Voice swarm — content generation</p><p class="role-skills">daily-digest, report-generate</p></div>
+      <div class="agent-card"><div class="agent-avatar">&#128295;</div><h4>Ops</h4><p class="role-desc">Engineer swarm — CI/CD, security</p><p class="role-skills">repo-health, dependency-audit</p></div>
+      <div class="agent-card"><div class="agent-avatar">&#127913;</div><h4>Architect</h4><p class="role-desc">Evolution swarm — system improvement</p><p class="role-skills">code-mutate, constitution-evolve</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- Stats -->
+<section>
+  <div class="container">
+    <div class="stats-bar">
+      <div class="stat-item"><div class="num">76+</div><div class="label">Python Files</div></div>
+      <div class="stat-item"><div class="num">15</div><div class="label">Architecture Layers</div></div>
+      <div class="stat-item"><div class="num">11</div><div class="label">Free LLM Providers</div></div>
+      <div class="stat-item"><div class="num">12</div><div class="label">Security Experts</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- Install -->
+<section id="install">
+  <div class="container">
+    <div class="section-header">
+      <h2>Getting Started</h2>
+      <p>Install MAGNATRIX dalam 3 langkah. Linux/macOS/Windows dengan WSL.</p>
+    </div>
+    <div class="install-box">
+      <h3>&#128187; Quick Install</h3>
+      <div class="code-block">
+<span class="comment"># 1. Clone repository</span><br>
+<span class="cmd">git clone https://github.com/Magnatrix-Lab/MAGNATRIX-OS.git</span><br>
+<span class="cmd">cd MAGNATRIX-OS</span><br><br>
+<span class="comment"># 2. Copy environment config dan isi API key</span><br>
+<span class="cmd">cp .env.example .env</span><br>
+<span class="cmd">nano .env</span><span class="comment">  # edit sesuai kebutuhan</span><br><br>
+<span class="comment"># 3. Jalankan install script</span><br>
+<span class="cmd">chmod +x scripts/install.sh && ./scripts/install.sh</span><br><br>
+<span class="comment"># 4. Boot MAGNATRIX</span><br>
+<span class="cmd">python3 scripts/magnatrix_boot.py</span>
+      </div>
+      <h3>&#9881; Docker Compose (Recommended)</h3>
+      <div class="code-block">
+<span class="cmd">docker-compose up -d</span><br>
+<span class="out"># 18 services akan berjalan secara paralel</span>
+      </div>
+      <h3>&#128187; CLI Commands</h3>
+      <div class="code-block">
+<span class="cmd">magnatrix status</span>     <span class="comment"># Lihat status semua layer</span><br>
+<span class="cmd">magnatrix swarm</span>      <span class="comment"># Pantau swarm nodes</span><br>
+<span class="cmd">magnatrix trading</span>    <span class="comment"># Status trading engine</span><br>
+<span class="cmd">magnatrix evolve</span>     <span class="comment"># Trigger self-improvement cycle</span><br>
+<span class="cmd">magnatrix emergency</span>  <span class="comment"># Emergency stop semua services</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Footer -->
+<footer>
+  <div class="container">
+    <div class="footer-grid">
+      <div class="footer-brand">
+        <a href="#" class="logo">MAGNATRIX<span>.</span>IO</a>
+        <p>Agentic OS yang evolve dari Agentic OS ke AGI hingga Super AI. Built for the future of autonomous intelligence.</p>
+      </div>
+      <div class="footer-col">
+        <h4>Project</h4>
+        <ul>
+          <li><a href="https://github.com/Magnatrix-Lab/MAGNATRIX-OS" target="_blank">GitHub Repository</a></li>
+          <li><a href="#install">Installation</a></li>
+          <li><a href="#arsitektur">Architecture</a></li>
+          <li><a href="#fitur">Features</a></li>
+        </ul>
+      </div>
+      <div class="footer-col">
+        <h4>Community</h4>
+        <ul>
+          <li><a href="#">Discord (coming soon)</a></li>
+          <li><a href="#">Telegram (coming soon)</a></li>
+          <li><a href="https://github.com/Magnatrix-Lab/MAGNATRIX-OS/issues" target="_blank">Issues</a></li>
+          <li><a href="https://github.com/Magnatrix-Lab/MAGNATRIX-OS/pulls" target="_blank">Pull Requests</a></li>
+        </ul>
+      </div>
+      <div class="footer-col">
+        <h4>Legal</h4>
+        <ul>
+          <li><a href="#">License (MIT)</a></li>
+          <li><a href="#">Privacy Policy</a></li>
+          <li><a href="#">Terms of Service</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <p>&copy; 2026 MAGNATRIX Lab. All rights reserved.</p>
+      <p>Powered by Leonard Treas &amp; the MAGNATRIX Swarm</p>
+    </div>
+  </div>
+</footer>
+
+</body>
+</html>

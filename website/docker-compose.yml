@@ -1,0 +1,19 @@
+version: "3.8"
+
+services:
+  magnatrix-website:
+    image: nginx:alpine
+    container_name: magnatrix-website
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./dist:/usr/share/nginx/html:ro
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    restart: unless-stopped
+    networks:
+      - magnatrix-net
+
+networks:
+  magnatrix-net:
+    external: true

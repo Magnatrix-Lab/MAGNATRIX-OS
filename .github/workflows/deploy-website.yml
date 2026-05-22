@@ -1,0 +1,30 @@
+name: Deploy Website to Hostinger VPS
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'website/**'
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build Static Site
+        run: |
+          cd website
+          python3 deploy.py --mode build
+
+      - name: Deploy to Hostinger VPS
+        uses: hostinger/deploy-on-vps@v2
+        with:
+          api-key: ${{ secrets.HOSTINGER_API_KEY }}
+          virtual-machine: ${{ vars.HOSTINGER_VM_ID }}
+          project-name: magnatrix-website
+          docker-compose-path: website/docker-compose.yml
+          environment-variables: |
+            NODE_ENV=production
+            PORT=80
