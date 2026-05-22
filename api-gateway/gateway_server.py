@@ -2,12 +2,23 @@
 """
 gateway_server.py — MAGNATRIX API Gateway
 REST API server untuk semua MAGNATRIX services.
-Implements OpenAPI spec dengan endpoints untuk swarm, trading, knowledge, governance, browser, chat, dan evolution.
+Implements OpenAPI spec dengan endpoints untuk swarm, trading, knowledge, governance, browser, chat, evolution, dan free LLM routing.
 """
 import json
+import os
+import sys
 import time
 from datetime import datetime, timezone
 from typing import Dict, Any
+
+# Import FreeLLM Router jika tersedia
+try:
+    sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "api-router"))
+    from free_llm_router import FreeLLMRouter
+    _LLM_ROUTER_AVAILABLE = True
+except Exception:
+    FreeLLMRouter = None  # type: ignore
+    _LLM_ROUTER_AVAILABLE = False
 
 
 class APIGatewayServer:
@@ -30,12 +41,18 @@ class APIGatewayServer:
             "POST /api/v2/browser/capture": self._browser_capture,
             "POST /api/v2/chat/send": self._chat_send,
             "POST /api/v2/evolve/trigger": self._evolve_trigger,
+            # Free LLM Router endpoints
+            "POST /api/v2/llm/chat": self._llm_chat,
+            "GET /api/v2/llm/models": self._llm_models,
+            "GET /api/v2/llm/health": self._llm_health,
         }
         # Simulated state
         self.swarm_nodes = []
         self.trading_nav = 1000000.0
         self.knowledge_entities = {}
         self.captured_data = []
+        # Initialize LLM router
+        self.llm_router = FreeLLMRouter() if _LLM_ROUTER_AVAILABLE else None
 
     def _health(self, body: Any = None) -> Dict:
         uptime = time.time() - self.start_time
@@ -47,11 +64,13 @@ class APIGatewayServer:
         }
 
     def _status(self, body: Any = None) -> Dict:
+        llm_status = "active" if self.llm_router else "disabled"
         return {
             "layers": [
                 {"layer": 0, "name": "kernel", "status": "active"},
                 {"layer": 0.5, "name": "collective-brain", "status": "active"},
                 {"layer": 1, "name": "protocol", "status": "active"},
+                {"layer": 1.5, "name": "api-router", "status": llm_status},
                 {"layer": 4, "name": "p2p-mesh", "status": "active", "nodes": len(self.swarm_nodes)},
                 {"layer": 5, "name": "knowledge", "status": "active", "entities": len(self.knowledge_entities)},
                 {"layer": 8, "name": "trading", "status": "active", "nav": self.trading_nav},
@@ -157,6 +176,35 @@ class APIGatewayServer:
             "status": "triggered",
             "improvements": ["swarm_optimization", "knowledge_expansion"]
         }
+
+    # ------------------------------------------------------------------
+    # Free LLM Router handlers
+    # ------------------------------------------------------------------
+    def _llm_chat(self, body: Dict) -> Dict:
+        if not self.llm_router:
+            return {"error": "FreeLLM Router not available. Set provider API keys in .env", "status": "503"}
+        messages = body.get("messages", [])
+        if not messages:
+            return {"error": "messages array required", "status": "400"}
+        return self.llm_router.chat_completions(
+            messages=messages,
+            model=body.get("model"),
+            temperature=body.get("temperature", 0.7),
+            max_tokens=body.get("max_tokens", 1024),
+            stream=body.get("stream", False),
+            tools=body.get("tools"),
+            session_id=body.get("session_id"),
+        )
+
+    def _llm_models(self, body: Any = None) -> Dict:
+        if not self.llm_router:
+            return {"error": "FreeLLM Router not available", "status": "503"}
+        return self.llm_router.export_openai_format()
+
+    def _llm_health(self, body: Any = None) -> Dict:
+        if not self.llm_router:
+            return {"error": "FreeLLM Router not available", "status": "503"}
+        return self.llm_router.get_health()
 
     def handle_request(self, method: str, path: str, body: Any = None) -> Dict:
         """Handle incoming API request."""
