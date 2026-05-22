@@ -1,0 +1,495 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MAGNATRIX.IO — Super AI Control Plane</title>
+<link rel="stylesheet" href="static/css/magnatrix.css">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+</head>
+<body>
+<div id="app">
+  <!-- Boot Screen -->
+  <div id="boot-screen" class="boot-screen">
+    <div class="boot-content">
+      <pre class="boot-ascii">
+ __  __    _    _   _    _    ____  _____ ___ _   _ _____ 
+|  \/  |  / \  | \ | |  / \  / ___||_   _|_ _| \ | | ____|
+| |\/| | / _ \ |  \| | / _ \ \___ \  | |  | ||  \| |  _|  
+| |  | |/ ___ \| |\  |/ ___ \ ___) | | |  | || |\  | |___ 
+|_|  |_/_/   \_\_| \_/_/   \_\____/  |_| |___|_| \_|_____|
+      </pre>
+      <div class="boot-text">INITIALIZING SUPER AI CONTROL PLANE...</div>
+      <div class="boot-progress"><div class="boot-progress-bar" id="boot-bar"></div></div>
+      <div class="boot-status" id="boot-status">Loading kernel modules...</div>
+    </div>
+  </div>
+
+  <!-- Auth Gate -->
+  <div id="auth-gate" class="auth-gate hidden">
+    <div class="auth-panel">
+      <div class="auth-logo">MAGNATRIX</div>
+      <div class="auth-subtitle">Super AI Control Plane</div>
+      <form id="auth-form" class="auth-form">
+        <input type="text" id="auth-user" placeholder="Agent ID or API Key" autocomplete="off" spellcheck="false">
+        <input type="password" id="auth-pass" placeholder="Secret Key" autocomplete="off">
+        <button type="submit" class="auth-btn">AUTHENTICATE</button>
+      </form>
+      <div class="auth-hint">Default: magnatrix / magnatrix</div>
+    </div>
+  </div>
+
+  <!-- Main Dashboard -->
+  <div id="dashboard" class="dashboard hidden">
+    <!-- Top Bar -->
+    <header class="topbar">
+      <div class="topbar-left">
+        <button class="sidebar-toggle" id="sidebar-toggle">≡</button>
+        <div class="logo-sm">MAG</div>
+        <div class="topbar-title" id="page-title">DASHBOARD</div>
+      </div>
+      <div class="topbar-center">
+        <div class="system-status">
+          <span class="status-dot status-ok" id="system-status-dot"></span>
+          <span id="system-status-text">SYSTEM ONLINE</span>
+        </div>
+      </div>
+      <div class="topbar-right">
+        <div class="ws-indicator" id="ws-indicator" title="WebSocket">◉</div>
+        <div class="uptime" id="uptime">00:00:00</div>
+        <div class="user-badge" id="user-badge">ORCHESTRATOR</div>
+        <button class="btn-icon" id="theme-toggle" title="Toggle Theme">◐</button>
+      </div>
+    </header>
+
+    <!-- Sidebar -->
+    <aside class="sidebar" id="sidebar">
+      <nav class="nav-main">
+        <a class="nav-item active" data-page="dashboard" data-icon="⌘">
+          <span class="nav-icon">⌘</span><span class="nav-label">Dashboard</span>
+        </a>
+        <a class="nav-item" data-page="agents" data-icon="◈">
+          <span class="nav-icon">◈</span><span class="nav-label">Agents</span>
+          <span class="nav-badge" id="badge-agents">0</span>
+        </a>
+        <a class="nav-item" data-page="skills" data-icon="⚡">
+          <span class="nav-icon">⚡</span><span class="nav-label">Skills</span>
+          <span class="nav-badge" id="badge-skills">0</span>
+        </a>
+        <a class="nav-item" data-page="trading" data-icon="◬">
+          <span class="nav-icon">◬</span><span class="nav-label">Trading</span>
+        </a>
+        <a class="nav-item" data-page="knowledge" data-icon="◉">
+          <span class="nav-icon">◉</span><span class="nav-label">Knowledge</span>
+        </a>
+        <a class="nav-item" data-page="browser" data-icon="◐">
+          <span class="nav-icon">◐</span><span class="nav-label">Browser</span>
+        </a>
+        <a class="nav-item" data-page="security" data-icon="◊">
+          <span class="nav-icon">◊</span><span class="nav-label">Security</span>
+        </a>
+        <a class="nav-item" data-page="mesh" data-icon="※">
+          <span class="nav-icon">※</span><span class="nav-label">P2P Mesh</span>
+        </a>
+      </nav>
+      <div class="nav-divider"></div>
+      <nav class="nav-system">
+        <a class="nav-item" data-page="logs" data-icon="▤">
+          <span class="nav-icon">▤</span><span class="nav-label">System Logs</span>
+        </a>
+        <a class="nav-item" data-page="settings" data-icon="⚙">
+          <span class="nav-icon">⚙</span><span class="nav-label">Settings</span>
+        </a>
+      </nav>
+      <div class="sidebar-footer">
+        <div class="version">v0.1.0</div>
+        <div class="repos">64+ repos</div>
+      </div>
+    </aside>
+
+    <!-- Content Area -->
+    <main class="main-content" id="main-content">
+      <!-- DASHBOARD PAGE -->
+      <section class="page" id="page-dashboard">
+        <div class="page-header">
+          <h1>System Overview</h1>
+          <div class="page-actions">
+            <button class="btn btn-primary" id="btn-refresh-all">↻ Refresh All</button>
+            <button class="btn btn-ghost" id="btn-deploy-trigger">▲ Deploy</button>
+          </div>
+        </div>
+        <div class="grid grid-4">
+          <div class="card metric-card">
+            <div class="metric-label">Active Agents</div>
+            <div class="metric-value" id="metric-agents">--</div>
+            <div class="metric-sub" id="metric-agents-sub">orchestrator + workers</div>
+          </div>
+          <div class="card metric-card">
+            <div class="metric-label">CPU Usage</div>
+            <div class="metric-value" id="metric-cpu">--%</div>
+            <div class="metric-sub" id="metric-cpu-sub">across all layers</div>
+            <div class="metric-bar"><div class="metric-bar-fill" id="metric-cpu-bar" style="width:0%"></div></div>
+          </div>
+          <div class="card metric-card">
+            <div class="metric-label">Memory</div>
+            <div class="metric-value" id="metric-mem">--</div>
+            <div class="metric-sub" id="metric-mem-sub">used / total</div>
+            <div class="metric-bar"><div class="metric-bar-fill" id="metric-mem-bar" style="width:0%"></div></div>
+          </div>
+          <div class="card metric-card">
+            <div class="metric-label">Trading PnL</div>
+            <div class="metric-value" id="metric-pnl">--</div>
+            <div class="metric-sub" id="metric-pnl-sub">paper mode</div>
+          </div>
+        </div>
+        <div class="grid grid-2">
+          <div class="card">
+            <div class="card-header">
+              <h3>Layer Health</h3>
+              <span class="badge badge-ok" id="badge-layers-ok">15/15 OK</span>
+            </div>
+            <div class="layer-list" id="layer-list">
+              <!-- JS populates -->
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header">
+              <h3>Live Activity</h3>
+              <span class="badge badge-info" id="badge-activity">-- events/min</span>
+            </div>
+            <div class="activity-feed" id="activity-feed">
+              <div class="activity-empty">Waiting for events...</div>
+            </div>
+          </div>
+        </div>
+        <div class="grid grid-3">
+          <div class="card">
+            <div class="card-header"><h3>Quick Actions</h3></div>
+            <div class="quick-actions">
+              <button class="qa-btn" data-action="agent-create"><span class="qa-icon">+</span>Create Agent</button>
+              <button class="qa-btn" data-action="skill-invoke"><span class="qa-icon">⚡</span>Invoke Skill</button>
+              <button class="qa-btn" data-action="repo-hunt"><span class="qa-icon">◉</span>Repo Hunt</button>
+              <button class="qa-btn" data-action="snapshot"><span class="qa-icon">◊</span>Snapshot</button>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header"><h3>Knowledge Query</h3></div>
+            <div class="knowledge-mini">
+              <input type="text" class="knowledge-input" id="knowledge-mini-input" placeholder="Ask the knowledge graph...">
+              <button class="btn btn-primary btn-block" id="knowledge-mini-btn">Query</button>
+              <div class="knowledge-mini-result" id="knowledge-mini-result"></div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header"><h3>System Info</h3></div>
+            <div class="info-list" id="system-info-list">
+              <div class="info-row"><span>Version</span><span>0.1.0</span></div>
+              <div class="info-row"><span>Environment</span><span id="info-env">production</span></div>
+              <div class="info-row"><span>Node ID</span><span id="info-node">auto</span></div>
+              <div class="info-row"><span>Repos</span><span>64+ integrated</span></div>
+              <div class="info-row"><span>Host</span><span>72.61.211.141</span></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- AGENTS PAGE -->
+      <section class="page hidden" id="page-agents">
+        <div class="page-header">
+          <h1>Agent Management</h1>
+          <div class="page-actions">
+            <button class="btn btn-primary" id="btn-create-agent">+ Create Agent</button>
+            <button class="btn btn-ghost" id="btn-delegate-task">▶ Delegate Task</button>
+          </div>
+        </div>
+        <div class="grid grid-1">
+          <div class="card">
+            <div class="card-header">
+              <h3>Active Agents</h3>
+              <input type="text" class="search-input" id="agent-search" placeholder="Filter agents...">
+            </div>
+            <div class="agent-grid" id="agent-grid">
+              <!-- JS populates -->
+            </div>
+          </div>
+        </div>
+        <div class="grid grid-2">
+          <div class="card">
+            <div class="card-header"><h3>Agent Hierarchy</h3></div>
+            <div class="hierarchy-view" id="hierarchy-view"></div>
+          </div>
+          <div class="card">
+            <div class="card-header"><h3>Agent Console</h3></div>
+            <div class="console" id="agent-console">
+              <div class="console-output" id="console-output"></div>
+              <div class="console-input-row">
+                <span class="console-prompt">agent></span>
+                <input type="text" class="console-input" id="console-input" placeholder="Enter command..." spellcheck="false">
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- SKILLS PAGE -->
+      <section class="page hidden" id="page-skills">
+        <div class="page-header">
+          <h1>Skill Marketplace</h1>
+          <div class="page-actions">
+            <button class="btn btn-primary" id="btn-install-skill">+ Install Skill</button>
+          </div>
+        </div>
+        <div class="grid grid-1">
+          <div class="card">
+            <div class="card-header">
+              <h3>Installed Skills</h3>
+              <input type="text" class="search-input" id="skill-search" placeholder="Search skills...">
+            </div>
+            <div class="skill-list" id="skill-list"></div>
+          </div>
+        </div>
+        <div class="grid grid-1">
+          <div class="card">
+            <div class="card-header"><h3>Invoke Skill</h3></div>
+            <div class="invoke-form">
+              <select class="input" id="invoke-skill-select">
+                <option value="">Select skill...</option>
+              </select>
+              <textarea class="input" id="invoke-skill-params" rows="4" placeholder='{"param": "value"}'></textarea>
+              <button class="btn btn-primary" id="btn-invoke-skill">Invoke</button>
+              <div class="invoke-result" id="invoke-result"></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- TRADING PAGE -->
+      <section class="page hidden" id="page-trading">
+        <div class="page-header">
+          <h1>HFT Trading Engine</h1>
+          <div class="page-actions">
+            <button class="btn btn-primary" id="btn-start-trading">▶ Start</button>
+            <button class="btn btn-danger" id="btn-stop-trading">■ Stop</button>
+            <button class="btn btn-ghost" id="btn-paper-toggle">Paper Mode: ON</button>
+          </div>
+        </div>
+        <div class="grid grid-4">
+          <div class="card metric-card">
+            <div class="metric-label">Portfolio Value</div>
+            <div class="metric-value" id="trading-portfolio">$0.00</div>
+          </div>
+          <div class="card metric-card">
+            <div class="metric-label">Open Positions</div>
+            <div class="metric-value" id="trading-positions">0</div>
+          </div>
+          <div class="card metric-card">
+            <div class="metric-label">Today's PnL</div>
+            <div class="metric-value" id="trading-pnl">$0.00</div>
+          </div>
+          <div class="card metric-card">
+            <div class="metric-label">Active Strategies</div>
+            <div class="metric-value" id="trading-strategies">0</div>
+          </div>
+        </div>
+        <div class="grid grid-2">
+          <div class="card">
+            <div class="card-header"><h3>Positions</h3></div>
+            <div class="table-wrapper">
+              <table class="data-table" id="positions-table">
+                <thead><tr><th>Asset</th><th>Side</th><th>Qty</th><th>Entry</th><th>Current</th><th>PnL</th></tr></thead>
+                <tbody><tr><td colspan="6" class="empty">No positions</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header"><h3>Trade History</h3></div>
+            <div class="table-wrapper">
+              <table class="data-table" id="trades-table">
+                <thead><tr><th>Time</th><th>Asset</th><th>Side</th><th>Qty</th><th>Price</th></tr></thead>
+                <tbody><tr><td colspan="5" class="empty">No trades</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- KNOWLEDGE PAGE -->
+      <section class="page hidden" id="page-knowledge">
+        <div class="page-header">
+          <h1>Knowledge Graph & RAG</h1>
+        </div>
+        <div class="grid grid-1">
+          <div class="card">
+            <div class="card-header"><h3>Query Knowledge Base</h3></div>
+            <div class="knowledge-query">
+              <input type="text" class="knowledge-input-lg" id="knowledge-input" placeholder="Enter your research query...">
+              <div class="knowledge-options">
+                <label>Top K: <input type="number" class="input-sm" id="knowledge-topk" value="5" min="1" max="20"></label>
+                <button class="btn btn-primary" id="btn-knowledge-query">Search</button>
+              </div>
+              <div class="knowledge-result" id="knowledge-result"></div>
+            </div>
+          </div>
+        </div>
+        <div class="grid grid-2">
+          <div class="card">
+            <div class="card-header"><h3>Recent Memories</h3></div>
+            <div class="memory-list" id="memory-list"></div>
+          </div>
+          <div class="card">
+            <div class="card-header"><h3>Knowledge Stats</h3></div>
+            <div class="info-list">
+              <div class="info-row"><span>Total Records</span><span id="knowledge-records">--</span></div>
+              <div class="info-row"><span>Graph Nodes</span><span id="knowledge-nodes">--</span></div>
+              <div class="info-row"><span>Triples</span><span id="knowledge-triples">--</span></div>
+              <div class="info-row"><span>Embeddings</span><span id="knowledge-embeddings">--</span></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- BROWSER PAGE -->
+      <section class="page hidden" id="page-browser">
+        <div class="page-header">
+          <h1>Browser Automation</h1>
+        </div>
+        <div class="grid grid-1">
+          <div class="card">
+            <div class="browser-toolbar">
+              <input type="text" class="browser-url" id="browser-url" placeholder="https://example.com" value="https://example.com">
+              <button class="btn btn-primary" id="btn-browser-navigate">Navigate</button>
+              <button class="btn btn-ghost" id="btn-browser-screenshot">Screenshot</button>
+              <button class="btn btn-ghost" id="btn-browser-extract">Extract</button>
+            </div>
+            <div class="browser-frame" id="browser-frame">
+              <div class="browser-placeholder">
+                <div class="browser-placeholder-icon">◐</div>
+                <div>Browser sessions will appear here</div>
+                <div class="browser-placeholder-sub">Agent-controlled browser automation</div>
+              </div>
+            </div>
+            <div class="browser-logs" id="browser-logs"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- SECURITY PAGE -->
+      <section class="page hidden" id="page-security">
+        <div class="page-header">
+          <h1>Security Operations</h1>
+        </div>
+        <div class="grid grid-3">
+          <div class="card">
+            <div class="card-header"><h3>Defense Status</h3></div>
+            <div class="security-status" id="defense-status">
+              <div class="sec-item sec-ok"><span class="sec-dot"></span>AgentShield</div>
+              <div class="sec-item sec-ok"><span class="sec-dot"></span>Jailbreak DB</div>
+              <div class="sec-item sec-ok"><span class="sec-dot"></span>OSINT Monitor</div>
+              <div class="sec-item sec-ok"><span class="sec-dot"></span>Runtime Enforcer</div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header"><h3>Audit Log</h3></div>
+            <div class="audit-list" id="audit-list"></div>
+          </div>
+          <div class="card">
+            <div class="card-header"><h3>Threat Intel</h3></div>
+            <div class="threat-list" id="threat-list">
+              <div class="threat-item threat-low">
+                <span class="threat-severity">LOW</span>
+                <span class="threat-desc">Scan from 192.168.x.x blocked</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- MESH PAGE -->
+      <section class="page hidden" id="page-mesh">
+        <div class="page-header">
+          <h1>P2P Mesh Network</h1>
+        </div>
+        <div class="grid grid-2">
+          <div class="card">
+            <div class="card-header"><h3>Mesh Topology</h3></div>
+            <div class="mesh-visual" id="mesh-visual">
+              <div class="mesh-node mesh-local">
+                <div class="mesh-node-id">local</div>
+                <div class="mesh-node-ip">127.0.0.1:8081</div>
+              </div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header"><h3>Connected Peers</h3></div>
+            <div class="peer-list" id="peer-list">
+              <div class="peer-empty">No peers connected</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- LOGS PAGE -->
+      <section class="page hidden" id="page-logs">
+        <div class="page-header">
+          <h1>System Logs</h1>
+          <div class="page-actions">
+            <button class="btn btn-ghost" id="btn-logs-pause">⏸ Pause</button>
+            <button class="btn btn-ghost" id="btn-logs-clear">Clear</button>
+            <select class="input-sm" id="logs-level">
+              <option value="all">All Levels</option>
+              <option value="info">Info</option>
+              <option value="warn">Warn</option>
+              <option value="error">Error</option>
+            </select>
+          </div>
+        </div>
+        <div class="card log-card">
+          <div class="log-stream" id="log-stream"></div>
+        </div>
+      </section>
+
+      <!-- SETTINGS PAGE -->
+      <section class="page hidden" id="page-settings">
+        <div class="page-header">
+          <h1>System Settings</h1>
+        </div>
+        <div class="grid grid-2">
+          <div class="card">
+            <div class="card-header"><h3>API Configuration</h3></div>
+            <div class="settings-form">
+              <div class="field"><label>API Base URL</label><input class="input" id="setting-api-url" value="http://72.61.211.141:8080"></div>
+              <div class="field"><label>WebSocket URL</label><input class="input" id="setting-ws-url" value="ws://72.61.211.141:8080/ws"></div>
+              <div class="field"><label>Refresh Interval (ms)</label><input class="input" id="setting-refresh" value="5000" type="number"></div>
+              <button class="btn btn-primary" id="btn-save-settings">Save Settings</button>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header"><h3>Layer Control</h3></div>
+            <div class="layer-controls" id="layer-controls">
+              <!-- JS populates toggles -->
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <!-- Toast Container -->
+    <div class="toast-container" id="toast-container"></div>
+
+    <!-- Modals -->
+    <div class="modal-overlay hidden" id="modal-overlay">
+      <div class="modal" id="modal">
+        <div class="modal-header">
+          <h3 id="modal-title">Modal</h3>
+          <button class="modal-close" id="modal-close">×</button>
+        </div>
+        <div class="modal-body" id="modal-body"></div>
+        <div class="modal-footer" id="modal-footer"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="static/js/magnatrix.js"></script>
+</body>
+</html>

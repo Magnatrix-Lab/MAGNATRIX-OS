@@ -26,7 +26,8 @@ from typing import Any, Dict, List, Optional
 
 try:
     from fastapi import FastAPI, WebSocket, HTTPException, BackgroundTasks
-    from fastapi.responses import JSONResponse
+    from fastapi.responses import JSONResponse, FileResponse
+    from fastapi.staticfiles import StaticFiles
     from pydantic import BaseModel
     HAS_FASTAPI = True
 except ImportError:
@@ -89,6 +90,21 @@ class APIGateway:
 
     def _setup_routes(self):
         app = self.app
+
+        # Static files — web-ui control plane
+        if HAS_FASTAPI:
+            webui_path = os.path.join(os.path.dirname(__file__), "..", "web-ui")
+            if os.path.exists(webui_path):
+                app.mount("/static", StaticFiles(directory=os.path.join(webui_path, "static")), name="static")
+                @app.get("/")
+                async def root():
+                    return FileResponse(os.path.join(webui_path, "index.html"))
+                @app.get("/{page}")
+                async def spa_page(page: str):
+                    # Serve index.html for all SPA routes
+                    if page in ("dashboard", "agents", "skills", "trading", "knowledge", "browser", "security", "mesh", "logs", "settings"):
+                        return FileResponse(os.path.join(webui_path, "index.html"))
+                    return {"detail": "Not found"}
 
         @app.get("/health")
         async def health():
