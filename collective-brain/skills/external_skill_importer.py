@@ -34,7 +34,7 @@ class ExternalSkillImporter:
         "architect": ["mcp-builder", "webapp-testing", "code-mutate", "capability-rank",
                       "constitution-evolve", "emergent-predict"],
         "scout": ["scan-tokens", "web-monitor", "repo-hunt", "news-scrape", "social-listen"],
-        "executor": ["execute-trade", "dca-execute", "deploy-node", "api-call"],
+        "executor": ["execute-trade", "dca-execute", "deploy-node", "api-call", "bankr-defi", "bankr-swap"],
         "guardian": ["check-risk", "drawdown-monitor", "anomaly-flag", "veto-trigger",
                      "self-repair", "constitution-check"],
     }
@@ -58,6 +58,11 @@ class ExternalSkillImporter:
                 "support-ticket-triage", "spreadsheet-formula-helper", "tailored-resume-generator",
                 "video-downloader", "webapp-testing",
             ],
+        },
+        "bankr-skills": {
+            "repo": "BankrBot/skills",
+            "url_pattern": "https://raw.githubusercontent.com/{repo}/main/{skill}/skill.sh",
+            "skills": ["swap", "bridge", "stake", "launch", "analyze", "portfolio"],
         },
     }
 
