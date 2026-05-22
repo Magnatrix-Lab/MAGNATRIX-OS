@@ -1,0 +1,34 @@
+version: '3.8'
+services:
+  magnatrix-core:
+    build: {context: ../.., dockerfile: infrastructure/docker/Dockerfile}
+    image: magnatrix/os:latest
+    restart: unless-stopped
+    ports: ["8080:8080", "8081:8081", "8082:8082"]
+    environment:
+      MAGNATRIX_ENV: production
+      MAGNATRIX_DB_URL: mysql+pymysql://u721595593_z8x9N:${HOSTINGER_DB_PASSWORD}@auth-db1867.hstgr.io:3306/u721595593_TfDUU?charset=utf8mb4
+      MAGNATRIX_REDIS_URL: redis://redis:6379
+      HOSTINGER_SSH_HOST: 72.61.211.141
+      HOSTINGER_SSH_PORT: 65002
+      HOSTINGER_SSH_USER: u721595593
+    volumes: [magnatrix-data:/app/data, magnatrix-logs:/app/logs]
+    depends_on: [redis]
+    networks: [magnatrix-net]
+    deploy:
+      resources:
+        limits: {cpus: '2.0', memory: 4G}
+        reservations: {cpus: '1.0', memory: 1G}
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru
+    volumes: [redis-data:/data]
+    ports: ["6379:6379"]
+    networks: [magnatrix-net]
+volumes:
+  magnatrix-data:
+  magnatrix-logs:
+  redis-data:
+networks:
+  magnatrix-net: {driver: bridge}
