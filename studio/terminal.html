@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MAGNATRIX Terminal</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css">
+<script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xterm-addon-web-links@0.9.0/lib/xterm-addon-web-links.min.js"></script>
+<style>
+:root {
+  --bg: #0a0a0f; --bg-elevated: #12121a; --border: #2a2a3a;
+  --text: #e0e0f0; --text-muted: #8a8aa0; --accent-cyan: #00f0ff;
+  --accent-purple: #a855f7; --accent-green: #00e676;
+  --font-mono: 'JetBrains Mono', monospace;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: var(--bg); color: var(--text); font-family: var(--font-mono); height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+
+/* Toolbar */
+.toolbar {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 8px 16px; background: var(--bg-elevated); border-bottom: 1px solid var(--border);
+}
+.toolbar .logo { font-size: 0.9rem; font-weight: 700; color: var(--accent-cyan); }
+.toolbar .tabs { display: flex; gap: 4px; }
+.tab {
+  padding: 4px 12px; border-radius: 4px; font-size: 0.75rem; cursor: pointer;
+  background: var(--bg-card); border: 1px solid var(--border); color: var(--text-muted);
+}
+.tab.active { background: rgba(0,240,255,0.1); color: var(--accent-cyan); border-color: var(--accent-cyan); }
+.toolbar .actions { display: flex; gap: 6px; }
+.btn { padding: 4px 10px; border-radius: 4px; font-size: 0.7rem; cursor: pointer; border: 1px solid var(--border); background: var(--bg); color: var(--text); }
+.btn:hover { border-color: var(--accent-cyan); }
+
+/* Terminal Container */
+.terminal-wrapper { flex: 1; padding: 8px; }
+#terminal { width: 100%; height: 100%; }
+
+/* Status bar */
+.statusbar {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 4px 16px; background: var(--bg-elevated); border-top: 1px solid var(--border);
+  font-size: 0.7rem; color: var(--text-muted);
+}
+.statusbar .indicator { display: flex; align-items: center; gap: 6px; }
+.dot { width: 6px; height: 6px; border-radius: 50%; }
+.dot.green { background: var(--accent-green); }
+
+/* xterm custom */
+.xterm { padding: 8px !important; }
+</style>
+</head>
+<body>
+
+<div class="toolbar">
+  <div class="logo">MAGNATRIX Terminal</div>
+  <div class="tabs">
+    <div class="tab active" onclick="switchTab(0)">shell</div>
+    <div class="tab" onclick="switchTab(1)">logs</div>
+    <div class="tab" onclick="switchTab(2)">mesh</div>
+  </div>
+  <div class="actions">
+    <button class="btn" onclick="clearTerm()">Clear</button>
+    <button class="btn" onclick="resetTerm()">Reset</button>
+    <button class="btn" onclick="window.open('/','_blank')">Studio ↗</button>
+  </div>
+</div>
+
+<div class="terminal-wrapper">
+  <div id="terminal"></div>
+</div>
+
+<div class="statusbar">
+  <div class="indicator"><span class="dot green"></span> Connected</div>
+  <div>MAGNATRIX v0.1.0 | 8 agents | 15 layers</div>
+  <div>PID: <span id="pid">—</span></div>
+</div>
+
+<script>
+const term = new Terminal({
+  fontFamily: "'JetBrains Mono', monospace",
+  fontSize: 13,
+  theme: {
+    background: '#0a0a0f',
+    foreground: '#e0e0f0',
+    cursor: '#00f0ff',
+    selectionBackground: 'rgba(0,240,255,0.25)',
+    black: '#0a0a0f',
+    red: '#ff5252',
+    green: '#00e676',
+    yellow: '#ff9800',
+    blue: '#00f0ff',
+    magenta: '#a855f7',
+    cyan: '#00f0ff',
+    white: '#e0e0f0',
+  },
+  cursorBlink: true,
+  cursorStyle: 'block',
+});
+
+const fitAddon = new FitAddon.FitAddon();
+term.loadAddon(fitAddon);
+term.loadAddon(new WebLinks.WebLinksAddon());
+
+term.open(document.getElementById('terminal'));
+fitAddon.fit();
+
+// Welcome banner
+term.writeln('\x1b[1;36m╔═══════════════════════════════════════════════════════════════╗\x1b[0m');
+term.writeln('\x1b[1;36m║\x1b[0m  \x1b[1;35mMAGNATRIX Agentic OS\x1b[0m — Terminal v0.1.0                      \x1b[1;36m║\x1b[0m');
+term.writeln('\x1b[1;36m║\x1b[0m  \x1b[90m8 agents | 15 layers | 20 skills | 11 LLM providers\x1b[0m        \x1b[1;36m║\x1b[0m');
+term.writeln('\x1b[1;36m╚═══════════════════════════════════════════════════════════════╝\x1b[0m');
+term.writeln('');
+
+// Simulated shell
+let currentLine = '';
+const prompt = '\x1b[1;36mmagnatrix\x1b[0m:\x1b[1;35m~\x1b[0m$ ';
+
+function printPrompt() {
+  term.write(prompt);
+}
+
+const commands = {
+  help: () => {
+    term.writeln('Available commands:');
+    term.writeln('  \x1b[36mstatus\x1b[0m      — Show system status');
+    term.writeln('  \x1b[36mswarm\x1b[0m       — List swarm agents');
+    term.writeln('  \x1b[36mtrading\x1b[0m     — Trading engine status');
+    term.writeln('  \x1b[36mevolve\x1b[0m      — Trigger self-improvement');
+    term.writeln('  \x1b[36mllm\x1b[0m         — LLM router status');
+    term.writeln('  \x1b[36mskills\x1b[0m      — List loaded skills');
+    term.writeln('  \x1b[36mhalt\x1b[0m        — Emergency stop');
+    term.writeln('  \x1b[36mclear\x1b[0m       — Clear terminal');
+    term.writeln('  \x1b[36mhelp\x1b[0m        — Show this help');
+  },
+  status: () => {
+    term.writeln('\x1b[32mKernel .............. active\x1b[0m');
+    term.writeln('\x1b[32mProtocol ............ active\x1b[0m');
+    term.writeln('\x1b[32mAPI Router .......... active — 11 providers\x1b[0m');
+    term.writeln('\x1b[32mP2P Mesh ............ 8 nodes\x1b[0m');
+    term.writeln('\x1b[32mKnowledge Graph ..... 12,847 entities\x1b[0m');
+    term.writeln('\x1b[32mTrading Engine ...... NAV $1,247,300\x1b[0m');
+    term.writeln('\x1b[32mGovernance .......... constitution v4.3\x1b[0m');
+    term.writeln('\x1b[32mOffensive Security .. 3 findings (1 critical)\x1b[0m');
+    term.writeln('\x1b[36mSuper AI Phase ...... Stage 5/5\x1b[0m');
+  },
+  swarm: () => {
+    term.writeln('Active agents:');
+    term.writeln('  \x1b[32m●\x1b[0m scout       — 5 signals/min');
+    term.writeln('  \x1b[32m●\x1b[0m analyst     — idle');
+    term.writeln('  \x1b[32m●\x1b[0m executor    — 1 task running');
+    term.writeln('  \x1b[32m●\x1b[0m guardian    — monitoring');
+    term.writeln('  \x1b[32m●\x1b[0m researcher  — arxiv scan');
+    term.writeln('  \x1b[33m○\x1b[0m writer      — offline');
+    term.writeln('  \x1b[32m●\x1b[0m ops         — CI monitor');
+    term.writeln('  \x1b[32m●\x1b[0m architect   — code mutation');
+  },
+  trading: () => {
+    term.writeln('NAV:        \x1b[32m$1,247,300\x1b[0m');
+    term.writeln('Drawdown:   \x1b[31m14.7%\x1b[0m (threshold: 15%)');
+    term.writeln('Positions:  \x1b[36m12 open\x1b[0m');
+    term.writeln('Volume 24h: \x1b[36m$2.4M\x1b[0m');
+    term.writeln('Last trade: SOL buy @ 145.2 (analyst signal)');
+  },
+  evolve: () => {
+    term.writeln('\x1b[33m[+] Triggering self-improvement cycle...\x1b[0m');
+    setTimeout(() => {
+      term.writeln('\x1b[32m[+] Code mutation accepted: 3.2x speedup in pipeline executor\x1b[0m');
+      term.writeln('\x1b[32m[+] Constitution evolved: v4.3 → v4.4\x1b[0m');
+      term.writeln('\x1b[32m[+] Emergent capability predicted: meta-reasoning\x1b[0m');
+      term.writeln('\x1b[36m[+] Cycle complete. 3 improvements applied.\x1b[0m');
+      printPrompt();
+    }, 800);
+    return 'async';
+  },
+  llm: () => {
+    term.writeln('LLM Router Status:');
+    term.writeln('  One-API      \x1b[32m● Online\x1b[0m — 20 providers');
+    term.writeln('  FreeLLM      \x1b[32m● Online\x1b[0m — 11 free providers');
+    term.writeln('  Requests/min: \x1b[36m47\x1b[0m');
+    term.writeln('  Avg latency:  \x1b[36m1.2s\x1b[0m');
+    term.writeln('  Active model: \x1b[36mgemini-2.5-flash\x1b[0m (Google)');
+  },
+  skills: () => {
+    term.writeln('Loaded skills: 20');
+    term.writeln('  scan-tokens, analyze-signal, execute-trade, check-risk,');
+    term.writeln('  daily-digest, repo-health, code-mutate, security-audit,');
+    term.writeln('  gh-address-comments, gh-fix-ci, codebase-migrate,');
+    term.writeln('  deploy-pipeline, datadog-logs, issue-triage,');
+    term.writeln('  changelog-generator, content-research-writer,');
+    term.writeln('  meeting-notes-and-actions, competitive-ads-extractor,');
+    term.writeln('  lead-research-assistant, mcp-builder, webapp-testing');
+  },
+  halt: () => {
+    term.writeln('\x1b[31m[!] HALT signal broadcast to all agents\x1b[0m');
+    term.writeln('\x1b[31m[!] Swarm frozen. Guardian veto active.\x1b[0m');
+    term.writeln('\x1b[33m[!] Reason: manual override by operator\x1b[0m');
+  },
+  clear: () => {
+    term.clear();
+    return 'no-prompt';
+  },
+};
+
+function executeCommand(cmd) {
+  const trimmed = cmd.trim();
+  if (!trimmed) return;
+  const [main, ...args] = trimmed.split(' ');
+  const handler = commands[main];
+  if (handler) {
+    const result = handler();
+    if (result === 'async') return;
+    if (result !== 'no-prompt') printPrompt();
+  } else {
+    term.writeln(`\x1b[31mCommand not found: ${main}\x1b[0m. Type 'help' for available commands.`);
+    printPrompt();
+  }
+}
+
+term.onData(e => {
+  const code = e.charCodeAt(0);
+  if (code === 13) { // Enter
+    term.writeln('');
+    executeCommand(currentLine);
+    currentLine = '';
+  } else if (code === 127) { // Backspace
+    if (currentLine.length > 0) {
+      currentLine = currentLine.slice(0, -1);
+      term.write('\b \b');
+    }
+  } else if (code >= 32) {
+    currentLine += e;
+    term.write(e);
+  }
+});
+
+printPrompt();
+
+function clearTerm() { term.clear(); printPrompt(); currentLine = ''; }
+function resetTerm() { term.reset(); currentLine = ''; }
+function switchTab(n) { document.querySelectorAll('.tab').forEach((t, i) => t.classList.toggle('active', i === n)); }
+
+window.addEventListener('resize', () => fitAddon.fit());
+</script>
+
+</body>
+</html>

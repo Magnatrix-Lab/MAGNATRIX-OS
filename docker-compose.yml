@@ -428,6 +428,32 @@ services:
           cpus: '1.0'
           memory: 512M
 
+  studio:
+    image: python:3.11-slim
+    container_name: magnatrix-studio
+    restart: unless-stopped
+    working_dir: /app/studio
+    environment:
+      - MAGNATRIX_API_URL=http://api-gateway:8080
+    volumes:
+      - ./studio:/app/studio:ro
+      - magnatrix-data:/data
+    ports:
+      - "3003:3003"
+    networks:
+      - magnatrix-net
+    command: ["python", "studio_server.py"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:3003/')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: '0.3'
+          memory: 128M
+
 networks:
   magnatrix-net:
     driver: bridge
@@ -441,4 +467,5 @@ volumes:
     driver: local
   one-api-data:
     driver: local
+  ollama-models:
     driver: local
