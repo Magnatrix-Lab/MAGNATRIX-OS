@@ -40,7 +40,7 @@ class HostingerDeployer:
 
     def __init__(self, api_key: Optional[str] = None):
         self.api_key = api_key or os.environ.get("HOSTINGER_API_KEY", "")
-        self.base_url = "https://api.hostinger.com/v1"
+        self.base_url = "https://developers.hostinger.com"
         self.instances: Dict[str, VPSInstance] = {}
         self.deploy_log: List[Dict] = []
 
@@ -71,7 +71,7 @@ class HostingerDeployer:
 
     def list_instances(self) -> List[VPSInstance]:
         """List semua VPS instances."""
-        result = self._api_request("GET", "/vps")
+        result = self._api_request("GET", "/api/vps/v1/virtual-machines")
         if "error" in result:
             # Simulasi: return mock data untuk demo
             return [
@@ -125,7 +125,7 @@ class HostingerDeployer:
             "user_data": self._generate_cloudinit(role),
         }
 
-        result = self._api_request("POST", "/vps", payload)
+        result = self._api_request("POST", "/api/vps/v1/virtual-machines", payload)
 
         self.deploy_log.append({
             "action": "deploy",
@@ -206,7 +206,7 @@ fi
 
     def stop_instance(self, instance_id: str) -> Dict:
         """Stop VPS instance."""
-        result = self._api_request("POST", f"/vps/{instance_id}/stop")
+        result = self._api_request("POST", f"/api/vps/v1/virtual-machines/{instance_id}/stop")
         self.deploy_log.append({
             "action": "stop",
             "timestamp": datetime.now(timezone.utc).isoformat(),
@@ -217,7 +217,7 @@ fi
 
     def delete_instance(self, instance_id: str) -> Dict:
         """Delete VPS instance."""
-        result = self._api_request("DELETE", f"/vps/{instance_id}")
+        result = self._api_request("DELETE", f"/api/vps/v1/virtual-machines/{instance_id}")
         self.deploy_log.append({
             "action": "delete",
             "timestamp": datetime.now(timezone.utc).isoformat(),
