@@ -17,4 +17,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
     CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8080/health')" || exit 1
 EXPOSE 8080 8081 8082
 ENV PYTHONPATH=/app MAGNATRIX_ENV=production MAGNATRIX_LOG_LEVEL=INFO
-CMD ["python", "scripts/master_orchestrator.py"]
+CMD ["python", "magnatrix_server.py"]
