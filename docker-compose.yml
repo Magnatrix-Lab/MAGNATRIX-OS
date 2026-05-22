@@ -43,6 +43,31 @@ services:
           cpus: '0.5'
           memory: 256M
 
+  one-api:
+    image: justsong/one-api:latest
+    container_name: magnatrix-one-api
+    restart: unless-stopped
+    environment:
+      - TZ=Asia/Jakarta
+      - SESSION_SECRET=${ONE_API_SESSION_SECRET:-magnatrix-secret-key}
+    volumes:
+      - one-api-data:/data
+      - ./api-router/one-api-config:/config:ro
+    ports:
+      - "3002:3000"
+    networks:
+      - magnatrix-net
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:3000/api/status"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+
   api-router:
     image: python:3.11-slim
     container_name: magnatrix-api-router
@@ -414,5 +439,6 @@ volumes:
     driver: local
   magnatrix-logs:
     driver: local
-  ollama-models:
+  one-api-data:
+    driver: local
     driver: local
