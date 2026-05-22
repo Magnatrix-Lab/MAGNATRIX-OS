@@ -1,0 +1,20 @@
+name: Release Automation
+on:
+  push:
+    tags: ['v*']
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Generate Release Notes
+        run: |
+          echo "## MAGNATRIX Release ${{ github.ref_name }}" > release_notes.md
+          echo "" >> release_notes.md
+          git log $(git describe --tags --abbrev=0 HEAD^)..HEAD --oneline >> release_notes.md
+      - uses: softprops/action-gh-release@v1
+        with:
+          body_path: release_notes.md
+          files: |
+            LICENSE
+            README.md
