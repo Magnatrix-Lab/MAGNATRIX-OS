@@ -1,0 +1,93 @@
+{
+  "name": "magnatrix-vscode",
+  "displayName": "MAGNATRIX Agentic OS",
+  "description": "VS Code extension for MAGNATRIX Agentic OS — AI-powered coding assistant, swarm integration, and autonomous development",
+  "version": "1.0.0",
+  "publisher": "magnatrix",
+  "engines": {
+    "vscode": "^1.74.0"
+  },
+  "categories": [
+    "Machine Learning",
+    "Debuggers",
+    "Other"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "magnatrix.start",
+        "title": "Start MAGNATRIX",
+        "category": "MAGNATRIX"
+      },
+      {
+        "command": "magnatrix.stop",
+        "title": "Stop MAGNATRIX",
+        "category": "MAGNATRIX"
+      },
+      {
+        "command": "magnatrix.query",
+        "title": "Query Knowledge Graph",
+        "category": "MAGNATRIX"
+      },
+      {
+        "command": "magnatrix.generate",
+        "title": "Generate Code",
+        "category": "MAGNATRIX"
+      },
+      {
+        "command": "magnatrix.explain",
+        "title": "Explain Selected Code",
+        "category": "MAGNATRIX"
+      },
+      {
+        "command": "magnatrix.refactor",
+        "title": "Refactor Selected Code",
+        "category": "MAGNATRIX"
+      },
+      {
+        "command": "magnatrix.status",
+        "title": "Show System Status",
+        "category": "MAGNATRIX"
+      }
+    ],
+    "menus": {
+      "editor/context": [
+        {
+          "command": "magnatrix.explain",
+          "group": "magnatrix@1",
+          "when": "editorHasSelection"
+        },
+        {
+          "command": "magnatrix.refactor",
+          "group": "magnatrix@2",
+          "when": "editorHasSelection"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "MAGNATRIX",
+      "properties": {
+        "magnatrix.apiUrl": {
+          "type": "string",
+          "default": "http://localhost:8080",
+          "description": "MAGNATRIX API server URL"
+        },
+        "magnatrix.autoStart": {
+          "type": "boolean",
+          "default": false,
+          "description": "Auto-start MAGNATRIX on VS Code launch"
+        },
+        "magnatrix.model": {
+          "type": "string",
+          "default": "hermes",
+          "enum": ["hermes", "kimi-claw", "gqris", "android-claw"],
+          "description": "Default brain model for code generation"
+        }
+      }
+    }
+  }
+}

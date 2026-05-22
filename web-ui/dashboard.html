@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MAGNATRIX Agentic OS — Dashboard</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            background: #0a0a0f;
+            color: #e0e0e0;
+            min-height: 100vh;
+        }
+        .header {
+            background: linear-gradient(90deg, #1a1a2e 0%, #16213e 100%);
+            padding: 20px 40px;
+            border-bottom: 2px solid #e94560;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .header h1 {
+            color: #e94560;
+            font-size: 28px;
+            letter-spacing: 2px;
+        }
+        .header .status {
+            display: flex;
+            gap: 20px;
+            align-items: center;
+        }
+        .status-badge {
+            padding: 6px 16px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+        .status-online { background: #00d9ff; color: #0a0a0f; }
+        .status-emergency { background: #ff0040; color: white; }
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            padding: 30px 40px;
+        }
+        .card {
+            background: #16162a;
+            border-radius: 12px;
+            padding: 24px;
+            border: 1px solid #2a2a4a;
+            transition: border-color 0.3s;
+        }
+        .card:hover { border-color: #e94560; }
+        .card h2 {
+            color: #00d9ff;
+            font-size: 16px;
+            margin-bottom: 16px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        .metric {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid #2a2a4a;
+        }
+        .metric:last-child { border-bottom: none; }
+        .metric-label { color: #888; }
+        .metric-value { color: #00d9ff; font-weight: bold; }
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: #2a2a4a;
+            border-radius: 4px;
+            overflow: hidden;
+            margin-top: 8px;
+        }
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #00d9ff, #e94560);
+            transition: width 0.5s;
+        }
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: bold;
+            text-transform: uppercase;
+            font-size: 12px;
+            letter-spacing: 1px;
+            transition: all 0.3s;
+        }
+        .btn-primary {
+            background: #e94560;
+            color: white;
+        }
+        .btn-primary:hover { background: #ff6b6b; }
+        .btn-danger {
+            background: #ff0040;
+            color: white;
+        }
+        .btn-danger:hover { background: #ff3366; }
+        .actions {
+            display: flex;
+            gap: 12px;
+            margin-top: 16px;
+        }
+        .log-container {
+            background: #0f0f1a;
+            border-radius: 8px;
+            padding: 12px;
+            max-height: 200px;
+            overflow-y: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+        }
+        .log-entry {
+            padding: 4px 0;
+            border-bottom: 1px solid #1a1a2e;
+        }
+        .log-time { color: #666; }
+        .log-info { color: #00d9ff; }
+        .log-warn { color: #ffaa00; }
+        .log-error { color: #ff0040; }
+        .swarm-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+            gap: 8px;
+            margin-top: 12px;
+        }
+        .node-pill {
+            padding: 6px 10px;
+            border-radius: 16px;
+            font-size: 11px;
+            text-align: center;
+            background: #2a2a4a;
+            border: 1px solid #3a3a5a;
+        }
+        .node-healthy { border-color: #00d9ff; color: #00d9ff; }
+        .node-degraded { border-color: #ffaa00; color: #ffaa00; }
+        .node-critical { border-color: #ff0040; color: #ff0040; }
+        .footer {
+            text-align: center;
+            padding: 20px;
+            color: #666;
+            font-size: 12px;
+            border-top: 1px solid #2a2a4a;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🧠 MAGNATRIX Agentic OS</h1>
+        <div class="status">
+            <span class="status-badge status-online" id="systemStatus">ONLINE</span>
+            <span id="uptime">Uptime: 0s</span>
+            <span id="version">v2.0.0</span>
+        </div>
+    </div>
+
+    <div class="grid">
+        <!-- System Overview -->
+        <div class="card">
+            <h2>System Overview</h2>
+            <div class="metric">
+                <span class="metric-label">Active Layers</span>
+                <span class="metric-value" id="activeLayers">15/15</span>
+            </div>
+            <div class="metric">
+                <span class="metric-label">Swarm Nodes</span>
+                <span class="metric-value" id="swarmNodes">5</span>
+            </div>
+            <div class="metric">
+                <span class="metric-label">Evolution Cycles</span>
+                <span class="metric-value" id="cycleCount">0</span>
+            </div>
+            <div class="metric">
+                <span class="metric-label">Emergency Mode</span>
+                <span class="metric-value" id="emergencyMode">OFF</span>
+            </div>
+            <div class="actions">
+                <button class="btn btn-primary" onclick="triggerEvolve()">🔄 Evolve</button>
+                <button class="btn btn-danger" onclick="emergencyStop()">🛑 Emergency</button>
+            </div>
+        </div>
+
+        <!-- Swarm Status -->
+        <div class="card">
+            <h2>Swarm Nodes</h2>
+            <div class="swarm-grid" id="swarmGrid">
+                <div class="node-pill node-healthy">hermes-1</div>
+                <div class="node-pill node-healthy">kimi-1</div>
+                <div class="node-pill node-healthy">gqris-1</div>
+                <div class="node-pill node-healthy">android-1</div>
+                <div class="node-pill node-degraded">backup-1</div>
+            </div>
+            <div class="actions">
+                <button class="btn btn-primary" onclick="spawnNode()">➕ Spawn Node</button>
+            </div>
+        </div>
+
+        <!-- Trading -->
+        <div class="card">
+            <h2>Trading Engine</h2>
+            <div class="metric">
+                <span class="metric-label">Mode</span>
+                <span class="metric-value" id="tradingMode">DEMO</span>
+            </div>
+            <div class="metric">
+                <span class="metric-label">NAV</span>
+                <span class="metric-value" id="navValue">$1,000,000</span>
+            </div>
+            <div class="metric">
+                <span class="metric-label">Daily P&L</span>
+                <span class="metric-value" id="dailyPnl">+$150</span>
+            </div>
+            <div class="metric">
+                <span class="metric-label">Positions</span>
+                <span class="metric-value" id="positions">2</span>
+            </div>
+            <div class="progress-bar">
+                <div class="progress-fill" style="width: 65%"></div>
+            </div>
+        </div>
+
+        <!-- Knowledge Graph -->
+        <div class="card">
+            <h2>Knowledge Graph</h2>
+            <div class="metric">
+                <span class="metric-label">Entities</span>
+                <span class="metric-value" id="entities">1,240</span>
+            </div>
+            <div class="metric">
+                <span class="metric-label">Relations</span>
+                <span class="metric-value" id="relations">3,680</span>
+            </div>
+            <div class="metric">
+                <span class="metric-label">Auto-Expand</span>
+                <span class="metric-value" id="autoExpand">ON</span>
+            </div>
+            <div class="actions">
+                <button class="btn btn-primary" onclick="queryKnowledge()">🔍 Query</button>
+                <button class="btn btn-primary" onclick="expandGraph()">📈 Expand</button>
+            </div>
+        </div>
+
+        <!-- Governance -->
+        <div class="card">
+            <h2>Governance</h2>
+            <div class="metric">
+                <span class="metric-label">Constitution Score</span>
+                <span class="metric-value" id="constitutionScore">0.95</span>
+            </div>
+            <div class="metric">
+                <span class="metric-label">Active Goals</span>
+                <span class="metric-value" id="activeGoals">2</span>
+            </div>
+            <div class="metric">
+                <span class="metric-label">Violations (24h)</span>
+                <span class="metric-value" id="violations">0</span>
+            </div>
+            <div class="metric">
+                <span class="metric-label">Concealment Flags</span>
+                <span class="metric-value" id="concealment">0</span>
+            </div>
+        </div>
+
+        <!-- Logs -->
+        <div class="card" style="grid-column: 1 / -1;">
+            <h2>System Logs</h2>
+            <div class="log-container" id="logContainer">
+                <div class="log-entry"><span class="log-time">[10:00:01]</span> <span class="log-info">System initialized — 15 layers active</span></div>
+                <div class="log-entry"><span class="log-time">[10:00:05]</span> <span class="log-info">Swarm orchestrator — 5 nodes online</span></div>
+                <div class="log-entry"><span class="log-time">[10:00:10]</span> <span class="log-warn">Trading engine — market volatility elevated</span></div>
+                <div class="log-entry"><span class="log-time">[10:00:15]</span> <span class="log-info">Knowledge graph — auto-expanded 12 entities</span></div>
+                <div class="log-entry"><span class="log-time">[10:00:20]</span> <span class="log-info">Governance — constitution check passed</span></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="footer">
+        MAGNATRIX Agentic OS v2.0.0 — Target: Super AI — 100% Self-Contained — Open Source
+    </div>
+
+    <script>
+        const API_URL = 'http://localhost:8080';
+        let uptime = 0;
+
+        function updateUptime() {
+            uptime++;
+            document.getElementById('uptime').textContent = `Uptime: ${uptime}s`;
+        }
+        setInterval(updateUptime, 1000);
+
+        async function fetchStatus() {
+            try {
+                const response = await fetch(`${API_URL}/api/v2/status`);
+                const data = await response.json();
+                document.getElementById('cycleCount').textContent = data.cycle_count || 0;
+                document.getElementById('emergencyMode').textContent = data.emergency_mode ? 'ON' : 'OFF';
+                if (data.emergency_mode) {
+                    document.getElementById('systemStatus').textContent = 'EMERGENCY';
+                    document.getElementById('systemStatus').className = 'status-badge status-emergency';
+                }
+            } catch (e) {
+                console.log('API unavailable');
+            }
+        }
+        setInterval(fetchStatus, 5000);
+
+        function triggerEvolve() {
+            fetch(`${API_URL}/api/v2/evolve/trigger`, { method: 'POST' })
+                .then(r => r.json())
+                .then(data => addLog(`Evolution triggered: ${data.cycle_id}`, 'info'));
+        }
+
+        function emergencyStop() {
+            addLog('EMERGENCY STOP triggered by user', 'error');
+            document.getElementById('systemStatus').textContent = 'EMERGENCY';
+            document.getElementById('systemStatus').className = 'status-badge status-emergency';
+        }
+
+        function spawnNode() {
+            fetch(`${API_URL}/api/v2/swarm/spawn`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ brain_type: 'hermes', count: 1 })
+            })
+            .then(r => r.json())
+            .then(data => addLog(`Spawned ${data.spawned} node(s): ${data.node_ids.join(', ')}`, 'info'));
+        }
+
+        function queryKnowledge() {
+            const query = prompt('Enter knowledge query:');
+            if (query) {
+                fetch(`${API_URL}/api/v2/knowledge/query`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ entity: query, depth: 2 })
+                })
+                .then(r => r.json())
+                .then(data => addLog(`Knowledge query: ${data.entity} — ${data.related.length} results`, 'info'));
+            }
+        }
+
+        function expandGraph() {
+            addLog('Knowledge graph auto-expansion triggered', 'info');
+        }
+
+        function addLog(message, level) {
+            const container = document.getElementById('logContainer');
+            const time = new Date().toLocaleTimeString();
+            const div = document.createElement('div');
+            div.className = 'log-entry';
+            div.innerHTML = `<span class="log-time">[${time}]</span> <span class="log-${level}">${message}</span>`;
+            container.insertBefore(div, container.firstChild);
+            if (container.children.length > 50) {
+                container.removeChild(container.lastChild);
+            }
+        }
+
+        // Initial status fetch
+        fetchStatus();
+    </script>
+</body>
+</html>

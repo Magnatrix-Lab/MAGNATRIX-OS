@@ -1,0 +1,279 @@
+openapi: 3.0.0
+info:
+  title: MAGNATRIX Agentic OS API
+  description: REST API for MAGNATRIX Agentic OS - Control swarm, trading, knowledge graph, and governance
+  version: 2.0.0
+  contact:
+    name: MAGNATRIX Team
+
+servers:
+  - url: http://localhost:8080
+    description: Local development server
+  - url: http://localhost:8080/api/v2
+    description: API v2 endpoint
+
+paths:
+  /health:
+    get:
+      summary: Health check
+      description: Check if MAGNATRIX is running and all services are healthy
+      responses:
+        200:
+          description: System is healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthStatus'
+
+  /api/v2/status:
+    get:
+      summary: Get full system status
+      description: Returns complete status of all MAGNATRIX layers and engines
+      responses:
+        200:
+          description: System status retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SystemStatus'
+
+  /api/v2/swarm/nodes:
+    get:
+      summary: List swarm nodes
+      description: Get all active nodes in the swarm
+      responses:
+        200:
+          description: List of nodes
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/SwarmNode'
+
+  /api/v2/swarm/spawn:
+    post:
+      summary: Spawn new nodes
+      description: Dynamically spawn new brain nodes
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                brain_type:
+                  type: string
+                  example: "hermes"
+                count:
+                  type: integer
+                  example: 3
+      responses:
+        200:
+          description: Nodes spawned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SpawnResult'
+
+  /api/v2/trading/status:
+    get:
+      summary: Trading engine status
+      description: Get current trading status and PnL
+      responses:
+        200:
+          description: Trading status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TradingStatus'
+
+  /api/v2/trading/execute:
+    post:
+      summary: Execute trade
+      description: Execute a trading strategy
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                symbol:
+                  type: string
+                side:
+                  type: string
+                  enum: [buy, sell]
+                amount:
+                  type: number
+      responses:
+        200:
+          description: Trade executed
+
+  /api/v2/knowledge/query:
+    post:
+      summary: Query knowledge graph
+      description: Query the knowledge graph with multi-hop traversal
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                entity:
+                  type: string
+                depth:
+                  type: integer
+                  default: 2
+      responses:
+        200:
+          description: Knowledge query result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KnowledgeQueryResult'
+
+  /api/v2/governance/constitution:
+    get:
+      summary: Get constitution
+      description: Retrieve current constitutional rules
+      responses:
+        200:
+          description: Constitution rules
+
+  /api/v2/governance/goals:
+    get:
+      summary: List active goals
+      description: Get all active emergent goals
+      responses:
+        200:
+          description: List of goals
+
+  /api/v2/browser/capture:
+    post:
+      summary: Capture browser data
+      description: Store captured web page data from browser extension
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        200:
+          description: Data captured
+
+  /api/v2/chat/send:
+    post:
+      summary: Send chat message
+      description: Send message to MAGNATRIX chat bridge
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                message:
+                  type: string
+                channel:
+                  type: string
+      responses:
+        200:
+          description: Message sent
+
+  /api/v2/evolve/trigger:
+    post:
+      summary: Trigger self-evolution cycle
+      description: Manually trigger one self-evolution cycle
+      responses:
+        200:
+          description: Evolution cycle triggered
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EvolveResult'
+
+components:
+  schemas:
+    HealthStatus:
+      type: object
+      properties:
+        status:
+          type: string
+          example: "healthy"
+        uptime_seconds:
+          type: integer
+        version:
+          type: string
+
+    SystemStatus:
+      type: object
+      properties:
+        layers:
+          type: array
+          items:
+            type: object
+        engines:
+          type: object
+        emergency_mode:
+          type: boolean
+        cycle_count:
+          type: integer
+
+    SwarmNode:
+      type: object
+      properties:
+        node_id:
+          type: string
+        type:
+          type: string
+        health:
+          type: number
+        load:
+          type: number
+
+    SpawnResult:
+      type: object
+      properties:
+        spawned:
+          type: integer
+        node_ids:
+          type: array
+          items:
+            type: string
+
+    TradingStatus:
+      type: object
+      properties:
+        mode:
+          type: string
+        nav:
+          type: number
+        positions:
+          type: integer
+        daily_pnl:
+          type: number
+
+    KnowledgeQueryResult:
+      type: object
+      properties:
+        entity:
+          type: string
+        depth:
+          type: integer
+        related:
+          type: array
+        paths:
+          type: array
+
+    EvolveResult:
+      type: object
+      properties:
+        cycle_id:
+          type: string
+        status:
+          type: string
+        improvements:
+          type: array
