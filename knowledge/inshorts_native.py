@@ -1,536 +1,685 @@
+#!/usr/bin/env python3
 """
-Inshorts News API — Native Python Client
-Replicated from: sumitkolhe/inshorts
-MAGNATRIX Layer 5/10 bridge — Knowledge Feed & AI Context Injection
+inshorts_native.py
+═══════════════════════════════════════════════════════════════════════════════
+Inshorts News API Native — Unofficial API wrapper for Inshorts news platform
+Pure Python · stdlib only · zero external dependencies
 
-Pure Python stdlib-first (urllib), requests optional.
-~400 baris
+Observed repo: sumitkolhe/inshorts
+  — Unofficial API for Inshorts news platform
+  — 18 categories, pagination, bilingual (en/hi)
+  — 60-word news summaries with images, timestamps, sources
+
+Target: ~400 lines · Single file · Runnable without install
+Author: GQRIS (AMATI-PELAJARI-TIRU)
 """
 
 from __future__ import annotations
 
 import json
+import logging
+import random
+import re
+import ssl
 import time
 import urllib.error
 import urllib.request
-from collections import deque
-from dataclasses import dataclass, field
-from datetime import datetime
-from enum import Enum
+from dataclasses import dataclass, field, asdict
+from datetime import datetime, timezone
+from enum import Enum, auto
 from typing import Any, Dict, List, Optional, Tuple
 
+logger = logging.getLogger(__name__)
 
-# ---------------------------------------------------------------------------
-# Inshorts API endpoint (public, no auth)
-# ---------------------------------------------------------------------------
-INSHORTS_API_URL = "https://inshorts.com/api/read"
-DEFAULT_TIMEOUT = 15
+# ════════════════════════════════════════════════════════════════
+# Section 1 — BaseLayer
+# Enums, Data Models, Request Builder
+# ════════════════════════════════════════════════════════════════
 
-
-# ---------------------------------------------------------------------------
-# 1. NewsCategory — Enum 18 kategori
-# ---------------------------------------------------------------------------
 class NewsCategory(Enum):
-    """Kategori berita yang didukung oleh Inshorts API."""
-
-    ALL = "all"
-    NATIONAL = "national"
-    BUSINESS = "business"
-    SPORTS = "sports"
-    WORLD = "world"
-    POLITICS = "politics"
-    TECHNOLOGY = "technology"
-    STARTUP = "startup"
-    ENTERTAINMENT = "entertainment"
-    MISCELLANEOUS = "miscellaneous"
-    HATKE = "hatke"
-    SCIENCE = "science"
-    AUTOMOBILE = "automobile"
-    # localized / extended
-    EDUCATION = "education"
-    HEALTH = "health"
-    FASHION = "fashion"
-    TRAVEL = "travel"
-    FOOD = "food"
-
-    @classmethod
-    def list_all(cls) -> List[str]:
-        """Return list of all category values."""
-        return [c.value for c in cls]
-
-    @classmethod
-    def from_string(cls, raw: str) -> "NewsCategory":
-        """Parse string ke NewsCategory, default ALL."""
-        mapping = {c.value.lower(): c for c in cls}
-        return mapping.get(raw.lower().strip(), cls.ALL)
-
-    def __repr__(self) -> str:
-        return f"NewsCategory.{self.name}('{self.value}')"
+    """All 18 news categories supported by Inshorts."""
+    TOP_STORIES     = "top_stories"
+    NATIONAL        = "national"
+    BUSINESS        = "business"
+    SPORTS          = "sports"
+    WORLD           = "world"
+    POLITICS        = "politics"
+    TECHNOLOGY      = "technology"
+    STARTUP         = "startup"
+    ENTERTAINMENT   = "entertainment"
+    MISCELLANEOUS   = "miscellaneous"
+    HATKE           = "hatke"
+    SCIENCE         = "science"
+    AUTOMOBILE      = "automobile"
+    TRAVEL          = "travel"
+    FASHION         = "fashion"
+    EDUCATION       = "education"
+    HEALTH          = "health"
+    FOOD            = "food"
 
 
-# ---------------------------------------------------------------------------
-# 2. Article — dataclass untuk news item
-# ---------------------------------------------------------------------------
+class Language(Enum):
+    """Supported languages."""
+    ENGLISH = "en"
+    HINDI   = "hi"
+
+
+@dataclass(frozen=True)
+class NewsArticle:
+    """Single news article from Inshorts."""
+    title:        str
+    content:      str
+    link:         str
+    image_url:    str
+    author:       str
+    category:     str
+    language:     str
+    published_at: str  # ISO 8601
+    source:       str
+    read_more:    str = ""  # deep link to full article
+
+    def to_dict(self) -> Dict[str, Any]:
+        return asdict(self)
+
+    def to_json(self, indent: int = 0) -> str:
+        return json.dumps(self.to_dict(), ensure_ascii=False, indent=indent or None)
+
+    @property
+    def word_count(self) -> int:
+        return len(self.content.split())
+
+    @property
+    def summary(self) -> str:
+        """Human-readable one-line summary."""
+        return f"[{self.category.upper()}] {self.title[:60]}... ({self.author})"
+
+
 @dataclass
-class Article:
-    """Single news article dari Inshorts."""
+class NewsFeed:
+    """Paginated feed result."""
+    category:   str
+    language:   str
+    articles:   List[NewsArticle] = field(default_factory=list)
+    offset:     int = 0
+    has_more:   bool = True
+    total_seen: int = 0
 
-    title: str
-    content: str
-    author: str
-    source_name: str
-    image_url: str
-    shortened_url: str
-    created_at: str
-    category_names: List[str] = field(default_factory=list)
-    hash_tags: List[str] = field(default_factory=list)
-    read_more_url: str = ""
-    timestamp: int = 0
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "category":   self.category,
+            "language":   self.language,
+            "offset":     self.offset,
+            "has_more":   self.has_more,
+            "total_seen": self.total_seen,
+            "articles":   [a.to_dict() for a in self.articles],
+        }
 
-    @classmethod
-    def from_api_dict(cls, data: Dict[str, Any]) -> "Article":
-        """Parse raw Inshorts API dict ke Article."""
-        return cls(
-            title=data.get("title", ""),
-            content=data.get("content", data.get("description", "")),
-            author=data.get("author", ""),
-            source_name=data.get("source_name", data.get("source", "")),
-            image_url=data.get("image_url", data.get("imageUrl", "")),
-            shortened_url=data.get("shortened_url", data.get("url", "")),
-            created_at=data.get("created_at", data.get("date", "")),
-            category_names=data.get("category_names", data.get("category", [])) or [],
-            hash_tags=data.get("hash_tags", data.get("hashtags", [])) or [],
-            read_more_url=data.get("read_more_url", data.get("readMoreUrl", "")),
-            timestamp=data.get("timestamp", 0),
-        )
-
-    def summary(self, max_chars: int = 120) -> str:
-        """Short one-line summary for AI context injection."""
-        text = f"[{self.source_name}] {self.title} — {self.content}"
-        if len(text) > max_chars:
-            return text[: max_chars - 3].rstrip() + "..."
-        return text
-
-    def __repr__(self) -> str:
-        return (
-            f"Article(title='{self.title[:40]}...', source='{self.source_name}', "
-            f"cat={self.category_names}, ts={self.created_at})"
-        )
+    def to_json(self, indent: int = 0) -> str:
+        return json.dumps(self.to_dict(), ensure_ascii=False, indent=indent or None)
 
 
-# ---------------------------------------------------------------------------
-# 3. InshortsClient — HTTP client untuk fetch news
-# ---------------------------------------------------------------------------
-class InshortsClient:
-    """HTTP client untuk Inshorts API. Pure stdlib, requests optional."""
+@dataclass
+class SearchResult:
+    """Search across categories."""
+    query:      str
+    articles:   List[NewsArticle] = field(default_factory=list)
+    total:      int = 0
 
-    def __init__(
-        self,
-        timeout: int = DEFAULT_TIMEOUT,
-        retries: int = 2,
-        use_requests: bool = False,
-    ):
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "query":    self.query,
+            "total":    self.total,
+            "articles": [a.to_dict() for a in self.articles],
+        }
+
+
+# ──────────────────────────────────────────────────────────────
+# 1.1 Request Builder — HTTP layer (stdlib only)
+# ──────────────────────────────────────────────────────────────
+
+class InshortsRequestBuilder:
+    """Constructs HTTP requests to Inshorts endpoints."""
+
+    BASE_URL = "https://inshorts.com/api/v1/public"
+    HEADERS = {
+        "User-Agent": (
+            "Mozilla/5.0 (X11; Linux x86_64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/120.0.0.0 Safari/537.36"
+        ),
+        "Accept": "application/json",
+        "Accept-Language": "en-US,en;q=0.9",
+    }
+
+    def __init__(self, timeout: int = 15):
         self.timeout = timeout
-        self.retries = retries
-        self._session = None
-        self._has_requests = False
+        self._ctx = ssl.create_default_context()
+        self._ctx.check_hostname = False
+        self._ctx.verify_mode = ssl.CERT_NONE
 
-        if use_requests:
-            try:
-                import requests
-
-                self._session = requests.Session()
-                self._session.headers.update({
-                    "User-Agent": "Mozilla/5.0 (compatible; InshortsClient/1.0)"
-                })
-                self._has_requests = True
-            except ImportError:
-                pass
-
-    def _build_url(
-        self,
-        category: NewsCategory,
-        lang: str = "en",
-        offset: int = 0,
-        limit: int = 10,
-    ) -> str:
-        """Build query URL dengan params."""
-        # Inshorts public endpoint: POST dengan form data
-        # Tapi ada endpoint read yang support GET query params juga
-        # Fallback ke POST body jika GET gagal
-        base = f"{INSHORTS_API_URL}?category={category.value}&lang={lang}&offset={offset}&limit={limit}"
-        return base
-
-    def _fetch_post(
-        self,
-        category: NewsCategory,
-        lang: str = "en",
-        offset: int = 0,
-        limit: int = 10,
-    ) -> Dict[str, Any]:
-        """Fetch via POST (Inshorts native)."""
-        payload = f"category={category.value}&lang={lang}&offset={offset}&limit={limit}"
-        data = payload.encode("utf-8")
-        req = urllib.request.Request(
-            INSHORTS_API_URL,
-            data=data,
-            headers={
-                "Content-Type": "application/x-www-form-urlencoded",
-                "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
-                "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-                "Accept": "application/json",
-            },
-            method="POST",
-        )
-
-        last_err: Optional[Exception] = None
-        for attempt in range(1, self.retries + 1):
-            try:
-                with urllib.request.urlopen(req, timeout=self.timeout) as resp:
-                    raw = resp.read().decode("utf-8")
-                    return json.loads(raw)
-            except (urllib.error.HTTPError, urllib.error.URLError, json.JSONDecodeError) as e:
-                last_err = e
-                if attempt < self.retries:
-                    time.sleep(1.0 * attempt)
-
-        # Semua retry habis — return empty
-        return {"success": False, "error": str(last_err), "data": []}
+    def _fetch(self, url: str) -> Optional[Dict[str, Any]]:
+        """Execute GET and parse JSON."""
+        req = urllib.request.Request(url, headers=self.HEADERS)
+        try:
+            with urllib.request.urlopen(req, context=self._ctx, timeout=self.timeout) as resp:
+                raw = resp.read().decode("utf-8")
+                return json.loads(raw)
+        except urllib.error.HTTPError as e:
+            logger.warning("HTTP %s: %s", e.code, url)
+        except urllib.error.URLError as e:
+            logger.warning("URL error: %s — %s", e.reason, url)
+        except json.JSONDecodeError as e:
+            logger.warning("JSON parse error: %s", e)
+        except Exception as e:
+            logger.warning("Fetch failed: %s", e)
+        return None
 
     def fetch_news(
         self,
-        category: NewsCategory = NewsCategory.ALL,
-        lang: str = "en",
-        offset: int = 0,
-        limit: int = 10,
-    ) -> Tuple[List[Article], int, bool]:
-        """
-        Fetch news articles dari Inshorts.
+        category: str,
+        language: str = "en",
+        offset:   int = 0,
+        limit:    int = 10,
+    ) -> Optional[Dict[str, Any]]:
+        """Fetch raw news payload for a category."""
+        params = f"category={category}&lang={language}&max_limit={limit}&include_card_data=true"
+        if offset > 0:
+            params += f"&news_offset={offset}"
+        url = f"{self.BASE_URL}/news?{params}"
+        return self._fetch(url)
 
-        Returns:
-            (articles_list, next_offset, has_more)
-        """
-        if self._has_requests and self._session is not None:
-            return self._fetch_via_requests(category, lang, offset, limit)
+    def fetch_all_categories(self, language: str = "en") -> Optional[Dict[str, Any]]:
+        """Fetch available categories metadata."""
+        url = f"{self.BASE_URL}/categories?lang={language}"
+        return self._fetch(url)
 
-        raw = self._fetch_post(category, lang, offset, limit)
 
-        if not raw.get("success", False):
-            return [], offset, False
+# ════════════════════════════════════════════════════════════════
+# Section 2 — CoreEngine
+# Parser, Feed Generator, Search Engine
+# ════════════════════════════════════════════════════════════════
 
-        news_list = raw.get("data", raw.get("news_list", []))
-        articles = [Article.from_api_dict(item) for item in news_list]
+class InshortsParser:
+    """Parse raw Inshorts JSON into structured dataclasses."""
 
-        has_more = len(articles) == limit
-        next_offset = offset + len(articles) if has_more else offset
-
-        return articles, next_offset, has_more
-
-    def _fetch_via_requests(
-        self,
-        category: NewsCategory,
-        lang: str,
-        offset: int,
-        limit: int,
-    ) -> Tuple[List[Article], int, bool]:
-        """Fetch via requests library jika available."""
-        payload = {
-            "category": category.value,
-            "lang": lang,
-            "offset": offset,
-            "limit": limit,
-        }
+    @staticmethod
+    def parse_article(raw: Dict[str, Any], category: str, language: str) -> Optional[NewsArticle]:
+        """Extract article from raw card data."""
         try:
-            resp = self._session.post(  # type: ignore[union-attr]
-                INSHORTS_API_URL, data=payload, timeout=self.timeout
+            title = raw.get("title", "").strip()
+            content = raw.get("content", "").strip()
+            if not title or not content:
+                return None
+
+            return NewsArticle(
+                title=title,
+                content=content,
+                link=raw.get("source_url", raw.get("url", "")),
+                image_url=raw.get("image_url", raw.get("imageUrl", "")),
+                author=raw.get("author_name", raw.get("author", "Inshorts")),
+                category=category,
+                language=language,
+                published_at=InshortsParser._parse_time(raw.get("created_at", raw.get("date", ""))),
+                source=raw.get("source_name", raw.get("source", "Inshorts")),
+                read_more=raw.get("deeplink", ""),
             )
-            resp.raise_for_status()
-            raw = resp.json()
+        except Exception as e:
+            logger.debug("Parse error: %s", e)
+            return None
+
+    @staticmethod
+    def _parse_time(ts_raw: Any) -> str:
+        """Convert Inshorts timestamp to ISO 8601."""
+        if not ts_raw:
+            return datetime.now(timezone.utc).isoformat()
+        try:
+            # Try epoch milliseconds
+            if isinstance(ts_raw, (int, float)):
+                dt = datetime.fromtimestamp(ts_raw / 1000.0, tz=timezone.utc)
+                return dt.isoformat()
+            # Try string formats
+            if isinstance(ts_raw, str):
+                if ts_raw.isdigit():
+                    dt = datetime.fromtimestamp(int(ts_raw) / 1000.0, tz=timezone.utc)
+                    return dt.isoformat()
+                for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%dT%H:%M:%S", "%d %b %Y, %H:%M"):
+                    try:
+                        dt = datetime.strptime(ts_raw, fmt).replace(tzinfo=timezone.utc)
+                        return dt.isoformat()
+                    except ValueError:
+                        continue
+            return str(ts_raw)
         except Exception:
-            # Fallback ke stdlib
-            raw = self._fetch_post(category, lang, offset, limit)
+            return datetime.now(timezone.utc).isoformat()
 
-        if not raw.get("success", False):
-            return [], offset, False
+    @staticmethod
+    def parse_feed(
+        payload:  Dict[str, Any],
+        category: str,
+        language: str,
+        offset:   int,
+    ) -> NewsFeed:
+        """Parse full feed response."""
+        feed = NewsFeed(category=category, language=language, offset=offset)
+        data = payload.get("data", {})
+        news_list = data.get("news_list", data.get("newsList", []))
+        min_news_id = data.get("min_news_id", data.get("minNewsId", None))
 
-        news_list = raw.get("data", raw.get("news_list", []))
-        articles = [Article.from_api_dict(item) for item in news_list]
-        has_more = len(articles) == limit
-        next_offset = offset + len(articles) if has_more else offset
-        return articles, next_offset, has_more
+        for item in news_list:
+            raw = item.get("news_obj", item)
+            article = InshortsParser.parse_article(raw, category, language)
+            if article:
+                feed.articles.append(article)
+                feed.total_seen += 1
 
-    def search_by_keyword(
-        self, keyword: str, category: NewsCategory = NewsCategory.ALL, max_results: int = 20
-    ) -> List[Article]:
-        """Simple client-side keyword search via fetch + filter."""
-        results: List[Article] = []
-        offset = 0
-        limit = 10
-        while len(results) < max_results:
-            articles, offset, has_more = self.fetch_news(category, offset=offset, limit=limit)
-            if not articles:
-                break
-            for art in articles:
-                if keyword.lower() in art.title.lower() or keyword.lower() in art.content.lower():
-                    results.append(art)
-                    if len(results) >= max_results:
-                        break
-            if not has_more:
-                break
-        return results[:max_results]
-
-    def __repr__(self) -> str:
-        backend = "requests" if self._has_requests else "urllib"
-        return f"InshortsClient(backend={backend}, timeout={self.timeout}, retries={self.retries})"
-
-
-# ---------------------------------------------------------------------------
-# 4. NewsFeed — paginated feed manager dengan cache ring buffer
-# ---------------------------------------------------------------------------
-class NewsFeed:
-    """Paginated feed manager dengan ring buffer cache."""
-
-    def __init__(
-        self,
-        client: Optional[InshortsClient] = None,
-        category: NewsCategory = NewsCategory.TECHNOLOGY,
-        lang: str = "en",
-        cache_size: int = 100,
-    ):
-        self.client = client or InshortsClient()
-        self.category = category
-        self.lang = lang
-        self._offset = 0
-        self._has_more = True
-        self._cache: deque[Article] = deque(maxlen=cache_size)
-        self._history: List[Article] = []
-        self.total_fetched = 0
-
-    def next_batch(self, limit: int = 10) -> List[Article]:
-        """Fetch next page dan append ke cache."""
-        if not self._has_more:
-            return []
-
-        articles, next_offset, has_more = self.client.fetch_news(
-            category=self.category,
-            lang=self.lang,
-            offset=self._offset,
-            limit=limit,
-        )
-
-        self._offset = next_offset
-        self._has_more = has_more
-        self.total_fetched += len(articles)
-
-        for art in articles:
-            self._cache.append(art)
-            self._history.append(art)
-
-        return articles
-
-    def peek(self, n: int = 5) -> List[Article]:
-        """Return up to n articles from cache tanpa fetch baru."""
-        return list(self._cache)[:n]
-
-    def refresh(self) -> List[Article]:
-        """Reset offset ke 0 dan fetch ulang."""
-        self._offset = 0
-        self._has_more = True
-        self._cache.clear()
-        self._history.clear()
-        self.total_fetched = 0
-        return self.next_batch(limit=10)
-
-    def get_all(self) -> List[Article]:
-        """Return semua history articles yang pernah di-fetch."""
-        return self._history.copy()
-
-    def flush_cache(self) -> None:
-        """Clear ring buffer cache."""
-        self._cache.clear()
-
-    @property
-    def stats(self) -> Dict[str, Any]:
-        return {
-            "category": self.category.value,
-            "lang": self.lang,
-            "offset": self._offset,
-            "has_more": self._has_more,
-            "cache_size": len(self._cache),
-            "total_fetched": self.total_fetched,
-        }
-
-    def __repr__(self) -> str:
-        return (
-            f"NewsFeed(cat={self.category.value}, cached={len(self._cache)}, "
-            f"total={self.total_fetched}, more={self._has_more})"
-        )
-
-
-# ---------------------------------------------------------------------------
-# 5. InshortsKernel — MAGNATRIX bridge ke Layer 5 & Layer 10
-# ---------------------------------------------------------------------------
-class InshortsKernel:
-    """
-    MAGNATRIX bridge:
-    - Layer 5  → Knowledge / News Feed (structured knowledge ingestion)
-    - Layer 10 → AI Agent Context Injection (surface relevant headlines)
-    """
-
-    def __init__(self, client: Optional[InshortsClient] = None):
-        self.client = client or InshortsClient()
-        self.feeds: Dict[str, NewsFeed] = {}
-
-    def create_feed(self, name: str, category: NewsCategory, lang: str = "en") -> NewsFeed:
-        """Register named feed untuk kategori tertentu."""
-        feed = NewsFeed(client=self.client, category=category, lang=lang)
-        self.feeds[name] = feed
+        feed.has_more = min_news_id is not None and len(feed.articles) > 0
+        if feed.has_more and min_news_id:
+            try:
+                feed.offset = int(min_news_id)
+            except (ValueError, TypeError):
+                feed.offset = offset + len(feed.articles)
         return feed
 
-    def ingest(self, feed_name: str, batch_size: int = 10) -> List[Dict[str, Any]]:
-        """Layer 5 — Ingest news sebagai structured knowledge records."""
-        feed = self.feeds.get(feed_name)
-        if not feed:
-            raise KeyError(f"Feed '{feed_name}' not registered.")
 
-        articles = feed.next_batch(batch_size)
-        records = []
-        for art in articles:
-            records.append(
-                {
-                    "type": "news_article",
-                    "source": "inshorts",
-                    "title": art.title,
-                    "content": art.content,
-                    "author": art.author,
-                    "source_name": art.source_name,
-                    "category": art.category_names,
-                    "tags": art.hash_tags,
-                    "url": art.read_more_url or art.shortened_url,
-                    "timestamp": art.timestamp,
-                    "date": art.created_at,
-                }
-            )
-        return records
+class InshortsFeedGenerator:
+    """High-level feed generator with pagination and caching."""
 
-    def context_inject(
+    def __init__(self, builder: Optional[InshortsRequestBuilder] = None):
+        self.builder = builder or InshortsRequestBuilder()
+        self.parser = InshortsParser()
+        self._cache: Dict[str, Tuple[float, NewsFeed]] = {}
+        self.cache_ttl = 300.0  # 5 minutes
+
+    def _cache_key(self, category: str, language: str, offset: int) -> str:
+        return f"{category}:{language}:{offset}"
+
+    def get_feed(
         self,
-        feed_name: str,
-        max_items: int = 5,
-        keywords: Optional[List[str]] = None,
-    ) -> str:
-        """Layer 10 — Format recent news sebagai AI context string."""
-        feed = self.feeds.get(feed_name)
-        if not feed:
-            raise KeyError(f"Feed '{feed_name}' not registered.")
+        category: str,
+        language: str = "en",
+        offset:   int = 0,
+        limit:    int = 10,
+        use_cache: bool = True,
+    ) -> NewsFeed:
+        """Fetch a single page of news."""
+        key = self._cache_key(category, language, offset)
+        now = time.time()
+        if use_cache and key in self._cache:
+            ts, cached = self._cache[key]
+            if now - ts < self.cache_ttl:
+                return cached
 
-        # Ensure we have enough in cache
-        articles = list(feed._cache)
-        if len(articles) < max_items:
-            articles = feed.next_batch(limit=max(max_items, 10))
+        payload = self.builder.fetch_news(category, language, offset, limit)
+        if payload:
+            feed = self.parser.parse_feed(payload, category, language, offset)
+            self._cache[key] = (now, feed)
+            return feed
 
-        if keywords:
-            filtered = [
-                art for art in articles
-                if any(kw.lower() in art.title.lower() or kw.lower() in art.content.lower() for kw in keywords)
-            ]
-            articles = filtered or articles  # fallback ke all jika no match
+        return NewsFeed(category=category, language=language, offset=offset, has_more=False)
 
-        selected = articles[:max_items]
-        lines = ["— Inshorts Headlines —"]
-        for i, art in enumerate(selected, 1):
-            lines.append(f"{i}. {art.summary(max_chars=200)}")
-        lines.append("— end —")
+    def iter_feed(
+        self,
+        category:  str,
+        language:  str = "en",
+        max_pages: int = 5,
+        limit:     int = 10,
+    ):
+        """Generator yielding successive pages."""
+        offset = 0
+        for _ in range(max_pages):
+            feed = self.get_feed(category, language, offset, limit, use_cache=False)
+            if not feed.articles:
+                break
+            yield feed
+            if not feed.has_more:
+                break
+            offset = feed.offset
+
+    def all_articles(
+        self,
+        category:  str,
+        language:  str = "en",
+        max_pages: int = 5,
+        limit:     int = 10,
+    ) -> List[NewsArticle]:
+        """Collect all articles across pages."""
+        result: List[NewsArticle] = []
+        for feed in self.iter_feed(category, language, max_pages, limit):
+            result.extend(feed.articles)
+        return result
+
+    def trending(self, language: str = "en", samples: int = 5) -> List[NewsArticle]:
+        """Sample trending articles from top categories."""
+        result: List[NewsArticle] = []
+        cats = [
+            NewsCategory.TOP_STORIES,
+            NewsCategory.TECHNOLOGY,
+            NewsCategory.WORLD,
+            NewsCategory.BUSINESS,
+            NewsCategory.SCIENCE,
+        ]
+        for cat in cats:
+            feed = self.get_feed(cat.value, language, limit=samples)
+            result.extend(feed.articles)
+        random.shuffle(result)
+        return result[:samples]
+
+    def clear_cache(self) -> None:
+        self._cache.clear()
+
+
+class InshortsSearchEngine:
+    """Simple in-memory search across fetched articles."""
+
+    def __init__(self, generator: Optional[InshortsFeedGenerator] = None):
+        self.generator = generator or InshortsFeedGenerator()
+
+    def search(
+        self,
+        query:       str,
+        categories:  Optional[List[str]] = None,
+        language:    str = "en",
+        max_results: int = 20,
+    ) -> SearchResult:
+        """Search articles by keyword across categories."""
+        cats = categories or [c.value for c in NewsCategory]
+        qlower = query.lower()
+        result = SearchResult(query=query)
+        seen_links: set = set()
+
+        for cat in cats:
+            articles = self.generator.all_articles(cat, language, max_pages=2, limit=10)
+            for art in articles:
+                if art.link in seen_links:
+                    continue
+                text = f"{art.title} {art.content} {art.author} {art.source}".lower()
+                if qlower in text:
+                    result.articles.append(art)
+                    seen_links.add(art.link)
+                    if len(result.articles) >= max_results:
+                        result.total = len(result.articles)
+                        return result
+
+        result.total = len(result.articles)
+        return result
+
+    def search_exact(
+        self,
+        query:       str,
+        categories:  Optional[List[str]] = None,
+        language:    str = "en",
+        max_results: int = 20,
+    ) -> SearchResult:
+        """Word-boundary exact match search."""
+        cats = categories or [c.value for c in NewsCategory]
+        pattern = re.compile(rf"\b{re.escape(query.lower())}\b")
+        result = SearchResult(query=query)
+        seen_links: set = set()
+
+        for cat in cats:
+            articles = self.generator.all_articles(cat, language, max_pages=2, limit=10)
+            for art in articles:
+                if art.link in seen_links:
+                    continue
+                text = f"{art.title} {art.content}".lower()
+                if pattern.search(text):
+                    result.articles.append(art)
+                    seen_links.add(art.link)
+                    if len(result.articles) >= max_results:
+                        result.total = len(result.articles)
+                        return result
+
+        result.total = len(result.articles)
+        return result
+
+
+# ════════════════════════════════════════════════════════════════
+# Section 3 — Features
+# CLI, Export, Analytics
+# ════════════════════════════════════════════════════════════════
+
+class InshortsCLI:
+    """Command-line interface for quick news access."""
+
+    def __init__(self, generator: Optional[InshortsFeedGenerator] = None):
+        self.generator = generator or InshortsFeedGenerator()
+
+    def print_feed(
+        self,
+        category: str,
+        language: str = "en",
+        pages:    int = 1,
+        limit:    int = 10,
+    ) -> None:
+        """Pretty-print news feed to stdout."""
+        for page_num, feed in enumerate(self.generator.iter_feed(category, language, pages, limit), 1):
+            print(f"\n{'═'*60}")
+            print(f"  📰  {category.upper()}  —  Page {page_num}  ({language})")
+            print(f"{'═'*60}")
+            for art in feed.articles:
+                print(f"\n  ▸ {art.title}")
+                print(f"    {art.content[:120]}...")
+                print(f"    — {art.author}  |  {art.published_at[:10]}  |  {art.source}")
+                if art.link:
+                    print(f"    🔗 {art.link}")
+            print(f"\n  {'─'*56}")
+            print(f"  Articles: {len(feed.articles)}  |  Has more: {feed.has_more}")
+
+    def print_trending(self, samples: int = 5) -> None:
+        """Print trending sample."""
+        articles = self.generator.trending(samples=samples)
+        print(f"\n{'═'*60}")
+        print(f"  🔥  TRENDING NOW")
+        print(f"{'═'*60}")
+        for art in articles:
+            print(f"\n  [{art.category.upper()}] {art.title}")
+            print(f"  {art.content[:100]}...")
+
+    def print_categories(self, language: str = "en") -> None:
+        """List all available categories."""
+        print(f"\n{'═'*60}")
+        print(f"  📂  NEWS CATEGORIES  ({language})")
+        print(f"{'═'*60}")
+        for i, cat in enumerate(NewsCategory, 1):
+            print(f"  {i:2}. {cat.value:20} — {cat.name.replace('_', ' ').title()}")
+
+
+class InshortsExporter:
+    """Export feeds to various formats."""
+
+    @staticmethod
+    def to_json(feed: NewsFeed, indent: int = 2) -> str:
+        return feed.to_json(indent)
+
+    @staticmethod
+    def to_jsonl(articles: List[NewsArticle]) -> str:
+        return "\n".join(a.to_json() for a in articles)
+
+    @staticmethod
+    def to_markdown(articles: List[NewsArticle]) -> str:
+        lines = ["# Inshorts News Feed\n"]
+        for art in articles:
+            lines.append(f"## {art.title}\n")
+            lines.append(f"**{art.category.upper()}**  |  {art.author}  |  {art.published_at[:10]}\n")
+            lines.append(f"{art.content}\n")
+            if art.link:
+                lines.append(f"[Read more]({art.link})\n")
+            if art.image_url:
+                lines.append(f"![Image]({art.image_url})\n")
+            lines.append("---\n")
         return "\n".join(lines)
 
-    def multi_feed_summary(
-        self, feed_names: List[str], per_feed: int = 3
-    ) -> Dict[str, List[str]]:
-        """Aggregate headlines dari multiple feeds."""
-        out: Dict[str, List[str]] = {}
-        for name in feed_names:
-            feed = self.feeds.get(name)
-            if not feed:
+    @staticmethod
+    def to_rss(articles: List[NewsArticle], title: str = "Inshorts Feed") -> str:
+        """Generate minimal RSS 2.0 XML."""
+        now = datetime.now(timezone.utc).strftime("%a, %d %b %Y %H:%M:%S GMT")
+        items = []
+        for art in articles:
+            items.append(
+                f"    <item>\n"
+                f"      <title>{_xml_escape(art.title)}</title>\n"
+                f"      <description>{_xml_escape(art.content)}</description>\n"
+                f"      <link>{_xml_escape(art.link)}</link>\n"
+                f"      <pubDate>{art.published_at[:10]}</pubDate>\n"
+                f"      <category>{_xml_escape(art.category)}</category>\n"
+                f"    </item>"
+            )
+        return (
+            f'<?xml version="1.0" encoding="UTF-8"?>\n'
+            f'<rss version="2.0">\n'
+            f"  <channel>\n"
+            f"    <title>{_xml_escape(title)}</title>\n"
+            f"    <link>https://inshorts.com</link>\n"
+            f"    <description>News in 60 words</description>\n"
+            f"    <lastBuildDate>{now}</lastBuildDate>\n"
+            f"    {chr(10).join(items)}\n"
+            f"  </channel>\n"
+            f"</rss>"
+        )
+
+
+def _xml_escape(text: str) -> str:
+    return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace('"', "&quot;")
+
+
+class InshortsAnalytics:
+    """Simple analytics over collected articles."""
+
+    @staticmethod
+    def category_distribution(articles: List[NewsArticle]) -> Dict[str, int]:
+        dist: Dict[str, int] = {}
+        for art in articles:
+            dist[art.category] = dist.get(art.category, 0) + 1
+        return dict(sorted(dist.items(), key=lambda x: x[1], reverse=True))
+
+    @staticmethod
+    def author_distribution(articles: List[NewsArticle], top_n: int = 10) -> Dict[str, int]:
+        dist: Dict[str, int] = {}
+        for art in articles:
+            dist[art.author] = dist.get(art.author, 0) + 1
+        return dict(sorted(dist.items(), key=lambda x: x[1], reverse=True)[:top_n])
+
+    @staticmethod
+    def hourly_pattern(articles: List[NewsArticle]) -> Dict[int, int]:
+        """Distribution by hour of day."""
+        dist: Dict[int, int] = {}
+        for art in articles:
+            try:
+                dt = datetime.fromisoformat(art.published_at.replace("Z", "+00:00"))
+                dist[dt.hour] = dist.get(dt.hour, 0) + 1
+            except Exception:
                 continue
-            articles = feed.peek(n=per_feed)
-            out[name] = [art.summary(max_chars=160) for art in articles]
-        return out
-
-    def __repr__(self) -> str:
-        return f"InshortsKernel(feeds={list(self.feeds.keys())})"
+        return dict(sorted(dist.items()))
 
 
-# ---------------------------------------------------------------------------
-# DEMO — fetch 10 tech news → print → paginate next 10
-# ---------------------------------------------------------------------------
-def demo() -> None:
-    """Demonstrasi lengkap: client, feed, pagination, kernel."""
-    print("=" * 60)
-    print("Inshorts Native Client — Demo")
-    print("=" * 60)
+# ════════════════════════════════════════════════════════════════
+# Section 4 — Kernel / Integration Bridge
+# MAGNATRIX Layer 6 (Media/Content) bridge
+# ════════════════════════════════════════════════════════════════
 
-    # 1. Client standalone
-    client = InshortsClient()
-    print(f"\n[Client] {client}")
+@dataclass
+class InshortsKernelConfig:
+    """Configuration for kernel integration."""
+    default_language: str = "en"
+    default_limit:    int = 10
+    cache_enabled:    bool = True
+    timeout:          int = 15
 
-    print(f"\n[Fetch 10 Tech News] category={NewsCategory.TECHNOLOGY.value}")
-    articles, offset, has_more = client.fetch_news(
-        category=NewsCategory.TECHNOLOGY, lang="en", offset=0, limit=10
-    )
 
-    if not articles:
-        print("⚠️ No articles returned (API may be temporarily unavailable).")
-        print("   Structure & logic validated via demo.")
-    else:
-        for i, art in enumerate(articles, 1):
-            print(f"\n  {i}. {art.title}")
-            print(f"     Source: {art.source_name} | Author: {art.author}")
-            print(f"     {art.content[:140]}...")
+class InshortsKernel:
+    """MAGNATRIX integration kernel — bridges news to agent memory."""
 
-    print(f"\n[Meta] offset={offset}, has_more={has_more}, fetched={len(articles)}")
+    def __init__(self, config: Optional[InshortsKernelConfig] = None):
+        self.config = config or InshortsKernelConfig()
+        self.builder = InshortsRequestBuilder(timeout=self.config.timeout)
+        self.generator = InshortsFeedGenerator(self.builder)
+        self.search = InshortsSearchEngine(self.generator)
+        self.cli = InshortsCLI(self.generator)
+        self.exporter = InshortsExporter()
 
-    # 2. Paginated feed
-    print("\n" + "=" * 60)
-    print("[NewsFeed Pagination Demo]")
-    print("=" * 60)
-    feed = NewsFeed(client=client, category=NewsCategory.TECHNOLOGY, lang="en")
+    def news_brief(self, category: str = "top_stories", count: int = 5) -> str:
+        """Generate a plain-text brief for agent consumption."""
+        feed = self.generator.get_feed(category, self.config.default_language, limit=count)
+        lines = [f"📰 News Brief — {category.upper()} ({len(feed.articles)} items)"]
+        for art in feed.articles:
+            lines.append(f"\n• {art.title}")
+            lines.append(f"  {art.content}")
+            lines.append(f"  — {art.author}, {art.published_at[:10]}")
+        return "\n".join(lines)
 
-    batch1 = feed.next_batch(limit=10)
-    print(f"\nBatch 1: {len(batch1)} articles | cache={len(feed._cache)} | total={feed.total_fetched}")
+    def trending_digest(self, count: int = 5) -> str:
+        """Cross-category trending digest."""
+        articles = self.generator.trending(language=self.config.default_language, samples=count)
+        lines = [f"🔥 Trending Digest ({len(articles)} items)"]
+        for art in articles:
+            lines.append(f"\n[{art.category}] {art.title}")
+            lines.append(f"  {art.content[:100]}...")
+        return "\n".join(lines)
 
-    batch2 = feed.next_batch(limit=10)
-    print(f"Batch 2: {len(batch2)} articles | cache={len(feed._cache)} | total={feed.total_fetched}")
+    def search_digest(self, query: str, max_results: int = 5) -> str:
+        """Search and format results."""
+        result = self.search.search(query, language=self.config.default_language, max_results=max_results)
+        lines = [f'🔍 Search: "{query}" — {result.total} results']
+        for art in result.articles:
+            lines.append(f"\n• {art.title}")
+            lines.append(f"  {art.content[:120]}...")
+        return "\n".join(lines)
 
-    # 3. Kernel bridge
-    print("\n" + "=" * 60)
-    print("[InshortsKernel — Layer 5 & 10 Bridge]")
-    print("=" * 60)
-    kernel = InshortsKernel(client=client)
-    kernel.create_feed("tech", NewsCategory.TECHNOLOGY, lang="en")
-    kernel.create_feed("business", NewsCategory.BUSINESS, lang="en")
+    def health_check(self) -> Dict[str, Any]:
+        """Quick connectivity check."""
+        start = time.time()
+        feed = self.generator.get_feed("top_stories", limit=1, use_cache=False)
+        latency = round((time.time() - start) * 1000, 2)
+        return {
+            "status":     "healthy" if feed.articles else "degraded",
+            "latency_ms": latency,
+            "articles":   len(feed.articles),
+            "cached":     bool(self.generator._cache),
+        }
 
-    # Layer 5: ingest structured records
-    records = kernel.ingest("tech", batch_size=5)
-    print(f"\nIngested {len(records)} records to knowledge layer")
-    if records:
-        print(f"  Sample: {records[0]['title'][:50]}...")
 
-    # Layer 10: context injection
-    ctx = kernel.context_inject("tech", max_items=3)
-    print(f"\n[Context Injection]\n{ctx}")
+# ════════════════════════════════════════════════════════════════
+# DEMO
+# ════════════════════════════════════════════════════════════════
 
-    # Multi-feed summary
-    multi = kernel.multi_feed_summary(["tech", "business"], per_feed=2)
-    print(f"\n[Multi-Feed Summary] feeds={list(multi.keys())}")
+def _demo() -> None:
+    print("Inshorts News API Native — Demo Run")
+    print("═" * 60)
 
-    # Stats
-    print(f"\n[Feed Stats] {feed.stats}")
-    print(f"[Kernel] {kernel}")
+    kernel = InshortsKernel()
 
-    print("\n" + "=" * 60)
-    print("Demo complete.")
-    print("=" * 60)
+    # Health check
+    health = kernel.health_check()
+    print(f"\n1. Health Check: {health}")
+
+    # Category listing
+    kernel.cli.print_categories()
+
+    # Fetch a feed
+    print("\n2. Fetching TOP_STORIES...")
+    feed = kernel.generator.get_feed("top_stories", limit=3)
+    print(f"   Got {len(feed.articles)} articles, has_more={feed.has_more}")
+    for art in feed.articles:
+        print(f"   • {art.summary}")
+
+    # Trending digest
+    print("\n3. Trending Digest:")
+    print(kernel.trending_digest(count=3))
+
+    # Search
+    print("\n4. Search Demo (query='tech'):")
+    print(kernel.search_digest("tech", max_results=3))
+
+    # Export demo
+    if feed.articles:
+        print("\n5. Export Formats:")
+        print(f"   JSON size: {len(InshortsExporter.to_json(feed))} chars")
+        print(f"   Markdown size: {len(InshortsExporter.to_markdown(feed.articles))} chars")
+
+    print("\n" + "═" * 60)
+    print("Demo complete. Kernel ready for MAGNATRIX integration.")
 
 
 if __name__ == "__main__":
-    demo()
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
+    _demo()
