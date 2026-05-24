@@ -1,0 +1,44 @@
+# MAGNATRIX-OS Repo Queue — Batch 8 (Leonard Treas submissions)
+# Format: URL | Source | Category | Priority
+# Generated: 2026-05-24
+
+https://github.com/ahujaraman/distributed-computing-tutorials | Leonard Treas | distributed-computing | medium
+https://github.com/LeoVerto/minecraft-console-client | Leonard Treas | bot-automation | low
+https://github.com/aja-cs/break-the-Turing-Machine | Leonard Treas | computational-theory | low
+https://github.com/justpiple/aja-cs-justpiple | Leonard Treas | ai-creative | low
+https://github.com/zhaqian/tiny-chameleon-architecture | Leonard Treas | system-architecture | medium
+https://github.com/nickmilo/School-of-Socrates | Leonard Treas | learning-philosophy | low
+https://github.com/papots/honeygain-free-bot | Leonard Treas | network-proxy | low
+https://github.com/DDev247/Trifle | Leonard Treas | windows-simulation | low
+https://github.com/TrailheadApps | Leonard Treas | salesforce-enterprise | low
+https://github.com/elcritch/nesper | Leonard Treas | embedded-iot | medium
+https://github.com/AlkTheOrg/dijital-zorbalik-algi-olcegi | Leonard Treas | survey-tool | low
+https://github.com/akaunting/akaunting | Leonard Treas | accounting-finance | medium
+https://github.com/blankly-finance/blankly | Leonard Treas | trading-backtest | high
+https://github.com/motleytech/stt | Leonard Treas | speech-to-text | medium
+https://github.com/cjohansen/juicer | Leonard Treas | web-scraping-browser | medium
+https://github.com/hrdkmishra/AI-Agent-Demo | Leonard Treas | ai-agent-demo | low
+https://github.com/jeevanshah07/Python-CP | Leonard Treas | competitive-programming | low
+https://github.com/angusy29/fudu-detective-app | Leonard Treas | nutrition-health | low
+https://github.com/Nanak360/AI_Image_description_generator | Leonard Treas | image-to-text | low
+https://github.com/CSGlabs/opstools | Leonard Treas | devops-tools | medium
+https://github.com/eazeldin/DSCertified | Leonard Treas | data-science | low
+https://github.com/xgfone/gconf | Leonard Treas | config-parser | low
+https://github.com/xgfone/ishell | Leonard Treas | cli-framework | medium
+https://github.com/maple3142/Ghost | Leonard Treas | adblock-browser-ext | low
+https://github.com/maple3142/YouTube-Live-Latency | Leonard Treas | stream-optimization | low
+https://github.com/openhie/openhim-core-js | Leonard Treas | health-orchestration | medium
+https://github.com/zhangfuli/simple-mepsshop | Leonard Treas | payment-gateway | low
+https://github.com/elcritch/esphome | Leonard Treas | embedded-home-automation | medium
+https://github.com/LUNA-UST | Leonard Treas | blockchain-stablecoin | low
+https://github.com/carbon-language | Leonard Treas | programming-language | medium
+https://github.com/substack/warehouse | Leonard Treas | distributed-object-store | medium
+https://github.com/substack | Leonard Treas | username-tbd | low
+https://github.com/Artificial_Intelligence | Leonard Treas | username-tbd | low
+https://github.com/Virtualization | Leonard Treas | username-tbd | low
+https://github.com/OzGelo | Leonard Treas | username-tbd | low
+https://github.com/dacog/barrahomeassistant | Leonard Treas | home-assistant | low
+https://github.com/lanl/dsi | Leonard Treas | data-science-lab | medium
+https://github.com/web3/web3.js | Leonard Treas | web3-blockchain | medium
+https://github.com/sohamganatra | Leonard Treas | username-tbd | low
+https://github.com/mrhaandi | Leonard Treas | username-tbd | low
