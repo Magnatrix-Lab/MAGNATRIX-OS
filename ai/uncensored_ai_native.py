@@ -29,6 +29,7 @@ import math
 import os
 import random
 import re
+import threading
 import struct
 import time
 from dataclasses import dataclass, field
@@ -200,59 +201,65 @@ class KVCacheManager:
         self._cache: List[List[KVCacheEntry]] = [[] for _ in range(max_layers)]
         self._hit_count = 0
         self._miss_count = 0
+        self._lock = threading.Lock()
 
     def get(self, layer: int, position: int) -> Optional[Tuple[List[float], List[float]]]:
-        """Retrieve KV at given layer and position."""
-        if layer >= self.max_layers or position >= len(self._cache[layer]):
-            self._miss_count += 1
-            return None
-        entry = self._cache[layer][position]
-        entry.timestamp = time.time()
-        self._hit_count += 1
-        return (entry.key, entry.value)
+        """Retrieve KV at given layer and position. Thread-safe."""
+        with self._lock:
+            if layer >= self.max_layers or position >= len(self._cache[layer]):
+                self._miss_count += 1
+                return None
+            entry = self._cache[layer][position]
+            entry.timestamp = time.time()
+            self._hit_count += 1
+            return (entry.key, entry.value)
 
     def store(self, layer: int, position: int, key: List[float], value: List[float],
               token_id: int) -> None:
-        """Store KV at layer/position."""
+        """Store KV at layer/position. Thread-safe."""
         if layer >= self.max_layers:
             return
-        # Evict if over capacity
-        if len(self._cache[layer]) >= self.max_seq_len:
-            if self.eviction_policy == "sliding_window":
-                self._cache[layer].pop(0)
-            elif self.eviction_policy == "lru":
-                # Remove oldest by timestamp
-                oldest_idx = min(range(len(self._cache[layer])),
-                                 key=lambda i: self._cache[layer][i].timestamp)
-                self._cache[layer].pop(oldest_idx)
-        entry = KVCacheEntry(key=key, value=value, layer=layer,
-                             timestamp=time.time(), token_id=token_id)
-        if position < len(self._cache[layer]):
-            self._cache[layer][position] = entry
-        else:
-            self._cache[layer].append(entry)
+        with self._lock:
+            # Evict if over capacity
+            if len(self._cache[layer]) >= self.max_seq_len:
+                if self.eviction_policy == "sliding_window":
+                    self._cache[layer].pop(0)
+                elif self.eviction_policy == "lru":
+                    # Remove oldest by timestamp
+                    oldest_idx = min(range(len(self._cache[layer])),
+                                     key=lambda i: self._cache[layer][i].timestamp)
+                    self._cache[layer].pop(oldest_idx)
+            entry = KVCacheEntry(key=key, value=value, layer=layer,
+                                 timestamp=time.time(), token_id=token_id)
+            if position < len(self._cache[layer]):
+                self._cache[layer][position] = entry
+            else:
+                self._cache[layer].append(entry)
 
     def trim_to(self, max_len: int) -> None:
-        """Trim all layers to max length."""
-        for layer in range(self.max_layers):
-            if len(self._cache[layer]) > max_len:
-                self._cache[layer] = self._cache[layer][-max_len:]
+        """Trim all layers to max length. Thread-safe."""
+        with self._lock:
+            for layer in range(self.max_layers):
+                if len(self._cache[layer]) > max_len:
+                    self._cache[layer] = self._cache[layer][-max_len:]
 
     def clear(self) -> None:
-        self._cache = [[] for _ in range(self.max_layers)]
+        with self._lock:
+            self._cache = [[] for _ in range(self.max_layers)]
 
     @property
     def stats(self) -> Dict[str, Any]:
-        total = self._hit_count + self._miss_count
-        return {
-            "layers": self.max_layers,
-            "max_seq_len": self.max_seq_len,
-            "current_len": max(len(c) for c in self._cache) if any(self._cache) else 0,
-            "hits": self._hit_count,
-            "misses": self._miss_count,
-            "hit_rate": self._hit_count / total if total > 0 else 0.0,
-            "entries": sum(len(c) for c in self._cache),
-        }
+        with self._lock:
+            total = self._hit_count + self._miss_count
+            return {
+                "layers": self.max_layers,
+                "max_seq_len": self.max_seq_len,
+                "current_len": max(len(c) for c in self._cache) if any(self._cache) else 0,
+                "hits": self._hit_count,
+                "misses": self._miss_count,
+                "hit_rate": self._hit_count / total if total > 0 else 0.0,
+                "entries": sum(len(c) for c in self._cache),
+            }
 
 
 # =============================================================================
