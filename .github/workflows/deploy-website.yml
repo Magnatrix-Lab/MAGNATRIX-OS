@@ -11,7 +11,7 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: 11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
 
       - name: Build Static Site
         run: |
@@ -19,7 +19,7 @@ jobs:
           python3 deploy.py --mode build
 
       - name: Deploy to Hostinger VPS
-        uses: hostinger/deploy-on-vps@v2
+        uses: ea1eb4c526fe006abcc38797f5178af1d9d5e38f  # v2
         with:
           api-key: ${{ secrets.HOSTINGER_API_KEY }}
           virtual-machine: ${{ vars.HOSTINGER_VM_ID }}

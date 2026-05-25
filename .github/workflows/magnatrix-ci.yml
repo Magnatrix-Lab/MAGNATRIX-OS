@@ -13,9 +13,9 @@ jobs:
       matrix:
         python-version: ['3.10', '3.11', '3.12']
     steps:
-      - uses: actions/checkout@v4
+      - uses: 11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
+        uses: 8d9ed9ac5c53483de85588cdf95a591a75ab9f55  # v5.5.0
         with:
           python-version: ${{ matrix.python-version }}
       - name: Install dependencies
@@ -30,7 +30,7 @@ jobs:
       - name: Test with pytest
         run: pytest --cov=. --cov-report=xml
       - name: Upload coverage
-        uses: codecov/codecov-action@v3
+        uses: 9cc74bf7e13a810454a28846494ddbc3795eb693  # v3.1.6
         with:
           files: ./coverage.xml
 
@@ -38,7 +38,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: test
     steps:
-      - uses: actions/checkout@v4
+      - uses: 11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
       - name: Build Docker images
         run: |
           docker-compose -f docker-compose.yml build
@@ -54,13 +54,13 @@ jobs:
   security-scan:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: 11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
       - name: Run Bandit security scan
         run: |
           pip install bandit
           bandit -r . -f json -o bandit-report.json || true
       - name: Upload security report
-        uses: actions/upload-artifact@v4
+        uses: ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.6.2
         with:
           name: security-report
           path: bandit-report.json
@@ -70,7 +70,7 @@ jobs:
     needs: [test, build, security-scan]
     if: github.ref == 'refs/heads/main'
     steps:
-      - uses: actions/checkout@v4
+      - uses: 11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
       - name: Deploy to staging
         run: |
           echo "Deploying MAGNATRIX Agentic OS..."
