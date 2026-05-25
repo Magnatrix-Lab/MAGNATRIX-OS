@@ -1527,6 +1527,18 @@ html, body {
 
   <div class="sidebar-divider"></div>
 
+  <div class="nav-item" data-panel="router" title="LLM Router">
+    <span class="nav-icon">🌐</span>
+    <span class="nav-label">Router</span>
+    <span class="nav-badge">3</span>
+  </div>
+  <div class="nav-item" data-panel="ccswitch" title="CC Switch">
+    <span class="nav-icon">🔀</span>
+    <span class="nav-label">CC Switch</span>
+  </div>
+
+  <div class="sidebar-divider"></div>
+
   <div class="nav-item" data-panel="tools" title="Tools">
     <span class="nav-icon">🛠️</span>
     <span class="nav-label">Tools</span>
@@ -3514,6 +3526,16 @@ html, body {
   </div>
 </div>
 
+<!-- ── PANEL: ROUTER ──────────────────────────────────────────────────── -->
+<div class="panel" id="panel-router">
+  <iframe src="panels/panel_router.html" style="width:100%;height:calc(100vh - 56px);border:none;display:block;"></iframe>
+</div>
+
+<!-- ── PANEL: CC SWITCH ─────────────────────────────────────────────────── -->
+<div class="panel" id="panel-ccswitch">
+  <iframe src="panels/panel_ccswitch.html" style="width:100%;height:calc(100vh - 56px);border:none;display:block;"></iframe>
+</div>
+
 </main>
 </div>
 
@@ -3564,6 +3586,8 @@ html, body {
       security: 'Security Center',
       p2p: 'P2P Mesh',
       gateway: 'API Gateway',
+      router: 'LLM Router',
+      ccswitch: 'CC Switch',
       tools: 'Tools',
       plugins: 'Plugins',
       settings: 'Settings',
