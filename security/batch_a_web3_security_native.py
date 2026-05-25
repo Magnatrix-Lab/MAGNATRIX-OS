@@ -784,9 +784,15 @@ class PentestScriptRunner:
         Path(work_dir).mkdir(parents=True, exist_ok=True)
 
     def run_command(self, command: str, timeout: int = 60, check: bool = False) -> Result[str]:
+        """Execute command WITHOUT shell=True — uses shlex.split for safety."""
+        import shlex
         start = time.time()
         try:
-            result = subprocess.run(command, shell=True, capture_output=True, text=True,
+            # SECURITY: Never use shell=True. Parse command into list.
+            cmd_list = shlex.split(command)
+            if not cmd_list:
+                return Result.failure("Empty command", 0.0)
+            result = subprocess.run(cmd_list, shell=False, capture_output=True, text=True,
                                     timeout=timeout, cwd=self.work_dir, check=False)
             latency = (time.time() - start) * 1000
             output = result.stdout + result.stderr
