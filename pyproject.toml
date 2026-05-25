@@ -1,57 +1,100 @@
 [build-system]
-requires = ["setuptools>=61.0", "setuptools_scm>=8.0"]
+requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "magnatrix-os"
-dynamic = ["version"]
-description = "MAGNATRIX-OS — Uncensored Agentic AI Operating System"
+version = "0.9.5-alpha"
+description = "MAGNATRIX-OS — Private Uncensored Agentic AI Operating System"
 readme = "README.md"
 license = {text = "MIT"}
 requires-python = ">=3.11"
 authors = [
-    {name = "Magnatrix Lab", email = "dev@magnatrix.io"},
+    {name = "Magnatrix Lab", email = "dev@magnatrix.ai"}
 ]
-keywords = ["agentic", "ai", "os", "uncensored", "llm", "p2p", "raft"]
+keywords = [
+    "agentic-ai", "uncensored-ai", "ai-os", "autonomous-agents",
+    "p2p-mesh", "hft-trading", "offensive-security", "self-improving"
+]
 classifiers = [
-    "Development Status :: 4 - Beta",
+    "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
-    "Topic :: System :: Operating System Kernels",
+    "Topic :: System :: Operating Systems",
+    "Topic :: Security",
 ]
+
+dependencies = [
+    # Core — zero external dependencies by design
+    # All native implementations are pure Python.
+    # Optional integrations below are for bridge/adapter layers only.
+]
+
+[project.optional-dependencies]
+bridge = [
+    "websockets>=12.0",
+    "httpx>=0.27.0",
+    "aiohttp>=3.9.0",
+]
+trading = [
+    "pandas>=2.0",
+    "numpy>=1.26",
+]
+llm = [
+    "llama-cpp-python>=0.2.0",
+    "transformers>=4.40",
+    "tokenizers>=0.19",
+]
+security = [
+    "cryptography>=42.0",
+    "pynacl>=1.5",
+]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23",
+    "pytest-cov>=5.0",
+    "black>=24.0",
+    "ruff>=0.4.0",
+    "mypy>=1.10",
+]
+all = [
+    "magnatrix-os[bridge,trading,llm,security,dev]"
+]
+
+[project.scripts]
+magnatrix = "magnatrix:main"
+mx = "magnatrix:main"
+mx-boot = "magnatrix:magnatrix_boot"
+mx-status = "magnatrix:magnatrix_status"
+mx-shutdown = "magnatrix:magnatrix_shutdown"
 
 [project.urls]
 Homepage = "https://github.com/Magnatrix-Lab/MAGNATRIX-OS"
 Documentation = "https://magnatrix-lab.github.io/MAGNATRIX-OS"
 Repository = "https://github.com/Magnatrix-Lab/MAGNATRIX-OS.git"
 Issues = "https://github.com/Magnatrix-Lab/MAGNATRIX-OS/issues"
+Changelog = "https://github.com/Magnatrix-Lab/MAGNATRIX-OS/blob/main/CHANGELOG.md"
 
-[project.optional-dependencies]
-dev = [
-    "pytest>=7.4.0",
-    "pytest-asyncio>=0.21.0",
-    "pytest-cov>=4.1.0",
-    "black>=23.0.0",
-    "ruff>=0.1.0",
-    "mypy>=1.7.0",
-    "hypothesis>=6.88.0",
+[tool.setuptools]
+packages = [
+    "kernel", "protocol", "api-router", "identity", "runtime",
+    "p2p-mesh", "knowledge", "skills", "browser", "hft", "security",
+    "ai", "governance", "ide", "trading", "uncensored", "llm",
+    "collective-brain", "collective-brain.agents",
+    "config", "database", "storage", "streaming", "system",
+    "tasks", "tests", "tests.chaos", "tests.fuzzing", "tests.integration",
+    "workflows", "observability", "constitutional", "consensus",
+    "benchmarks", "bin", "scripts", "website", "mobile", "hunter"
 ]
-all = [
-    "pynacl>=1.5.0",
-    "httpx>=0.25.0",
-    "aiohttp>=3.9.0",
-    "msgpack>=1.0.7",
-]
+py-modules = ["magnatrix"]
 
-[tool.setuptools_scm]
-write_to = "magnatrix/_version.py"
-
-[tool.setuptools.packages.find]
-exclude = ["tests*", "docs*", "benchmarks*"]
+[tool.setuptools.package-data]
+"*" = ["*.md", "*.json", "*.yaml", "*.yml", "*.html", "*.css", "*.js"]
 
 [tool.black]
 line-length = 100
@@ -60,18 +103,20 @@ target-version = ['py311']
 [tool.ruff]
 line-length = 100
 target-version = "py311"
-select = ["E", "W", "F", "I", "N", "UP", "B", "C4", "SIM"]
-ignore = ["E501"]
+select = ["E", "F", "W", "I", "N", "UP", "B", "C4", "SIM"]
+ignore = ["E501", "B008"]
 
 [tool.mypy]
 python_version = "3.11"
+strict = true
 warn_return_any = true
-warn_unused_configs = true
-disallow_untyped_defs = false
+warn_unused_ignores = true
+ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-python_files = "test_*.py"
-python_classes = "Test*"
-python_functions = "test_*"
+python_files = ["test_*.py", "*_test.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
 addopts = "-v --tb=short"
+asyncio_mode = "auto"

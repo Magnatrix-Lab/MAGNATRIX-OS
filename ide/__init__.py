@@ -1,0 +1,1 @@
+"""MAGNATRIX-OS ide module."""
