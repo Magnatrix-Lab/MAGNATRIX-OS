@@ -223,6 +223,47 @@ class MagnatrixOS:
         self._boot_time = 0.0
         self.shutdown_mgr = ShutdownManager()
         self.health_agg = HealthAggregator()
+        # Register shutdown hooks for all layers
+        self._register_layer_shutdown_hooks()
+        self._register_layer_health_checks()
+
+    def _register_layer_shutdown_hooks(self) -> None:
+        """Register per-layer shutdown callbacks with dependency ordering."""
+        # Register in reverse dependency order
+        for layer_id, name, deps in reversed(self.LAYERS):
+            def _make_shutdown(lid=layer_id, lname=name):
+                def _fn():
+                    try:
+                        self.status[str(lid)]["status"] = "stopped"
+                        if verbose:
+                            print(f"[SHUTDOWN] Layer {lid}: {lname}")
+                    except Exception:
+                        pass
+                return _fn
+            # Depends on all downstream layers already shut down
+            downstream = [d for lid2, n2, dlist in self.LAYERS if lid2 > layer_id for d in dlist]
+            self.shutdown_mgr.register(
+                name=f"layer-{layer_id}-{name}",
+                callback=_make_shutdown(),
+                timeout_sec=3.0,
+                depends_on=list(set(downstream))
+            )
+
+    def _register_layer_health_checks(self) -> None:
+        """Register health probes for all layers."""
+        for layer_id, name, deps in self.LAYERS:
+            def _make_check(lid=layer_id, lname=name):
+                def _fn():
+                    stat = self.status.get(str(lid), {})
+                    if stat.get("status") == "running":
+                        return (True, f"{lname} running")
+                    return (False, f"{lname} not running")
+                return _fn
+            self.health_agg.register(
+                name=f"layer-{layer_id}-{name}",
+                check_fn=_make_check(),
+                critical=(layer_id in (0, 2, 10))  # kernel, identity, security are critical
+            )
 
     def boot(self, config_path: str = "config/magnatrix.json", verbose: bool = False):
         """Boot all layers in dependency order."""
