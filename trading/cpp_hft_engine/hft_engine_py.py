@@ -248,8 +248,8 @@ class ArbitrageDetector:
 
 class HFTEngine:
     def __init__(self) -> None:
-        self.book_manager = OrderBookManager()
-        self.arb_detector = ArbitrageDetector()
+        self._book_manager = OrderBookManager()
+        self._arb_detector = ArbitrageDetector()
         self.running = False
         self.tick_count = 0
         self.latency_sum_ns = 0
@@ -261,6 +261,12 @@ class HFTEngine:
 
     def shutdown(self) -> None:
         self.running = False
+
+    def book_manager(self) -> OrderBookManager:
+        return self._book_manager
+
+    def arb_detector(self) -> ArbitrageDetector:
+        return self._arb_detector
 
     def avg_tick_latency_ns(self) -> int:
         if self.tick_count == 0:

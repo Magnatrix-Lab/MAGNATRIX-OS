@@ -35,8 +35,8 @@ def blake3_hash(data: bytes) -> bytes:
         import blake3 as _blake3
         return _blake3.blake3(data).digest()
     except ImportError:
-        # Fallback to BLAKE2b if blake3 not installed
-        return hashlib.blake2b(data).digest()
+        # Fallback to BLAKE2s (32 bytes) if blake3 not installed
+        return hashlib.blake2s(data).digest()
 
 
 def hmac_sha256(key: bytes, data: bytes) -> bytes:
