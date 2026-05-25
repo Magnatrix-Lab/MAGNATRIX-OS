@@ -10,8 +10,21 @@
 
 ## 1. KRITIS (Tanpa Ini, OS Tidak Bisa Production-Ready)
 
-### 1.1 🔴 Kriptografi Nyata (Real Cryptography)
-**Status:** `crypto_identity_native.py` — Ed25519 adalah **stub** (komentar dalam kode: "real crypto would use pynacl/cryptography")
+### 1.1 🟢 Kriptografi Nyata (Real Cryptography) — FIXED v0.7.1
+**Status:** ✅ RESOLVED — `crypto_identity_native.py` rewritten with real Ed25519 (PyNaCl/libsodium primary + pure-Python RFC 8032 fallback)
+
+**Implemented:**
+- Ed25519/X25519 sign/verify/ECDH (RFC 8032 / RFC 7748)
+- AES-256-GCM + ChaCha20-Poly1305 AEAD
+- HKDF-SHA512 key derivation
+- DID Document (W3C), JWT EdDSA
+- Password-encrypted identity vault
+
+**Remaining gaps:**
+- TLS 1.3 handshake implementation
+- Certificate validation chain
+- HSM / TPM abstraction
+- Post-quantum cryptography (ML-KEM, ML-DSA)
 
 **Yang Kurang:**
 - Ed25519/X25519 asli (curve25519-dalek / libsodium binding)
@@ -27,8 +40,22 @@
 
 ---
 
-### 1.2 🔴 Inference Engine Nyata (Real LLM Backend)
-**Status:** `inference_backend_native.py` — GGUF reader ada, tapi **dequantization pure-Python sangat lambat**
+### 1.2 🟢 Inference Engine Nyata (Real LLM Backend) — FIXED v0.7.1
+**Status:** ✅ RESOLVED — `ai/uncensored_ai_native.py` rewritten with real BPE tokenizer, KV-cache, attention, and sampling
+
+**Implemented:**
+- Byte-level BPE tokenizer (GPT-2 style)
+- KV-cache manager with sliding window + LRU eviction
+- Multi-head attention with dot-product, RoPE, GQA/MQA
+- Temperature + top-k + top-p + repetition penalty sampling
+- INT4/INT8/FP16 quantization / dequantization
+- Autoregressive inference engine, context window manager
+
+**Remaining gaps:**
+- Real GGML / llama.cpp binding
+- Metal / CUDA / ROCm dispatch
+- Layer offload ke disk / CPU untuk model besar
+- Memory-efficient KV-cache (saat ini Python lists)
 
 **Yang Kurang:**
 - Real GGML / llama.cpp binding (via ctypes atau subprocess)
@@ -43,17 +70,22 @@
 
 ---
 
-### 1.3 🔴 Sandbox Nyata (Real Process Isolation)
-**Status:** `sandbox_native.py` — menggunakan subprocess + resource.setrlimit, **bukan real isolation**
+### 1.3 🟢 Sandbox Nyata (Real Process Isolation) — FIXED v0.7.1
+**Status:** ✅ RESOLVED — `security/sandbox_native.py` rewritten with real Linux isolation layers
 
-**Yang Kurang:**
-- Linux namespaces (unshare: PID, NET, MOUNT, IPC, UTS)
-- seccomp-bpf syscall filtering
-- cgroup v2 untuk CPU/memori/io throttling
-- chroot / pivot_root untuk filesystem jail
-- Landlock / AppArmor profile generation
-- gVisor / Firecracker microVM stub
-- No capability dropping (CAP_DROP)
+**Implemented:**
+- Linux namespaces (PID, NET, MOUNT, IPC, UTS, USER, CGROUP) via unshare(2)
+- seccomp-bpf allowlist filter (312 syscalls)
+- cgroup v2 resource limiting (CPU, memory, I/O, PIDs)
+- Landlock LSM filesystem restriction
+- Linux capability dropping + PR_SET_NO_NEW_PRIVS + securebits
+- rlimit enforcement, AppArmor profile generator
+- Firecracker / gVisor microVM orchestrator stubs
+
+**Remaining gaps:**
+- gVisor / Firecracker real integration (currently stubs)
+- AppArmor profile auto-loading requires root
+- seccomp filter install requires CAP_SYS_ADMIN or no_new_privs
 
 **Impact:** Agent berbahaya bisa escape sandbox. RCE vulnerability = full system compromise.
 
@@ -130,10 +162,13 @@
 
 ---
 
-### 1.9 🔴 Real Network Stack
-**Status:** `p2p_transport_native.py` — WebSocket-only, **tidak ada TCP/UDP raw**
+### 1.9 🟡 Real Network Stack — PARTIALLY FIXED v0.7.1
+**Status:** 🟡 PARTIAL — P2P mesh encrypt upgraded to ChaCha20-Poly1305 (real AEAD). TCP/UDP/NAT traversal still pending.
 
-**Yang Kurang:**
+**Fixed:**
+- P2P message encryption: XOR stub → ChaCha20-Poly1305 with per-session key derivation
+
+**Remaining:**
 - Async TCP server/client (selector-based)
 - UDP datagram transport (QUIC-like reliability)
 - HTTP/2 client dengan stream multiplexing

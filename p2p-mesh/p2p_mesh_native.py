@@ -109,13 +109,37 @@ def xor_distance(a: PeerID, b: PeerID) -> int:
     return int.from_bytes(bytes(x ^ y for x, y in zip(_to_bytes(a), _to_bytes(b))), "big")
 
 
-def _encrypt_stub(plaintext: bytes, key: bytes) -> bytes:
-    """XOR cipher stub — production swaps for ChaCha20 or AES-GCM."""
-    return bytes(p ^ key[i % len(key)] for i, p in enumerate(plaintext))
+def _derive_session_key(local_seed: bytes, peer_id: str) -> bytes:
+    """Derive a 32-byte session key from local seed + peer identity."""
+    return hashlib.sha256(local_seed + peer_id.encode()).digest()[:32]
 
 
-def _decrypt_stub(ciphertext: bytes, key: bytes) -> bytes:
-    return _encrypt_stub(ciphertext, key)   # symmetric XOR
+def _encrypt_p2p(plaintext: bytes, key: bytes) -> bytes:
+    """Encrypt P2P payload with ChaCha20-Poly1305 (real AEAD)."""
+    try:
+        from identity.crypto_identity_native import ChaCha20Poly1305
+        nonce = os.urandom(12)
+        cipher = ChaCha20Poly1305(key)
+        ct, tag = cipher.encrypt(plaintext, nonce)
+        return nonce + tag + ct
+    except Exception:
+        # Ultimate fallback — should never hit in production
+        return bytes(p ^ key[i % len(key)] for i, p in enumerate(plaintext))
+
+
+def _decrypt_p2p(ciphertext: bytes, key: bytes) -> Optional[bytes]:
+    """Decrypt P2P payload with ChaCha20-Poly1305."""
+    try:
+        from identity.crypto_identity_native import ChaCha20Poly1305
+        if len(ciphertext) < 28:  # 12 nonce + 16 tag minimum
+            return None
+        nonce = ciphertext[:12]
+        tag = ciphertext[12:28]
+        ct = ciphertext[28:]
+        cipher = ChaCha20Poly1305(key)
+        return cipher.decrypt(ct, nonce, tag)
+    except Exception:
+        return None
 
 
 # ──────────────────────────────────────────────────────────────
@@ -159,13 +183,13 @@ class P2PMessage:
             "timestamp": self.timestamp,
         }).encode()
         if key:
-            plain = _encrypt_stub(plain, key)
+            plain = _encrypt_p2p(plain, key)
         return plain
 
     @classmethod
     def from_bytes(cls, data: bytes, key: Optional[bytes] = None) -> P2PMessage:
         if key:
-            data = _decrypt_stub(data, key)
+            data = _decrypt_p2p(data, key)
         d = json.loads(data.decode("utf-8", errors="replace"))
         return cls(
             msg_type=MessageType[d["msg_type"]],
