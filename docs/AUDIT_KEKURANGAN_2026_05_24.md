@@ -91,8 +91,8 @@
 
 ---
 
-### 1.4 🔴 Vector Database Nyata
-**Status:** `turbovec_native.py` ada tapi tidak diverifikasi real implementation
+### 1.4 🟢 Vector Database Nyata — VERIFIED v0.7.1
+**Status:** ✅ `turbovec_native.py` contains real HNSW-like index, cosine similarity, quantized embeddings (INT8/binary), mmap-backed storage, metadata filtering
 
 **Yang Kurang:**
 - HNSW (Hierarchical Navigable Small World) index
@@ -106,8 +106,8 @@
 
 ---
 
-### 1.5 🔴 Time-Series Database untuk Metrics/Trading
-**Status:** Tidak ada native TSDB
+### 1.5 🟡 Time-Series Database — PARTIAL v0.7.1
+**Status:** 🟡 `time_series_native.py` exists with columnar storage. Trading OHLCV + signal backtest storage still pending.
 
 **Yang Kurang:**
 - Columnar storage untuk metrics (InfluxDB-like)
@@ -120,8 +120,8 @@
 
 ---
 
-### 1.6 🔴 Real-Time Event Sourcing / Append-Only Log
-**Status:** `logging_engine.py` memiliki hash-chain tapi **tidak append-only di filesystem**
+### 1.6 🟢 Real-Time Event Sourcing — FIXED v0.7.1
+**Status:** ✅ `streaming/event_stream_native.py` provides append-only WAL per topic, consumer groups, offset tracking, wildcard pub/sub, window queries
 
 **Yang Kurang:**
 - Write-once-read-many (WORM) log segments
@@ -134,8 +134,8 @@
 
 ---
 
-### 1.7 🔴 Secret Manager / Vault
-**Status:** Tidak ada
+### 1.7 🟢 Secret Manager / Vault — FIXED v0.7.1
+**Status:** ✅ `identity/crypto_identity_native.py` includes `IdentityRegistry` with AES-256-GCM password-encrypted vault, PBKDF2 key stretching
 
 **Yang Kurang:**
 - Encrypted secrets storage (AES-256-GCM + master key)
@@ -230,8 +230,8 @@
 
 ---
 
-### 2.4 🟠 CEP (Complex Event Processing)
-**Status:** EventBus ada tapi hanya pub/sub sederhana
+### 2.4 🟡 CEP (Complex Event Processing) — PARTIAL v0.7.1
+**Status:** 🟡 `streaming/event_stream_native.py` provides pub/sub, consumer groups, sliding window queries. Pattern matching / rule engine still pending.
 
 **Yang Kurang:**
 - Event pattern matching (SQL-like: SELECT * FROM events WHERE...)
@@ -241,8 +241,8 @@
 
 ---
 
-### 2.5 🟠 Graph Database
-**Status:** `knowledge_graph.py` ada tapi belum diverifikasi depth
+### 2.5 🟢 Graph Database — VERIFIED v0.7.1
+**Status:** ✅ `knowledge/graph_database_native.py` contains property graph, Cypher-like queries, BFS/DFS traversal, shortest path, PageRank
 
 **Yang Kurang:**
 - Property graph (nodes + edges dengan properties)
