@@ -659,7 +659,14 @@ class IdentityRegistry:
         os.makedirs(data_dir, exist_ok=True)
 
     def _path(self, name: str) -> str:
-        return os.path.join(self.data_dir, f"{name}.json.enc")
+        # SECURITY: PathGuard validation prevents directory traversal
+        import sys
+        sys.path.insert(0, "kernel")
+        from path_guard_native import PathGuard
+        safe = PathGuard.validate(os.path.join(self.data_dir, f"{name}.json.enc"))
+        if "security" not in sys.path:
+            sys.path.remove("kernel")
+        return safe
 
     def save(self, name: str, keypair: Ed25519KeyPair, password: str) -> None:
         salt = os.urandom(32)
