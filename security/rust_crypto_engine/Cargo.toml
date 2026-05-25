@@ -1,0 +1,40 @@
+[package]
+name = "magnatrix_crypto"
+version = "0.9.5"
+edition = "2021"
+authors = ["Magnatrix Lab <dev@magnatrix.ai>"]
+description = "MAGNATRIX-OS Rust cryptographic primitives engine"
+license = "MIT"
+repository = "https://github.com/Magnatrix-Lab/MAGNATRIX-OS"
+
+[lib]
+name = "_magnatrix_crypto"
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+pyo3 = { version = "0.22", features = ["extension-module", "abi3-py311"] }
+sha2 = "0.10"
+sha3 = "0.10"
+blake3 = "1.5"
+ed25519-dalek = { version = "2.1", features = ["rand_core", "serde"] }
+rand = "0.8"
+chacha20poly1305 = "0.10"
+aes-gcm = "0.10"
+argon2 = "0.5"
+hmac = "0.12"
+pbkdf2 = "0.12"
+base64 = "0.22"
+hex = "0.4"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+zeroize = { version = "1.8", features = ["derive"] }
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true
+
+[profile.dev]
+opt-level = 1
