@@ -27,11 +27,16 @@ import json
 import os
 import random
 import struct
+import sys
 import threading
 import time
 from dataclasses import dataclass, field, asdict
 from enum import Enum, auto
 from typing import Dict, List, Optional, Tuple, Any, Callable, Set
+
+# SECURITY: Secure file operations
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "storage"))
+from file_ops_native import open as _sopen
 
 
 # =============================================================================
@@ -82,7 +87,7 @@ class WriteAheadLog:
         self.path = path
         os.makedirs(os.path.dirname(path), exist_ok=True)
         self._lock = threading.Lock()
-        self._fp = open(path, "a+b")
+        self._fp = _sopen(path, "a+b")
         self._fp.seek(0, os.SEEK_END)
 
     def append(self, entry: LogEntry) -> None:
@@ -125,7 +130,7 @@ class WriteAheadLog:
         entries = self.read_all()
         keep = [e for e in entries if e.index <= last_index]
         tmp_path = self.path + ".tmp"
-        with open(tmp_path, "wb") as f:
+        with _sopen(tmp_path, "wb") as f:
             for e in keep:
                 data = json.dumps(e.to_dict(), ensure_ascii=False).encode("utf-8")
                 crc = zlib.crc32(data) & 0xffffffff
@@ -134,7 +139,7 @@ class WriteAheadLog:
         with self._lock:
             self._fp.close()
             os.replace(tmp_path, self.path)
-            self._fp = open(self.path, "a+b")
+            self._fp = _sopen(self.path, "a+b")
 
     def close(self) -> None:
         with self._lock:
@@ -171,14 +176,14 @@ class SnapshotManager:
 
     def save(self, snapshot: Snapshot) -> None:
         tmp = self._snap_path + ".tmp"
-        with open(tmp, "wb") as f:
+        with _sopen(tmp, "wb") as f:
             f.write(snapshot.to_bytes())
         os.replace(tmp, self._snap_path)
 
     def load(self) -> Optional[Snapshot]:
         if not os.path.exists(self._snap_path):
             return None
-        with open(self._snap_path, "rb") as f:
+        with _sopen(self._snap_path, "rb") as f:
             return Snapshot.from_bytes(f.read())
 
 
@@ -273,7 +278,7 @@ class RaftNode:
     def _load_persistent_state(self) -> None:
         meta_path = os.path.join(self.config.data_dir, f"{self.id}.meta")
         if os.path.exists(meta_path):
-            with open(meta_path, "r") as f:
+            with _sopen(meta_path, "r") as f:
                 meta = json.load(f)
             self.current_term = meta.get("term", 0)
             self.voted_for = meta.get("voted_for")
@@ -289,7 +294,7 @@ class RaftNode:
     def _save_persistent_state(self) -> None:
         meta_path = os.path.join(self.config.data_dir, f"{self.id}.meta")
         tmp = meta_path + ".tmp"
-        with open(tmp, "w") as f:
+        with _sopen(tmp, "w") as f:
             json.dump({"term": self.current_term, "voted_for": self.voted_for}, f)
         os.replace(tmp, meta_path)
 
@@ -652,4 +657,4 @@ def demo() -> None:
 
 
 if __name__ == "__main__":
-    demo()
+    demo(

@@ -10,6 +10,12 @@ from dataclasses import dataclass, field, asdict
 from enum import Enum, auto
 from typing import Dict, List, Optional, Callable, Any
 
+# SECURITY: Use secure file operations instead of raw open()
+import sys
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "storage"))
+from file_ops_native import open as _sopen
+from file_ops_native import exists as _sexists
+
 
 class LogLevel(Enum):
     DEBUG = 0
@@ -84,7 +90,7 @@ class LogRotator:
             self._current_size = os.path.getsize(self.filepath)
         else:
             os.makedirs(os.path.dirname(self.filepath) or ".", exist_ok=True)
-            open(self.filepath, "a").close()
+            _sopen(self.filepath, "a").close()
             self._current_size = 0
 
     def _rotate(self):
@@ -98,7 +104,7 @@ class LogRotator:
             # Gzip old backups beyond max_days
             self._cleanup_old()
             # Reset
-            open(self.filepath, "a").close()
+            _sopen(self.filepath, "a").close()
             self._current_size = 0
 
     def _cleanup_old(self):
@@ -111,7 +117,7 @@ class LogRotator:
             backup_path = os.path.join(dir_path, backup)
             if not backup.endswith(".gz"):
                 gz_path = backup_path + ".gz"
-                with open(backup_path, "rb") as f_in:
+                with _sopen(backup_path, "rb") as f_in:
                     with gzip.open(gz_path, "wb") as f_out:
                         f_out.write(f_in.read())
                 os.remove(backup_path)
@@ -131,7 +137,7 @@ class LogRotator:
             if today != self._current_date:
                 self._current_date = today
                 self._rotate()
-            with open(self.filepath, "a", encoding="utf-8") as f:
+            with _sopen(self.filepath, "a", encoding="utf-8") as f:
                 f.write(line + "\n")
             self._current_size += len(line_bytes)
 

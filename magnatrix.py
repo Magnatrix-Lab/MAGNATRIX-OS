@@ -9,6 +9,11 @@ import argparse, signal, sys, time, os, json, threading
 from typing import Dict, List, Optional, Callable
 from dataclasses import dataclass
 
+# Infrastructure imports
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "kernel"))
+from shutdown_manager_native import ShutdownManager
+from health_aggregator_native import HealthAggregator
+
 
 @dataclass
 class VersionInfo:
@@ -19,16 +24,15 @@ class VersionInfo:
 
 
 class SignalHandler:
-    """Handle SIGINT/SIGTERM for graceful shutdown."""
+    """Handle SIGINT/SIGTERM for graceful shutdown via ShutdownManager."""
 
-    def __init__(self, callback: Callable):
-        self.callback = callback
-        signal.signal(signal.SIGINT, self._handle)
-        signal.signal(signal.SIGTERM, self._handle)
+    def __init__(self, shutdown_mgr: ShutdownManager):
+        self.mgr = shutdown_mgr
+        shutdown_mgr.install_signal_handlers()
 
     def _handle(self, signum, frame):
         print(f"\nSignal {signum} received, initiating graceful shutdown...")
-        self.callback()
+        self.mgr.shutdown(exit_code=0)
 
 
 class HealthDashboard:
@@ -217,6 +221,8 @@ class MagnatrixOS:
         self._running = False
         self._lock = threading.Lock()
         self._boot_time = 0.0
+        self.shutdown_mgr = ShutdownManager()
+        self.health_agg = HealthAggregator()
 
     def boot(self, config_path: str = "config/magnatrix.json", verbose: bool = False):
         """Boot all layers in dependency order."""
@@ -227,6 +233,7 @@ class MagnatrixOS:
 
         self.hooks.fire_pre_boot()
         self._boot_time = time.time()
+        self.health_agg.register("kernel", lambda: (True, "booted"), critical=True)
 
         for layer_id, name, deps in self.LAYERS:
             if verbose:
@@ -272,7 +279,7 @@ class MagnatrixOS:
         print(f"{'='*60}\n")
 
     def shutdown(self, force: bool = False):
-        """Graceful shutdown all layers in reverse order."""
+        """Graceful shutdown all layers in reverse order via ShutdownManager."""
         if not self._running:
             return
 
@@ -283,18 +290,21 @@ class MagnatrixOS:
         self.hooks.fire_pre_shutdown()
         self.watchdog.stop()
 
-        # Shutdown in reverse
+        # Register reverse shutdown hooks
         for layer_id, name, _ in reversed(self.LAYERS):
-            if layer_id in self.layers:
-                if not force:
-                    time.sleep(0.1)
-                self.status[str(layer_id)]["status"] = "stopped"
-                del self.layers[layer_id]
-                print(f"[SHUTDOWN] Layer {layer_id}: {name} stopped")
+            lid = layer_id
+            self.shutdown_mgr.register(
+                f"layer-{lid}",
+                lambda lid=lid: self._shutdown_layer(lid),
+                timeout_sec=5.0,
+            )
+        self.shutdown_mgr.shutdown(exit_code=0)
 
-        self._running = False
-        self.hooks.fire_post_shutdown()
-        print(f"\n{'='*60}")
+    def _shutdown_layer(self, layer_id: int) -> None:
+        if layer_id in self.layers:
+            self.status[str(layer_id)]["status"] = "stopped"
+            del self.layers[layer_id]
+            print(f"[SHUTDOWN] Layer {layer_id} stopped")
         print("Shutdown complete.")
         print(f"{'='*60}\n")
 

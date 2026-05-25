@@ -9,6 +9,11 @@ import json, os, time, threading
 from dataclasses import dataclass, field, asdict
 from typing import Dict, List, Optional, Any
 
+# SECURITY: Secure file operations
+import sys
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "storage"))
+from file_ops_native import open as _sopen
+
 
 @dataclass
 class LayerConfig:
@@ -65,7 +70,7 @@ class ConfigLoader:
         # Override from file
         if os.path.exists(self.filepath):
             try:
-                with open(self.filepath, "r") as f:
+                with _sopen(self.filepath, "r") as f:
                     file_config = json.load(f)
                 self._deep_merge(config, file_config)
             except Exception:
@@ -191,7 +196,7 @@ class ConfigManager:
         with self._lock:
             data = dict(self._config)
         os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
-        with open(path, "w") as f:
+        with _sopen(path, "w") as f:
             json.dump(data, f, indent=2, default=str)
         return path
 
