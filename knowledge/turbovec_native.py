@@ -1,4 +1,7 @@
 """
+from storage.file_ops_native import open as _secure_open
+_builtins_open = open
+open = _secure_open
 knowledge/turbovec_native.py
 ===========================
 MAGNATRIX Native TurboQuant Vector Index

@@ -9,6 +9,7 @@ Zero-dependency graph database with adjacency list storage.
 ================================================================================
 """
 from __future__ import annotations
+from storage.file_ops_native import open as _secure_open
 
 import hashlib
 import heapq

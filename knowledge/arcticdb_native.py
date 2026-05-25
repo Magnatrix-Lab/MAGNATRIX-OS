@@ -562,7 +562,6 @@ Pure Python, standard library + asyncio, zero external dependencies.
 Bagian 2: PandasLikeInterface, VersionEngine, QueryOptimizer,
           CompressionEngine, SchemaEngine, ArcticKernelBridge, ArcticDB + demo
 """
-from __future__ import annotations
 
 import asyncio
 import json

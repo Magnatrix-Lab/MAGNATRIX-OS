@@ -316,8 +316,8 @@ class KVCacheManager:
 
 ---
 
-### 5.2 🟢 Log Rotation — FIXED v0.7.2
-**Status:** ✅ kernel/log_rotator_native.py created (size/time based + gzip). Remaining: wire to logging_engine.py.
+### 5.2 🟢 Log Rotation — FIXED (already wired)
+**Status:** ✅ LogRotator was already in kernel/logging_engine.py (line 338) wired to LoggingEngine. kernel/log_rotator_native.py is reusable standalone component.
 **Temuan:** `logging_engine.py` menulis ke file tunggal tanpa rotation.
 
 **Impact:** Disk penuh. Log terlalu besar untuk di-parse.

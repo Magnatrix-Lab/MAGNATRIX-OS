@@ -32,6 +32,7 @@ Versi: Phase 5 — OpenChronicle Native Memory Layer
 """
 
 from __future__ import annotations
+from storage.file_ops_native import open as _secure_open
 
 import hashlib
 import json
