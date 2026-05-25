@@ -479,11 +479,13 @@ def run_demo() -> None:
         api_key="sk-fake",
         model="gpt-4",
     ))
+    # SECURITY: API keys must come from environment variables in production
+    import os as _os
     router.register_provider(LLMProvider(
         provider_id="anthropic-1",
         type=ProviderType.ANTHROPIC,
         base_url="https://api.anthropic.com",
-        api_key="sk-ant-fake",
+        api_key=_os.environ.get("ANTHROPIC_API_KEY", "sk-ant-fake"),
         model="claude-3-opus",
     ))
     router.register_provider(LLMProvider(

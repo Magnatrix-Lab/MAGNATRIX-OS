@@ -9,6 +9,19 @@ import os
 
 here = os.path.abspath(os.path.dirname(__file__))
 
+# Auto-version from CHANGELOG or fallback
+version = "0.7.1"
+changelog = os.path.join(here, "CHANGELOG.md")
+if os.path.exists(changelog):
+    with open(changelog, encoding="utf-8") as f:
+        for line in f:
+            if line.startswith("## v"):
+                try:
+                    version = line.split()[1].strip()
+                    break
+                except Exception:
+                    pass
+
 with open(os.path.join(here, "README.md"), encoding="utf-8") as f:
     long_description = f.read()
 
@@ -17,7 +30,7 @@ with open(os.path.join(here, "requirements.txt"), encoding="utf-8") as f:
 
 setup(
     name="magnatrix-os",
-    version="0.1.0",
+    version=version,
     description="MAGNATRIX Agentic OS — Open-source AI Operating System evolving toward AGI and Super AI",
     long_description=long_description,
     long_description_content_type="text/markdown",

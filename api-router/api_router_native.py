@@ -781,7 +781,15 @@ def run_demo() -> None:
     print("API_ROUTER_NATIVE DEMO")
     print("=" * 60)
 
-    secret = b"demo-secret-key-32-bytes-long!!"
+    # SECURITY: Derive secret from environment or generate ephemeral
+    secret_env = os.environ.get("MAGNATRIX_API_SECRET", "")
+    if len(secret_env) >= 32:
+        secret = secret_env.encode()[:32]
+    else:
+        # Ephemeral secret for demo only — production MUST set env var
+        import hashlib, time
+        secret = hashlib.sha256(str(time.time()).encode()).digest()
+
     router = RouterKernel(secret)
 
     # Middleware chain

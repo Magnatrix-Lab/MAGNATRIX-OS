@@ -28,6 +28,7 @@ import io
 import json
 import os
 import struct
+import sys
 import zlib
 import time
 from dataclasses import dataclass, field
@@ -624,13 +625,20 @@ class BlueprintModdingEngine:
         self.scripts[script_name] = code
 
     def execute_lua(self, script_name: str, context: Dict[str, Any]) -> Any:
-        """Execute Lua script dengan context."""
+        """Execute Lua script dengan context — SECURE: uses SafeEvaluator instead of eval()."""
         code = self.scripts.get(script_name, "")
-        # Simplified: Python eval sebagai proxy
+        # SECURITY FIX: replaced eval() with SafeEvaluator
+        # Old: return eval(code, {"__builtins__": {}}, context)
         try:
-            return eval(code, {"__builtins__": {}}, context)
+            sys.path.insert(0, "security")
+            from safe_eval_native import SafeEvaluator
+            evaluator = SafeEvaluator(extra_names=context)
+            return evaluator.eval(code)
         except Exception as e:
-            return {"error": str(e)}
+            return {"error": str(e), "blocked": True}
+        finally:
+            if "security" in sys.path:
+                sys.path.remove("security")
 
     def generate_mod_actor_template(self, mod_name: str) -> str:
         """Generate Blueprint ModActor template."""

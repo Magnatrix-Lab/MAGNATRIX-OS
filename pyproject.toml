@@ -1,0 +1,77 @@
+[build-system]
+requires = ["setuptools>=61.0", "setuptools_scm>=8.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "magnatrix-os"
+dynamic = ["version"]
+description = "MAGNATRIX-OS — Uncensored Agentic AI Operating System"
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.11"
+authors = [
+    {name = "Magnatrix Lab", email = "dev@magnatrix.io"},
+]
+keywords = ["agentic", "ai", "os", "uncensored", "llm", "p2p", "raft"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: System :: Operating System Kernels",
+]
+
+[project.urls]
+Homepage = "https://github.com/Magnatrix-Lab/MAGNATRIX-OS"
+Documentation = "https://magnatrix-lab.github.io/MAGNATRIX-OS"
+Repository = "https://github.com/Magnatrix-Lab/MAGNATRIX-OS.git"
+Issues = "https://github.com/Magnatrix-Lab/MAGNATRIX-OS/issues"
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.0",
+    "pytest-asyncio>=0.21.0",
+    "pytest-cov>=4.1.0",
+    "black>=23.0.0",
+    "ruff>=0.1.0",
+    "mypy>=1.7.0",
+    "hypothesis>=6.88.0",
+]
+all = [
+    "pynacl>=1.5.0",
+    "httpx>=0.25.0",
+    "aiohttp>=3.9.0",
+    "msgpack>=1.0.7",
+]
+
+[tool.setuptools_scm]
+write_to = "magnatrix/_version.py"
+
+[tool.setuptools.packages.find]
+exclude = ["tests*", "docs*", "benchmarks*"]
+
+[tool.black]
+line-length = 100
+target-version = ['py311']
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+select = ["E", "W", "F", "I", "N", "UP", "B", "C4", "SIM"]
+ignore = ["E501"]
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = "test_*.py"
+python_classes = "Test*"
+python_functions = "test_*"
+addopts = "-v --tb=short"
