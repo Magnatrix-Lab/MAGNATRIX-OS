@@ -75,6 +75,9 @@ class TopicLog:
     def append(self, event: Event) -> int:
         data = event.to_bytes()
         record = struct.pack("<Q", len(data)) + data
+        # SECURITY: Validate WAL path before write
+        from kernel.path_guard_native import PathGuard
+        PathGuard.validate(self.log_path)
         with self._lock:
             offset = self._offset
             with open(self.log_path, "ab") as f:

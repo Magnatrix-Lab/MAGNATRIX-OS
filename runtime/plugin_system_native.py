@@ -132,7 +132,11 @@ class PluginLoader:
 
     def _load_manifest(self, path: Path) -> Optional[PluginManifest]:
         try:
-            with open(path / MANIFEST_FILE, "r", encoding="utf-8") as f:
+            # SECURITY: Validate plugin path before loading
+            from kernel.path_guard_native import PathGuard
+            manifest_path = str(path / MANIFEST_FILE)
+            PathGuard.validate(manifest_path)
+            with open(manifest_path, "r", encoding="utf-8") as f:
                 data = json.load(f)
             return PluginManifest.from_dict(data)
         except Exception:

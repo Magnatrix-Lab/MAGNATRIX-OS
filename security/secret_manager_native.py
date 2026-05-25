@@ -243,6 +243,9 @@ class SecretVault:
         if not self.vault_path.exists():
             return
         try:
+            # SECURITY: Validate vault path before reading
+            from kernel.path_guard_native import PathGuard
+            PathGuard.validate(str(self.vault_path))
             with open(self.vault_path, "r", encoding="utf-8") as f:
                 data = json.load(f)
             for name, entry_data in data.get("secrets", {}).items():
@@ -281,6 +284,9 @@ class SecretVault:
                 "checksum": entry.checksum,
                 "metadata": entry.metadata,
             }
+        # SECURITY: Validate vault path before writing
+        from kernel.path_guard_native import PathGuard
+        PathGuard.validate(str(self.vault_path))
         with open(self.vault_path, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2)
 
