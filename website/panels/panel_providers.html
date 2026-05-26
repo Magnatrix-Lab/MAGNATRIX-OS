@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MAGNATRIX Provider Manager</title>
+<style>
+:root {
+  --bg: #0a0a0f; --bg2: #111118; --bg3: #1a1a24;
+  --text: #e8e8f0; --text2: #8888a0; --text3: #555570;
+  --cyan: #00e5ff; --green: #69f0ae; --orange: #ffab40; --red: #ff5252; --purple: #b388ff; --blue: #448aff;
+  --border: rgba(255,255,255,0.06);
+  --font-mono: 'SF Mono', 'Fira Code', monospace;
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+body { background:var(--bg); color:var(--text); font-family:var(--font-mono); font-size:13px; height:100vh; overflow:hidden; }
+.app { display:grid; grid-template-rows:48px 1fr; height:100vh; }
+
+.topbar { display:flex; align-items:center; justify-content:space-between; padding:0 20px; background:var(--bg2); border-bottom:1px solid var(--border); }
+.topbar .title { font-size:14px; font-weight:600; }
+.add-btn { background:var(--bg3); border:1px solid var(--border); color:var(--text); padding:5px 14px; border-radius:6px; font-size:12px; cursor:pointer; }
+.add-btn:hover { border-color:var(--cyan); }
+
+.main { display:grid; grid-template-columns:1fr 1fr; gap:1px; background:var(--border); overflow:hidden; }
+.panel { background:var(--bg); padding:16px; overflow:auto; }
+
+.provider-card { background:var(--bg2); border:1px solid var(--border); border-radius:12px; padding:16px; margin-bottom:12px; transition:all 0.15s; }
+.provider-card:hover { border-color:rgba(255,255,255,0.12); }
+.provider-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; }
+.provider-name { font-size:15px; font-weight:600; display:flex; align-items:center; gap:10px; }
+.provider-icon { font-size:22px; }
+.provider-status { font-size:11px; padding:3px 10px; border-radius:4px; font-weight:700; }
+.status-online { background:rgba(105,240,174,0.12); color:var(--green); }
+.status-offline { background:rgba(255,82,82,0.12); color:var(--red); }
+.status-test { background:rgba(255,171,64,0.12); color:var(--orange); }
+.provider-body { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:12px; }
+.provider-info { font-size:11px; color:var(--text2); }
+.provider-info span { color:var(--text); font-weight:500; }
+.provider-actions { display:flex; gap:8px; }
+.btn { padding:6px 14px; border-radius:6px; border:1px solid var(--border); background:var(--bg3); color:var(--text); font-size:11px; cursor:pointer; }
+.btn:hover { border-color:var(--cyan); }
+.btn-success { background:rgba(105,240,174,0.1); border-color:rgba(105,240,174,0.3); color:var(--green); }
+.btn-danger { background:rgba(255,82,82,0.1); border-color:rgba(255,82,82,0.3); color:var(--red); }
+
+.api-key { background:var(--bg); border:1px solid var(--border); border-radius:6px; padding:8px 12px; font-family:var(--font-mono); font-size:11px; color:var(--text3); display:flex; justify-content:space-between; align-items:center; }
+.api-key-val { letter-spacing:2px; }
+.api-key-mask { color:var(--text3); }
+
+/* Routing */
+.route-item { display:grid; grid-template-columns:30px 1fr 80px 60px 80px 70px; gap:10px; align-items:center; padding:8px 0; border-bottom:1px solid var(--border); font-size:12px; }
+.route-header { color:var(--text2); font-size:10px; text-transform:uppercase; font-weight:600; }
+.route-tier { text-align:center; font-size:11px; padding:2px 6px; border-radius:4px; }
+.tier-1 { background:rgba(0,229,255,0.12); color:var(--cyan); }
+.tier-2 { background:rgba(179,136,255,0.12); color:var(--purple); }
+.tier-3 { background:rgba(105,240,174,0.12); color:var(--green); }
+.route-toggle { appearance:none; width:36px; height:18px; background:var(--bg3); border-radius:9px; position:relative; cursor:pointer; border:1px solid var(--border); }
+.route-toggle:checked { background:rgba(0,229,255,0.3); border-color:var(--cyan); }
+.route-toggle::after { content:''; position:absolute; width:14px; height:14px; background:var(--text3); border-radius:50%; top:1px; left:1px; transition:0.2s; }
+.route-toggle:checked::after { left:19px; background:var(--cyan); }
+
+::-webkit-scrollbar { width:4px; }
+::-webkit-scrollbar-thumb { background:var(--text3); border-radius:2px; }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="topbar">
+    <div class="title">🔌 MAGNATRIX Provider Manager <span style="color:var(--text3);font-weight:400;">| 3-Tier Routing</span></div>
+    <button class="add-btn" onclick="addProvider()">+ Add Provider</button>
+  </div>
+  <div class="main">
+    <div class="panel">
+      <div style="font-size:12px;color:var(--text2);font-weight:600;margin-bottom:12px;">Active Providers</div>
+      <div id="providerList"></div>
+    </div>
+    <div class="panel">
+      <div style="font-size:12px;color:var(--text2);font-weight:600;margin-bottom:12px;">3-Tier Routing Configuration</div>
+      <div class="route-item route-header">
+        <span>#</span><span>Provider</span><span>Tier</span><span>Priority</span><span>Fallback</span><span>Active</span>
+      </div>
+      <div id="routeList"></div>
+      <div style="margin-top:20px;padding:12px;background:var(--bg2);border-radius:8px;border:1px solid var(--border);">
+        <div style="font-size:11px;color:var(--text2);margin-bottom:8px;font-weight:600;">Routing Logic</div>
+        <div style="font-size:12px;line-height:1.8;">
+          <span style="color:var(--cyan)">Tier 1</span> → Local GGUF (latency &lt;50ms, free)<br>
+          <span style="color:var(--purple)">Tier 2</span> → Cloud API (latency &lt;500ms, paid)<br>
+          <span style="color:var(--green)">Tier 3</span> → Free tier / fallback (unlimited, slow)<br>
+          <span style="color:var(--text3)">If Tier N fails → auto-fallback to Tier N+1</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const providers = [
+  { id:'p1', name:'Local GPU (CUDA)', icon:'🖥️', status:'online', statusClass:'status-online',
+    model:'MAGNATRIX Brain 7B', backend:'llama.cpp', latency:'12ms', cost:'Free',
+    apiKey:'Not Required', tier:'Tier 1', priority:1, fallback:false, active:true },
+  { id:'p2', name:'Groq Cloud', icon:'⚡', status:'online', statusClass:'status-online',
+    model:'Llama-3 70B', backend:'Groq API', latency:'45ms', cost:'$0.60/M tok',
+    apiKey:'grk_••••••••••9f2a', tier:'Tier 2', priority:2, fallback:true, active:true },
+  { id:'p3', name:'OpenAI', icon:'🔮', status:'online', statusClass:'status-online',
+    model:'GPT-4o', backend:'OpenAI API', latency:'800ms', cost:'$5.00/M tok',
+    apiKey:'sk-••••••••••x7y2', tier:'Tier 2', priority:3, fallback:true, active:true },
+  { id:'p4', name:'Local CPU (llamafile)', icon:'💻', status:'test', statusClass:'status-test',
+    model:'DeepSeek-R1 32B', backend:'llamafile', latency:'120ms', cost:'Free',
+    apiKey:'Not Required', tier:'Tier 1', priority:4, fallback:false, active:false },
+  { id:'p5', name:'Anthropic', icon:'🅰️', status:'offline', statusClass:'status-offline',
+    model:'Claude 3.5 Sonnet', backend:'Anthropic API', latency:'—', cost:'$3.00/M tok',
+    apiKey:'Not Set', tier:'Tier 2', priority:5, fallback:true, active:false },
+];
+
+function renderProviders() {
+  const list = document.getElementById('providerList');
+  list.innerHTML = providers.map(p => `
+    <div class="provider-card">
+      <div class="provider-header">
+        <div class="provider-name"><span class="provider-icon">${p.icon}</span>${p.name}</div>
+        <span class="provider-status ${p.statusClass}">● ${p.status}</span>
+      </div>
+      <div class="provider-body">
+        <div class="provider-info">Model: <span>${p.model}</span></div>
+        <div class="provider-info">Backend: <span>${p.backend}</span></div>
+        <div class="provider-info">Latency: <span>${p.latency}</span></div>
+        <div class="provider-info">Cost: <span>${p.cost}</span></div>
+      </div>
+      <div class="api-key">
+        <span>API Key</span>
+        <span class="api-key-val">${p.apiKey.startsWith('Not') ? p.apiKey : '<span class="api-key-mask">' + p.apiKey.slice(0,3) + '••••••••••' + p.apiKey.slice(-4) + '</span>'}</span>
+      </div>
+      <div class="provider-actions" style="margin-top:10px;">
+        <button class="btn ${p.status === 'online' ? 'btn-success' : ''}" onclick="testProvider('${p.id}')">${p.status === 'online' ? '✓ Tested' : 'Test'}</button>
+        <button class="btn">Edit</button>
+        <button class="btn ${p.status === 'offline' ? '' : 'btn-danger'}" onclick="toggleProvider('${p.id}')">${p.active ? 'Disable' : 'Enable'}</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+function renderRoutes() {
+  const list = document.getElementById('routeList');
+  list.innerHTML = providers.map((p, i) => `
+    <div class="route-item">
+      <span style="color:var(--text3)">${i+1}</span>
+      <span>${p.icon} ${p.name}</span>
+      <span class="route-tier ${p.tier === 'Tier 1' ? 'tier-1' : p.tier === 'Tier 2' ? 'tier-2' : 'tier-3'}">${p.tier}</span>
+      <span style="text-align:center">${p.priority}</span>
+      <span style="text-align:center;color:${p.fallback ? 'var(--green)' : 'var(--text3)'}">${p.fallback ? '✓' : '—'}</span>
+      <span style="text-align:center"><input type="checkbox" class="route-toggle" ${p.active ? 'checked' : ''} onchange="toggleRoute('${p.id}')"></span>
+    </div>
+  `).join('');
+}
+
+function testProvider(id) {
+  const p = providers.find(x => x.id === id);
+  alert(`Testing ${p.name}...\nLatency: ${p.latency}\nStatus: ${p.status}`);
+}
+
+function toggleProvider(id) {
+  const p = providers.find(x => x.id === id);
+  p.active = !p.active;
+  p.status = p.active ? 'online' : 'offline';
+  renderProviders();
+  renderRoutes();
+}
+
+function toggleRoute(id) {
+  const p = providers.find(x => x.id === id);
+  p.active = !p.active;
+  renderProviders();
+  renderRoutes();
+}
+
+function addProvider() {
+  const name = prompt('Provider name:');
+  if (!name) return;
+  providers.push({
+    id: 'p' + Date.now(), name, icon: '🔌', status: 'test', statusClass: 'status-test',
+    model: 'Custom', backend: 'API', latency: '—', cost: '—',
+    apiKey: 'Not Set', tier: 'Tier 3', priority: providers.length + 1, fallback: true, active: false
+  });
+  renderProviders();
+  renderRoutes();
+}
+
+renderProviders();
+renderRoutes();
+</script>
+</body>
+</html>

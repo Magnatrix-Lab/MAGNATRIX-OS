@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MAGNATRIX Model Registry</title>
+<style>
+:root {
+  --bg: #0a0a0f; --bg2: #111118; --bg3: #1a1a24;
+  --text: #e8e8f0; --text2: #8888a0; --text3: #555570;
+  --cyan: #00e5ff; --green: #69f0ae; --orange: #ffab40; --purple: #b388ff; --blue: #448aff;
+  --border: rgba(255,255,255,0.06);
+  --font-mono: 'SF Mono', 'Fira Code', monospace;
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+body { background:var(--bg); color:var(--text); font-family:var(--font-mono); font-size:13px; height:100vh; overflow:hidden; }
+.app { display:grid; grid-template-rows:48px 1fr; height:100vh; }
+
+.topbar { display:flex; align-items:center; justify-content:space-between; padding:0 20px; background:var(--bg2); border-bottom:1px solid var(--border); }
+.topbar .title { font-size:14px; font-weight:600; }
+.filter-bar { display:flex; gap:10px; }
+.filter-btn { background:var(--bg3); border:1px solid var(--border); color:var(--text2); padding:4px 12px; border-radius:6px; font-size:11px; cursor:pointer; }
+.filter-btn:hover, .filter-btn.active { border-color:var(--cyan); color:var(--cyan); }
+
+.main { display:grid; grid-template-columns:1fr 320px; gap:1px; background:var(--border); overflow:hidden; }
+.panel { background:var(--bg); padding:16px; overflow:auto; }
+
+/* Model cards */
+.model-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(260px,1fr)); gap:12px; }
+.model-card { background:var(--bg2); border:1px solid var(--border); border-radius:12px; padding:14px; transition:all 0.15s; }
+.model-card:hover { border-color:rgba(255,255,255,0.12); }
+.model-header { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:10px; }
+.model-name { font-size:14px; font-weight:600; }
+.model-badge { font-size:10px; padding:2px 8px; border-radius:4px; font-weight:700; }
+.badge-local { background:rgba(0,229,255,0.12); color:var(--cyan); }
+.badge-cloud { background:rgba(179,136,255,0.12); color:var(--purple); }
+.badge-api { background:rgba(68,138,255,0.12); color:var(--blue); }
+.model-meta { font-size:11px; color:var(--text2); margin-bottom:10px; }
+.model-stats { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:10px; }
+.stat { background:var(--bg); border-radius:6px; padding:8px; text-align:center; }
+.stat-val { font-size:16px; font-weight:700; color:var(--cyan); }
+.stat-label { font-size:10px; color:var(--text2); margin-top:2px; }
+.model-actions { display:flex; gap:8px; }
+.btn { flex:1; padding:6px; border-radius:6px; border:1px solid var(--border); background:var(--bg3); color:var(--text); font-size:11px; cursor:pointer; text-align:center; }
+.btn:hover { border-color:var(--cyan); }
+.btn-primary { background:rgba(0,229,255,0.1); border-color:rgba(0,229,255,0.3); color:var(--cyan); }
+
+/* Detail panel */
+.detail-title { font-size:14px; font-weight:600; margin-bottom:12px; }
+.detail-section { margin-bottom:16px; }
+.detail-section-title { font-size:11px; color:var(--text2); text-transform:uppercase; margin-bottom:8px; }
+.detail-row { display:flex; justify-content:space-between; padding:6px 0; font-size:12px; border-bottom:1px solid var(--border); }
+.detail-key { color:var(--text2); }
+.detail-val { color:var(--text); font-family:var(--font-mono); }
+.param-slider { width:100%; margin-top:8px; }
+.param-label { display:flex; justify-content:space-between; font-size:11px; color:var(--text2); margin-bottom:4px; }
+
+::-webkit-scrollbar { width:4px; }
+::-webkit-scrollbar-thumb { background:var(--text3); border-radius:2px; }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="topbar">
+    <div class="title">🧠 MAGNATRIX Model Registry <span style="color:var(--text3);font-weight:400;">| LLM Management</span></div>
+    <div class="filter-bar">
+      <button class="filter-btn active" onclick="filter('all')">All</button>
+      <button class="filter-btn" onclick="filter('local')">Local</button>
+      <button class="filter-btn" onclick="filter('cloud')">Cloud</button>
+      <button class="filter-btn" onclick="filter('api')">API</button>
+    </div>
+  </div>
+  <div class="main">
+    <div class="panel">
+      <div class="model-grid" id="modelGrid"></div>
+    </div>
+    <div class="panel">
+      <div class="detail-title">⚙️ Model Configuration</div>
+      <div id="modelDetail">
+        <div style="color:var(--text2);font-size:13px;text-align:center;padding:40px 0;">
+          Select a model to view configuration
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const models = [
+  { id:'m1', name:'MAGNATRIX Brain', type:'local', badge:'Local', badgeClass:'badge-local',
+    params:'7B', quant:'Q4_K_M', ctx:32768, vram:'4.2GB', speed:'45 tok/s',
+    desc:'Custom fine-tuned model for agentic OS tasks',
+    status:'Loaded', provider:'Local GPU' },
+  { id:'m2', name:'Llama-3 70B', type:'cloud', badge:'Cloud', badgeClass:'badge-cloud',
+    params:'70B', quant:'FP16', ctx:128000, vram:'~140GB', speed:'12 tok/s',
+    desc:'Meta Llama 3 via Groq API',
+    status:'Available', provider:'Groq' },
+  { id:'m3', name:'GPT-4o', type:'api', badge:'API', badgeClass:'badge-api',
+    params:'—', quant:'—', ctx:128000, vram:'Cloud', speed:'—',
+    desc:'OpenAI multimodal flagship',
+    status:'API Key Set', provider:'OpenAI' },
+  { id:'m4', name:'DeepSeek-R1 32B', type:'local', badge:'Local', badgeClass:'badge-local',
+    params:'32B', quant:'Q4_K_M', ctx:32768, vram:'20GB', speed:'28 tok/s',
+    desc:'Reasoning-focused model with CoT',
+    status:'Available', provider:'Local GPU' },
+  { id:'m5', name:'Qwen2.5 72B', type:'local', badge:'Local', badgeClass:'badge-local',
+    params:'72B', quant:'Q5_K_M', ctx:32768, vram:'48GB', speed:'18 tok/s',
+    desc:'Alibaba Qwen multilingual',
+    status:'Downloaded', provider:'Local GPU' },
+  { id:'m6', name:'Claude 3.5 Sonnet', type:'api', badge:'API', badgeClass:'badge-api',
+    params:'—', quant:'—', ctx:200000, vram:'Cloud', speed:'—',
+    desc:'Anthropic reasoning model',
+    status:'API Key Missing', provider:'Anthropic' },
+];
+
+let selectedModel = null;
+let currentFilter = 'all';
+
+function renderModels() {
+  const grid = document.getElementById('modelGrid');
+  grid.innerHTML = '';
+  const filtered = currentFilter === 'all' ? models : models.filter(m => m.type === currentFilter);
+  filtered.forEach(m => {
+    const card = document.createElement('div');
+    card.className = 'model-card';
+    card.onclick = () => selectModel(m);
+    card.innerHTML = `
+      <div class="model-header">
+        <span class="model-name">${m.name}</span>
+        <span class="model-badge ${m.badgeClass}">${m.badge}</span>
+      </div>
+      <div class="model-meta">${m.desc}</div>
+      <div class="model-stats">
+        <div class="stat"><div class="stat-val">${m.params}</div><div class="stat-label">Params</div></div>
+        <div class="stat"><div class="stat-val">${m.ctx >= 1000 ? (m.ctx/1000)+'K' : m.ctx}</div><div class="stat-label">Context</div></div>
+      </div>
+      <div class="model-actions">
+        <button class="btn ${m.status === 'Loaded' ? 'btn-primary' : ''}">${m.status === 'Loaded' ? 'Active' : 'Load'}</button>
+        <button class="btn">⚙️</button>
+      </div>
+    `;
+    grid.appendChild(card);
+  });
+}
+
+function selectModel(m) {
+  selectedModel = m;
+  const detail = document.getElementById('modelDetail');
+  detail.innerHTML = `
+    <div class="detail-section">
+      <div class="detail-section-title">Model Info</div>
+      <div class="detail-row"><span class="detail-key">Name</span><span class="detail-val">${m.name}</span></div>
+      <div class="detail-row"><span class="detail-key">Parameters</span><span class="detail-val">${m.params}</span></div>
+      <div class="detail-row"><span class="detail-key">Quantization</span><span class="detail-val">${m.quant}</span></div>
+      <div class="detail-row"><span class="detail-key">Context Length</span><span class="detail-val">${m.ctx.toLocaleString()}</span></div>
+      <div class="detail-row"><span class="detail-key">VRAM Required</span><span class="detail-val">${m.vram}</span></div>
+      <div class="detail-row"><span class="detail-key">Speed</span><span class="detail-val">${m.speed}</span></div>
+    </div>
+    <div class="detail-section">
+      <div class="detail-section-title">Provider</div>
+      <div class="detail-row"><span class="detail-key">Backend</span><span class="detail-val">${m.provider}</span></div>
+      <div class="detail-row"><span class="detail-key">Status</span><span class="detail-val" style="color:${m.status === 'Loaded' ? 'var(--green)' : m.status === 'API Key Missing' ? 'var(--orange)' : 'var(--cyan)'}">${m.status}</span></div>
+    </div>
+    <div class="detail-section">
+      <div class="detail-section-title">Inference Parameters</div>
+      <div class="param-label"><span>Temperature</span><span id="tempVal">0.7</span></div>
+      <input type="range" class="param-slider" min="0" max="20" value="7" oninput="document.getElementById('tempVal').textContent=(this.value/10).toFixed(1)">
+      <div class="param-label" style="margin-top:12px"><span>Top P</span><span id="topPVal">0.9</span></div>
+      <input type="range" class="param-slider" min="1" max="10" value="9" oninput="document.getElementById('topPVal').textContent=(this.value/10).toFixed(1)">
+      <div class="param-label" style="margin-top:12px"><span>Max Tokens</span><span id="maxTokVal">2048</span></div>
+      <input type="range" class="param-slider" min="256" max="8192" step="256" value="2048" oninput="document.getElementById('maxTokVal').textContent=this.value">
+    </div>
+    <div class="detail-section" style="margin-top:20px">
+      <button class="btn btn-primary" style="width:100%;padding:10px;font-size:13px" onclick="activateModel()">${m.status === 'Loaded' ? '✓ Model Active' : '⚡ Activate Model'}</button>
+    </div>
+  `;
+}
+
+function filter(type) {
+  currentFilter = type;
+  document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+  event.target.classList.add('active');
+  renderModels();
+}
+
+function activateModel() {
+  if (selectedModel) {
+    alert(`Model "${selectedModel.name}" activated. Inference parameters applied.`);
+  }
+}
+
+renderModels();
+</script>
+</body>
+</html>

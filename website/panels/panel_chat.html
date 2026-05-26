@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MAGNATRIX AI Chat</title>
+<style>
+:root {
+  --bg: #0a0a0f; --bg2: #111118; --bg3: #1a1a24;
+  --text: #e8e8f0; --text2: #8888a0; --text3: #555570;
+  --cyan: #00e5ff; --green: #69f0ae; --purple: #b388ff;
+  --border: rgba(255,255,255,0.06);
+  --font-mono: 'SF Mono', 'Fira Code', monospace;
+  --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+body { background:var(--bg); color:var(--text); font-family:var(--font-sans); font-size:14px; height:100vh; overflow:hidden; }
+.app { display:grid; grid-template-columns:260px 1fr; grid-template-rows:48px 1fr 64px; height:100vh; }
+
+/* Sidebar */
+.sidebar { background:var(--bg2); border-right:1px solid var(--border); grid-row:1/-1; display:flex; flex-direction:column; }
+.sidebar-header { padding:14px 16px; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; }
+.sidebar-title { font-size:13px; font-weight:600; }
+.new-chat-btn { background:var(--bg3); border:1px solid var(--border); color:var(--text); padding:4px 10px; border-radius:6px; font-size:11px; cursor:pointer; }
+.new-chat-btn:hover { border-color:var(--cyan); }
+.chat-list { flex:1; overflow:auto; padding:8px; }
+.chat-item { padding:10px 12px; border-radius:8px; cursor:pointer; margin-bottom:4px; font-size:13px; display:flex; align-items:center; gap:8px; }
+.chat-item:hover { background:rgba(255,255,255,0.03); }
+.chat-item.active { background:rgba(0,229,255,0.08); border:1px solid rgba(0,229,255,0.2); }
+.chat-icon { font-size:14px; }
+.chat-name { flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+
+/* Top bar */
+.topbar { background:var(--bg2); border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between; padding:0 20px; grid-column:2; }
+.model-selector { display:flex; align-items:center; gap:8px; }
+.model-select { background:var(--bg3); border:1px solid var(--border); color:var(--text); padding:5px 12px; border-radius:6px; font-size:12px; cursor:pointer; }
+.top-actions { display:flex; gap:10px; align-items:center; }
+.action-btn { background:transparent; border:1px solid var(--border); color:var(--text2); padding:4px 10px; border-radius:6px; font-size:11px; cursor:pointer; }
+.action-btn:hover { border-color:var(--cyan); color:var(--cyan); }
+
+/* Messages */
+.messages { grid-column:2; overflow:auto; padding:20px; display:flex; flex-direction:column; gap:16px; }
+.msg { display:flex; gap:12px; max-width:85%; }
+.msg.user { align-self:flex-end; flex-direction:row-reverse; }
+.msg.assistant { align-self:flex-start; }
+.msg-avatar { width:32px; height:32px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:14px; flex-shrink:0; }
+.msg.user .msg-avatar { background:var(--purple); }
+.msg.assistant .msg-avatar { background:var(--cyan); }
+.msg-body { background:var(--bg2); border:1px solid var(--border); border-radius:12px; padding:12px 14px; font-size:13px; line-height:1.6; }
+.msg.user .msg-body { background:rgba(179,136,255,0.08); border-color:rgba(179,136,255,0.2); }
+.msg-time { font-size:10px; color:var(--text3); margin-top:6px; }
+.msg-thinking { display:flex; align-items:center; gap:6px; color:var(--text2); font-size:12px; padding:8px 0; }
+.dot { width:6px; height:6px; border-radius:50%; background:var(--cyan); animation:blink 1.4s infinite; }
+.dot:nth-child(2) { animation-delay:0.2s; }
+.dot:nth-child(3) { animation-delay:0.4s; }
+@keyframes blink { 0%,80%,100% {opacity:0.3;} 40% {opacity:1;} }
+
+/* Input */
+.input-area { grid-column:2; background:var(--bg2); border-top:1px solid var(--border); padding:12px 20px; display:flex; gap:10px; align-items:flex-end; }
+.input-box { flex:1; background:var(--bg3); border:1px solid var(--border); border-radius:10px; padding:10px 14px; color:var(--text); font-size:14px; outline:none; resize:none; min-height:40px; max-height:120px; font-family:var(--font-sans); }
+.input-box:focus { border-color:var(--cyan); }
+.send-btn { width:40px; height:40px; border-radius:10px; background:var(--cyan); border:none; color:var(--bg); font-size:18px; cursor:pointer; display:flex; align-items:center; justify-content:center; }
+.send-btn:hover { filter:brightness(1.2); }
+
+::-webkit-scrollbar { width:4px; }
+::-webkit-scrollbar-thumb { background:var(--text3); border-radius:2px; }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="sidebar">
+    <div class="sidebar-header">
+      <span class="sidebar-title">💬 Conversations</span>
+      <button class="new-chat-btn" onclick="newChat()">+ New</button>
+    </div>
+    <div class="chat-list" id="chatList">
+      <div class="chat-item active" data-id="1">
+        <span class="chat-icon">💬</span>
+        <span class="chat-name">General Discussion</span>
+      </div>
+      <div class="chat-item" data-id="2">
+        <span class="chat-icon">🔍</span>
+        <span class="chat-name">Research: Python asyncio</span>
+      </div>
+      <div class="chat-item" data-id="3">
+        <span class="chat-icon">📊</span>
+        <span class="chat-name">Trading strategy review</span>
+      </div>
+      <div class="chat-item" data-id="4">
+        <span class="chat-icon">🛡️</span>
+        <span class="chat-name">Security audit questions</span>
+      </div>
+      <div class="chat-item" data-id="5">
+        <span class="chat-icon">🧠</span>
+        <span class="chat-name">AGI architecture plan</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="topbar">
+    <div class="model-selector">
+      <span style="font-size:12px;color:var(--text2)">Model:</span>
+      <select class="model-select" id="modelSelect">
+        <option>🧠 MAGNATRIX-OS Brain (local)</option>
+        <option>⚡ Groq Llama-3 70B</option>
+        <option>🔮 GPT-4o</option>
+        <option>🦙 Local GGUF (Q4_K_M)</option>
+        <option>🔥 DeepSeek-R1 32B</option>
+      </select>
+    </div>
+    <div class="top-actions">
+      <button class="action-btn" onclick="clearChat()">🗑️ Clear</button>
+      <button class="action-btn" onclick="exportChat()">📥 Export</button>
+      <span style="font-size:11px;color:var(--green)">● Online</span>
+    </div>
+  </div>
+
+  <div class="messages" id="messages"></div>
+
+  <div class="input-area">
+    <textarea class="input-box" id="inputBox" placeholder="Message MAGNATRIX..." rows="1"></textarea>
+    <button class="send-btn" onclick="sendMessage()">➤</button>
+  </div>
+</div>
+
+<script>
+let currentChat = 1;
+const chatHistories = {1: [], 2: [], 3: [], 4: [], 5: []};
+const chatNames = {1: 'General', 2: 'Research', 3: 'Trading', 4: 'Security', 5: 'AGI'};
+
+const mockResponses = [
+  "I understand. Let me analyze this for you.",
+  "That's an interesting point. Based on the MAGNATRIX knowledge base...",
+  "I can help with that. Here is what I found:",
+  "Processing your request through the local inference engine...",
+  "From the available context, I would suggest...",
+];
+
+function appendMessage(role, text, isStreaming = false) {
+  const msgs = document.getElementById('messages');
+  const div = document.createElement('div');
+  div.className = `msg ${role}`;
+  const time = new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+  div.innerHTML = `
+    <div class="msg-avatar">${role === 'user' ? '👤' : '🤖'}</div>
+    <div>
+      <div class="msg-body">${text}</div>
+      <div class="msg-time">${time}</div>
+    </div>
+  `;
+  msgs.appendChild(div);
+  msgs.scrollTop = msgs.scrollHeight;
+  return div;
+}
+
+function showThinking() {
+  const msgs = document.getElementById('messages');
+  const div = document.createElement('div');
+  div.className = 'msg assistant';
+  div.id = 'thinkingMsg';
+  div.innerHTML = `
+    <div class="msg-avatar">🤖</div>
+    <div class="msg-thinking">
+      <div class="dot"></div><div class="dot"></div><div class="dot"></div>
+      <span>Thinking...</span>
+    </div>
+  `;
+  msgs.appendChild(div);
+  msgs.scrollTop = msgs.scrollHeight;
+}
+
+function removeThinking() {
+  const t = document.getElementById('thinkingMsg');
+  if (t) t.remove();
+}
+
+function sendMessage() {
+  const input = document.getElementById('inputBox');
+  const text = input.value.trim();
+  if (!text) return;
+
+  appendMessage('user', text);
+  chatHistories[currentChat].push({role: 'user', text});
+  input.value = '';
+  input.style.height = 'auto';
+
+  showThinking();
+
+  // Simulate streaming response
+  setTimeout(() => {
+    removeThinking();
+    const base = mockResponses[Math.floor(Math.random() * mockResponses.length)];
+    const response = base + "\n\n" + text.slice(0, 80) + "... [This is a simulated response from the local LLM engine. In production, this streams from the GGUF model via the tri-language bridge.]";
+    appendMessage('assistant', response);
+    chatHistories[currentChat].push({role: 'assistant', text: response});
+  }, 800 + Math.random() * 1200);
+}
+
+function newChat() {
+  const id = Date.now();
+  chatHistories[id] = [];
+  chatNames[id] = 'New Chat';
+  const list = document.getElementById('chatList');
+  const item = document.createElement('div');
+  item.className = 'chat-item active';
+  item.dataset.id = id;
+  item.innerHTML = `<span class="chat-icon">💬</span><span class="chat-name">New Chat</span>`;
+  list.insertBefore(item, list.firstChild);
+  document.querySelectorAll('.chat-item').forEach(i => { if (i !== item) i.classList.remove('active'); });
+  switchChat(id);
+}
+
+function switchChat(id) {
+  currentChat = id;
+  document.getElementById('messages').innerHTML = '';
+  (chatHistories[id] || []).forEach(m => appendMessage(m.role, m.text));
+}
+
+function clearChat() {
+  chatHistories[currentChat] = [];
+  document.getElementById('messages').innerHTML = '';
+}
+
+function exportChat() {
+  const data = JSON.stringify(chatHistories[currentChat], null, 2);
+  const blob = new Blob([data], {type: 'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `chat-${currentChat}.json`;
+  a.click();
+}
+
+document.querySelectorAll('.chat-item').forEach(item => {
+  item.addEventListener('click', () => {
+    document.querySelectorAll('.chat-item').forEach(i => i.classList.remove('active'));
+    item.classList.add('active');
+    switchChat(parseInt(item.dataset.id));
+  });
+});
+
+document.getElementById('inputBox').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    sendMessage();
+  }
+});
+
+// Initial welcome
+appendMessage('assistant', 'Welcome to MAGNATRIX AI Chat. I am running entirely on your local machine. Select a model from the dropdown and start chatting. All conversations are stored locally.');
+</script>
+</body>
+</html>

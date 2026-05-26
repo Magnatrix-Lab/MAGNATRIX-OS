@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MAGNATRIX Kanban</title>
+<style>
+:root {
+  --bg: #0a0a0f; --bg2: #111118; --bg3: #1a1a24;
+  --text: #e8e8f0; --text2: #8888a0; --text3: #555570;
+  --cyan: #00e5ff; --green: #69f0ae; --orange: #ffab40; --purple: #b388ff; --blue: #448aff;
+  --border: rgba(255,255,255,0.06);
+  --font-mono: 'SF Mono', 'Fira Code', monospace;
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+body { background:var(--bg); color:var(--text); font-family:var(--font-mono); font-size:13px; height:100vh; overflow:hidden; }
+.app { display:grid; grid-template-rows:48px 1fr; height:100vh; }
+
+.topbar { display:flex; align-items:center; justify-content:space-between; padding:0 20px; background:var(--bg2); border-bottom:1px solid var(--border); }
+.topbar .title { font-size:14px; font-weight:600; }
+.add-btn { background:var(--bg3); border:1px solid var(--border); color:var(--text); padding:5px 14px; border-radius:6px; font-size:12px; cursor:pointer; }
+.add-btn:hover { border-color:var(--cyan); }
+
+.board { display:grid; grid-template-columns:repeat(4,1fr); gap:1px; background:var(--border); padding:0; overflow:auto; }
+.column { background:var(--bg); padding:14px; display:flex; flex-direction:column; gap:10px; min-width:280px; }
+.col-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; }
+.col-title { font-size:13px; font-weight:600; display:flex; align-items:center; gap:8px; }
+.col-count { font-size:11px; color:var(--text2); background:var(--bg2); padding:2px 8px; border-radius:10px; }
+
+.card { background:var(--bg2); border:1px solid var(--border); border-radius:10px; padding:12px; cursor:grab; transition:all 0.15s; }
+.card:hover { border-color:rgba(255,255,255,0.12); transform:translateY(-2px); }
+.card.dragging { opacity:0.5; }
+.card-title { font-size:13px; font-weight:500; margin-bottom:8px; }
+.card-meta { display:flex; gap:8px; font-size:10px; color:var(--text2); align-items:center; }
+.card-tag { padding:2px 8px; border-radius:4px; font-size:10px; font-weight:600; }
+.tag-high { background:rgba(255,82,82,0.15); color:#ff5252; }
+.tag-medium { background:rgba(255,171,64,0.15); color:#ffab40; }
+.tag-low { background:rgba(105,240,174,0.15); color:#69f0ae; }
+.tag-done { background:rgba(0,229,255,0.15); color:#00e5ff; }
+
+.drop-zone { border:2px dashed var(--border); border-radius:10px; min-height:60px; transition:all 0.2s; }
+.drop-zone.drag-over { border-color:var(--cyan); background:rgba(0,229,255,0.05); }
+
+::-webkit-scrollbar { width:4px; height:4px; }
+::-webkit-scrollbar-thumb { background:var(--text3); border-radius:2px; }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="topbar">
+    <div class="title">📋 MAGNATRIX Kanban <span style="color:var(--text3);font-weight:400;">| Task Management</span></div>
+    <button class="add-btn" onclick="addTask()">+ Add Task</button>
+  </div>
+  <div class="board" id="board">
+    <div class="column" data-col="todo">
+      <div class="col-header">
+        <span class="col-title">⬜ <span style="color:var(--text2)">To Do</span></span>
+        <span class="col-count" id="count-todo">4</span>
+      </div>
+      <div class="cards" id="col-todo"></div>
+    </div>
+    <div class="column" data-col="inprogress">
+      <div class="col-header">
+        <span class="col-title">🔵 <span style="color:var(--blue)">In Progress</span></span>
+        <span class="col-count" id="count-inprogress">2</span>
+      </div>
+      <div class="cards" id="col-inprogress"></div>
+    </div>
+    <div class="column" data-col="review">
+      <div class="col-header">
+        <span class="col-title">🟡 <span style="color:var(--orange)">Review</span></span>
+        <span class="col-count" id="count-review">1</span>
+      </div>
+      <div class="cards" id="col-review"></div>
+    </div>
+    <div class="column" data-col="done">
+      <div class="col-header">
+        <span class="col-title">🟢 <span style="color:var(--green)">Done</span></span>
+        <span class="col-count" id="count-done">3</span>
+      </div>
+      <div class="cards" id="col-done"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const initialTasks = {
+  todo: [
+    {id:'t1', title:'Implement constitutional AI constraints', tag:'High', tagClass:'tag-high', meta:'AI Layer • 3d'},
+    {id:'t2', title:'Add Groq provider to gateway', tag:'High', tagClass:'tag-high', meta:'Gateway • 1d'},
+    {id:'t3', title:'Optimize Rust crypto benchmarks', tag:'Medium', tagClass:'tag-medium', meta:'Security • 2d'},
+    {id:'t4', title:'Write P2P mesh documentation', tag:'Low', tagClass:'tag-low', meta:'Docs • 1d'},
+  ],
+  inprogress: [
+    {id:'p1', title:'Convert dashboard panels to standalone', tag:'High', tagClass:'tag-high', meta:'GUI • In Progress'},
+    {id:'p2', title:'Build streaming layer native', tag:'Medium', tagClass:'tag-medium', meta:'Runtime • In Progress'},
+  ],
+  review: [
+    {id:'r1', title:'Theorem prover DSP+ integration', tag:'High', tagClass:'tag-high', meta:'AI • Review'},
+  ],
+  done: [
+    {id:'d1', title:'C++ HFT Engine with pybind11', tag:'Done', tagClass:'tag-done', meta:'Trading • Done'},
+    {id:'d2', title:'Rust Crypto Engine PyO3', tag:'Done', tagClass:'tag-done', meta:'Security • Done'},
+    {id:'d3', title:'Tri-Language Bridge + 22 tests', tag:'Done', tagClass:'tag-done', meta:'Runtime • Done'},
+  ]
+};
+
+let draggedCard = null;
+
+function renderCard(task) {
+  const div = document.createElement('div');
+  div.className = 'card';
+  div.draggable = true;
+  div.dataset.id = task.id;
+  div.innerHTML = `
+    <div class="card-title">${task.title}</div>
+    <div class="card-meta">
+      <span class="card-tag ${task.tagClass}">${task.tag}</span>
+      <span>${task.meta}</span>
+    </div>
+  `;
+  div.addEventListener('dragstart', () => { draggedCard = div; div.classList.add('dragging'); });
+  div.addEventListener('dragend', () => { div.classList.remove('dragging'); draggedCard = null; });
+  return div;
+}
+
+function renderColumn(colId) {
+  const container = document.getElementById('col-' + colId);
+  container.innerHTML = '';
+  initialTasks[colId].forEach(task => container.appendChild(renderCard(task)));
+  document.getElementById('count-' + colId).textContent = initialTasks[colId].length;
+}
+
+function initDragAndDrop() {
+  document.querySelectorAll('.column').forEach(col => {
+    col.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      const cards = col.querySelector('.cards');
+      const after = getDragAfterElement(cards, e.clientY);
+      if (draggedCard) {
+        if (after) cards.insertBefore(draggedCard, after);
+        else cards.appendChild(draggedCard);
+      }
+    });
+    col.addEventListener('drop', (e) => {
+      e.preventDefault();
+      const newCol = col.dataset.col;
+      const cardId = draggedCard.dataset.id;
+      // Remove dari old column
+      for (const [colId, tasks] of Object.entries(initialTasks)) {
+        const idx = tasks.findIndex(t => t.id === cardId);
+        if (idx !== -1) {
+          const task = tasks.splice(idx, 1)[0];
+          initialTasks[newCol].push(task);
+          break;
+        }
+      }
+      renderAll();
+    });
+  });
+}
+
+function getDragAfterElement(container, y) {
+  const cards = [...container.querySelectorAll('.card:not(.dragging)')];
+  return cards.reduce((closest, child) => {
+    const box = child.getBoundingClientRect();
+    const offset = y - box.top - box.height / 2;
+    if (offset < 0 && offset > closest.offset) return { offset, element: child };
+    return closest;
+  }, { offset: -Infinity }).element;
+}
+
+function renderAll() {
+  ['todo', 'inprogress', 'review', 'done'].forEach(renderColumn);
+}
+
+function addTask() {
+  const title = prompt('Task title:');
+  if (!title) return;
+  const id = 't' + Date.now();
+  initialTasks.todo.push({id, title, tag:'Medium', tagClass:'tag-medium', meta:'New • 1d'});
+  renderAll();
+}
+
+renderAll();
+initDragAndDrop();
+</script>
+</body>
+</html>
