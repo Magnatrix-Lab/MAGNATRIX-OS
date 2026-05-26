@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MAGNATRIX P2P Mesh</title>
+<style>
+:root {
+  --bg: #0a0a0f; --bg2: #111118; --bg3: #1a1a24;
+  --text: #e8e8f0; --text2: #8888a0; --text3: #555570;
+  --cyan: #00e5ff; --green: #69f0ae; --purple: #b388ff;
+  --orange: #ffab40; --red: #ff5252; --blue: #448aff;
+  --font-mono: 'SF Mono', 'Fira Code', monospace;
+  --border: rgba(255,255,255,0.06);
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+body { background:var(--bg); color:var(--text); font-family:var(--font-mono); font-size:13px; height:100vh; overflow:hidden; }
+.app { display:grid; grid-template-rows:48px 1fr; height:100vh; }
+.topbar { display:flex; align-items:center; justify-content:space-between; padding:0 20px; background:var(--bg2); border-bottom:1px solid var(--border); }
+.topbar .title { font-size:14px; font-weight:600; }
+.tag { padding:2px 10px; border-radius:4px; font-size:11px; font-weight:600; }
+.tag-online { background:rgba(0,229,255,0.15); color:var(--cyan); }
+
+.main { display:grid; grid-template-columns:300px 1fr; grid-template-rows:90px 1fr; gap:1px; background:var(--border); }
+.panel { background:var(--bg); padding:12px; overflow:auto; }
+.stats { grid-column:1/-1; display:grid; grid-template-columns:repeat(4,1fr); gap:12px; }
+.stat-box { background:var(--bg2); border:1px solid var(--border); border-radius:8px; padding:10px; }
+.stat-label { font-size:11px; color:var(--text2); text-transform:uppercase; margin-bottom:4px; }
+.stat-value { font-size:20px; font-weight:700; }
+
+.peer-row { display:grid; grid-template-columns:70px 1fr 60px 80px 70px; gap:8px; font-size:11px; padding:6px 0; border-bottom:1px solid var(--border); align-items:center; }
+.peer-header { color:var(--text2); font-size:10px; text-transform:uppercase; }
+.peer-id { font-family:var(--font-mono); font-size:11px; color:var(--cyan); }
+.peer-latency { color:var(--green); }
+.peer-status { font-size:11px; }
+
+.mesh-canvas { width:100%; height:100%; background:var(--bg2); border-radius:8px; border:1px solid var(--border); }
+
+.dht-row { display:flex; justify-content:space-between; padding:5px 0; font-size:11px; border-bottom:1px solid var(--border); }
+.dht-key { color:var(--text2); }
+.dht-val { color:var(--cyan); font-family:var(--font-mono); }
+
+.packet-log { font-size:10px; font-family:var(--font-mono); }
+.packet-line { padding:2px 0; border-bottom:1px solid var(--border); display:flex; gap:8px; }
+.packet-time { color:var(--text3); min-width:50px; }
+.packet-dir { min-width:20px; text-align:center; }
+.packet-in { color:var(--green); }
+.packet-out { color:var(--blue); }
+.packet-data { color:var(--text2); }
+
+::-webkit-scrollbar { width:4px; }
+::-webkit-scrollbar-thumb { background:var(--text3); border-radius:2px; }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="topbar">
+    <div class="title">🌐 MAGNATRIX P2P Mesh <span style="color:var(--text3);font-weight:400;">| Kademlia DHT · NAT Traversal</span></div>
+    <div class="status">
+      <span class="tag tag-online">● 12 Peers Online</span>
+      <button style="background:var(--bg3);border:1px solid var(--border);color:var(--text);padding:4px 12px;border-radius:4px;cursor:pointer;font-size:11px;" onclick="rediscover()">🔄 Rediscover</button>
+    </div>
+  </div>
+  <div class="main">
+    <div class="stats panel">
+      <div class="stat-box">
+        <div class="stat-label">Peers Online</div>
+        <div class="stat-value" style="color:var(--cyan)"><span id="peerCount">12</span></div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-label">K-Buckets</div>
+        <div class="stat-value" style="color:var(--purple)">156</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-label">NAT Type</div>
+        <div class="stat-value" style="color:var(--green)">Public</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-label">Network ID</div>
+        <div class="stat-value" style="color:var(--orange);font-size:14px;">magnatrix-main</div>
+      </div>
+    </div>
+    <div class="panel">
+      <div style="font-size:12px;color:var(--text2);margin-bottom:8px;font-weight:600;">🕸️ Peer List</div>
+      <div class="peer-row peer-header"><span>Node ID</span><span>Address</span><span>Latency</span><span>Status</span><span>Capability</span></div>
+      <div id="peerList"></div>
+    </div>
+    <div class="panel">
+      <canvas class="mesh-canvas" id="meshCanvas"></canvas>
+      <div style="display:flex;gap:16px;margin-top:8px;font-size:11px;justify-content:center;">
+        <span><span style="color:var(--purple)">●</span> Local</span>
+        <span><span style="color:var(--cyan)">●</span> Peer</span>
+        <span><span style="color:var(--green)">●</span> Bootstrap</span>
+        <span><span style="color:var(--orange)">●</span> Relay</span>
+      </div>
+    </div>
+    <div class="panel">
+      <div style="font-size:12px;color:var(--text2);margin-bottom:8px;font-weight:600;">🧭 Kademlia DHT Routing Table</div>
+      <div id="dhtTable"></div>
+      <div style="margin-top:12px;font-size:12px;color:var(--text2);font-weight:600;">📡 Packet Log</div>
+      <div class="packet-log" id="packetLog" style="margin-top:6px;max-height:120px;overflow:auto;"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const peers = [
+  { id: '7d2e...1a9b', addr: '127.0.0.1:17777', latency: 0, status: 'Local', cap: 'Bootstrap', color: '#b388ff', x: 0.5, y: 0.5 },
+  { id: 'a1f3...b8c2', addr: '192.168.1.42:17777', latency: 12, status: 'Online', cap: 'Relay', color: '#00e5ff', x: 0.3, y: 0.3 },
+  { id: 'e9d5...4f7a', addr: '203.45.12.88:17777', latency: 145, status: 'Online', cap: 'Storage', color: '#00e5ff', x: 0.7, y: 0.25 },
+  { id: 'c3b1...9e6d', addr: '88.192.71.5:17777', latency: 230, status: 'Online', cap: 'Compute', color: '#00e5ff', x: 0.75, y: 0.6 },
+  { id: 'f8a2...3c1e', addr: '—', latency: null, status: 'Pending', cap: 'Unknown', color: '#ffab40', x: 0.25, y: 0.65 },
+  { id: 'b4d7...2e5f', addr: '10.0.0.5:17777', latency: 45, status: 'Online', cap: 'Relay', color: '#00e5ff', x: 0.6, y: 0.4 },
+  { id: 'aa11...cc99', addr: '45.67.89.12:17777', latency: 180, status: 'Online', cap: 'Storage', color: '#00e5ff', x: 0.15, y: 0.5 },
+  { id: 'zz22...dd88', addr: '198.51.100.4:17777', latency: 95, status: 'Online', cap: 'Compute', color: '#00e5ff', x: 0.85, y: 0.45 },
+];
+
+function renderPeers() {
+  document.getElementById('peerList').innerHTML = peers.map(p => `
+    <div class="peer-row">
+      <span class="peer-id">${p.id}</span>
+      <span style="color:var(--text2)">${p.addr}</span>
+      <span class="peer-latency">${p.latency !== null ? p.latency + 'ms' : '—'}</span>
+      <span class="peer-status" style="color:${p.color}">● ${p.status}</span>
+      <span style="color:var(--text2)">${p.cap}</span>
+    </div>
+  `).join('');
+  document.getElementById('peerCount').textContent = peers.filter(p => p.status !== 'Pending').length;
+}
+
+/* ── Animated Mesh Canvas ── */
+const canvas = document.getElementById('meshCanvas');
+const ctx = canvas.getContext('2d');
+let animT = 0;
+
+function resizeCanvas() {
+  const dpr = window.devicePixelRatio || 1;
+  const rect = canvas.getBoundingClientRect();
+  canvas.width = rect.width * dpr;
+  canvas.height = rect.height * dpr;
+  ctx.scale(dpr, dpr);
+}
+window.addEventListener('resize', resizeCanvas);
+resizeCanvas();
+
+function drawMesh() {
+  const w = canvas.width / (window.devicePixelRatio || 1);
+  const h = canvas.height / (window.devicePixelRatio || 1);
+  ctx.clearRect(0, 0, w, h);
+
+  // Draw connections with animated pulses
+  const center = peers[0];
+  for (let i = 1; i < peers.length; i++) {
+    const p = peers[i];
+    const x1 = center.x * w, y1 = center.y * h;
+    const x2 = p.x * w, y2 = p.y * h;
+
+    // Connection line
+    ctx.strokeStyle = p.status === 'Online' ? 'rgba(0,229,255,0.15)' : 'rgba(255,171,64,0.1)';
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+
+    // Animated pulse dot on line
+    if (p.status === 'Online') {
+      const t = (animT * 0.5 + i * 0.3) % 1;
+      const px = x1 + (x2 - x1) * t;
+      const py = y1 + (y2 - y1) * t;
+      ctx.fillStyle = 'rgba(0,229,255,0.6)';
+      ctx.beginPath(); ctx.arc(px, py, 2, 0, Math.PI * 2); ctx.fill();
+    }
+  }
+
+  // Peer-to-peer connections
+  for (let i = 1; i < peers.length; i++) {
+    for (let j = i + 1; j < peers.length; j++) {
+      if (Math.random() > 0.7) continue;
+      const a = peers[i], b = peers[j];
+      ctx.strokeStyle = 'rgba(179,136,255,0.08)';
+      ctx.beginPath(); ctx.moveTo(a.x * w, a.y * h); ctx.lineTo(b.x * w, b.y * h); ctx.stroke();
+    }
+  }
+
+  // Draw nodes
+  peers.forEach(p => {
+    const x = p.x * w, y = p.y * h;
+    // Glow
+    const glow = ctx.createRadialGradient(x, y, 0, x, y, 20);
+    glow.addColorStop(0, p.color + '40');
+    glow.addColorStop(1, p.color + '00');
+    ctx.fillStyle = glow;
+    ctx.beginPath(); ctx.arc(x, y, 20, 0, Math.PI * 2); ctx.fill();
+    // Core
+    ctx.fillStyle = p.color;
+    ctx.beginPath(); ctx.arc(x, y, 5, 0, Math.PI * 2); ctx.fill();
+    // Label
+    ctx.fillStyle = '#8888a0'; ctx.font = '10px ' + getComputedStyle(document.body).fontFamily;
+    ctx.fillText(p.cap, x + 10, y + 3);
+  });
+
+  animT += 0.02;
+  requestAnimationFrame(drawMesh);
+}
+
+/* ── DHT Table ── */
+const dhtBuckets = [
+  { prefix: '00000', count: 1, nodes: '7d2e...1a9b' },
+  { prefix: '00101', count: 2, nodes: 'a1f3...b8c2, b4d7...2e5f' },
+  { prefix: '01011', count: 1, nodes: 'e9d5...4f7a' },
+  { prefix: '01110', count: 2, nodes: 'c3b1...9e6d, aa11...cc99' },
+  { prefix: '10001', count: 1, nodes: 'zz22...dd88' },
+  { prefix: '10100', count: 0, nodes: '—' },
+  { prefix: '11010', count: 0, nodes: '—' },
+  { prefix: '11111', count: 0, nodes: '—' },
+];
+
+function renderDHT() {
+  document.getElementById('dhtTable').innerHTML = dhtBuckets.map(b => `
+    <div class="dht-row">
+      <span class="dht-key">Bucket ${b.prefix}*</span>
+      <span style="color:var(--text2)">${b.count} nodes</span>
+      <span class="dht-val">${b.nodes}</span>
+    </div>
+  `).join('');
+}
+
+/* ── Packet Log ── */
+const packets = [];
+const msgTypes = ['PING', 'PONG', 'FIND_NODE', 'STORE', 'GET_VALUE', 'ANNOUNCE'];
+
+function addPacket() {
+  const now = new Date();
+  const time = now.toTimeString().slice(0, 8);
+  const isOut = Math.random() > 0.5;
+  const type = msgTypes[Math.floor(Math.random() * msgTypes.length)];
+  const target = peers[Math.floor(Math.random() * peers.length)].id;
+  packets.unshift({ time, dir: isOut ? '→' : '←', type, target, isOut });
+  if (packets.length > 30) packets.pop();
+
+  document.getElementById('packetLog').innerHTML = packets.map(p => `
+    <div class="packet-line">
+      <span class="packet-time">${p.time}</span>
+      <span class="packet-dir ${p.isOut ? 'packet-out' : 'packet-in'}">${p.dir}</span>
+      <span class="packet-data">${p.type} → ${p.target}</span>
+    </div>
+  `).join('');
+}
+
+function rediscover() {
+  // Simulate peer discovery
+  const newPeer = {
+    id: Math.random().toString(36).slice(2, 6) + '...' + Math.random().toString(36).slice(2, 6),
+    addr: ' discovered ', latency: Math.floor(Math.random() * 300),
+    status: 'Online', cap: ['Storage','Compute','Relay'][Math.floor(Math.random()*3)],
+    color: '#00e5ff', x: Math.random(), y: Math.random()
+  };
+  peers.push(newPeer);
+  renderPeers();
+  addPacket();
+}
+
+renderPeers();
+renderDHT();
+drawMesh();
+setInterval(addPacket, 2000);
+</script>
+</body>
+</html>

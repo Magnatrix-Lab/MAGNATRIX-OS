@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MAGNATRIX Trading Desk</title>
+<style>
+:root {
+  --bg: #0a0a0f; --bg2: #111118; --bg3: #1a1a24;
+  --text: #e8e8f0; --text2: #8888a0; --text3: #555570;
+  --cyan: #00e5ff; --green: #69f0ae; --red: #ff5252;
+  --orange: #ffab40; --purple: #b388ff; --blue: #448aff;
+  --font-mono: 'SF Mono', 'Fira Code', monospace;
+  --border: rgba(255,255,255,0.06);
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+body { background:var(--bg); color:var(--text); font-family:var(--font-mono); font-size:13px; height:100vh; overflow:hidden; }
+.app { display:grid; grid-template-rows:48px 1fr; height:100vh; }
+
+/* Top bar */
+.topbar { display:flex; align-items:center; justify-content:space-between; padding:0 20px; background:var(--bg2); border-bottom:1px solid var(--border); }
+.topbar .title { font-size:14px; font-weight:600; display:flex; align-items:center; gap:8px; }
+.topbar .status { display:flex; gap:12px; align-items:center; }
+.tag { padding:2px 10px; border-radius:4px; font-size:11px; font-weight:600; }
+.tag-live { background:rgba(105,240,174,0.15); color:var(--green); }
+.tag-paper { background:rgba(255,171,64,0.15); color:var(--orange); }
+
+/* Main grid */
+.main { display:grid; grid-template-columns:1fr 300px; grid-template-rows:120px 1fr 180px; gap:1px; background:var(--border); }
+.panel { background:var(--bg); padding:12px; overflow:hidden; display:flex; flex-direction:column; }
+
+/* Stats row */
+.stats { grid-column:1 / -1; display:grid; grid-template-columns:repeat(4,1fr); gap:12px; }
+.stat-box { background:var(--bg2); border:1px solid var(--border); border-radius:8px; padding:12px; }
+.stat-label { font-size:11px; color:var(--text2); text-transform:uppercase; margin-bottom:6px; }
+.stat-value { font-size:22px; font-weight:700; }
+.stat-delta { font-size:11px; margin-top:4px; }
+.up { color:var(--green); } .down { color:var(--red); }
+
+/* Chart area */
+.chart-area { position:relative; }
+.chart-title { font-size:12px; color:var(--text2); margin-bottom:8px; display:flex; justify-content:space-between; }
+#priceChart { width:100%; height:calc(100% - 30px); }
+
+/* Order book */
+.orderbook { display:grid; grid-template-rows:auto 1fr; }
+.ob-header { display:flex; justify-content:space-between; font-size:11px; color:var(--text2); margin-bottom:8px; }
+.ob-rows { display:flex; flex-direction:column; gap:2px; overflow:hidden; }
+.ob-row { display:grid; grid-template-columns:1fr 1fr 60px; gap:8px; font-size:12px; padding:2px 4px; border-radius:3px; }
+.ob-row:hover { background:rgba(255,255,255,0.03); }
+.ob-bid { color:var(--green); }
+.ob-ask { color:var(--red); }
+.ob-bar { height:100%; background:currentColor; opacity:0.15; border-radius:2px; }
+.ob-depth { display:flex; align-items:center; }
+
+/* Trades / Arb */
+.trades-title { font-size:12px; color:var(--text2); margin-bottom:8px; }
+.trade-row { display:grid; grid-template-columns:80px 1fr 1fr 80px 70px; gap:8px; font-size:11px; padding:4px 0; border-bottom:1px solid var(--border); }
+.trade-header { color:var(--text2); font-size:10px; text-transform:uppercase; }
+.trade-profit { font-weight:700; }
+
+/* Canvas styling */
+canvas { width:100%; height:100%; }
+
+/* Scrollbar */
+::-webkit-scrollbar { width:4px; }
+::-webkit-scrollbar-thumb { background:var(--text3); border-radius:2px; }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="topbar">
+    <div class="title">📈 MAGNATRIX Trading Desk <span style="color:var(--text3);font-weight:400;">| HFT Engine v2.0</span></div>
+    <div class="status">
+      <span class="tag tag-live">● C++ Engine Active</span>
+      <span class="tag tag-paper">○ Paper Trading</span>
+      <span style="color:var(--text3);font-size:11px;">Latency: <span id="latency" style="color:var(--cyan)">12μs</span></span>
+    </div>
+  </div>
+  <div class="main">
+    <div class="stats panel">
+      <div class="stat-box">
+        <div class="stat-label">Portfolio Value</div>
+        <div class="stat-value" style="color:var(--green)">$<span id="portfolio">124,892</span></div>
+        <div class="stat-delta up">▲ +$<span id="pnl">1,245</span> (<span id="pnlpct">1.01</span>%)</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-label">Open Positions</div>
+        <div class="stat-value" style="color:var(--cyan)"><span id="positions">7</span></div>
+        <div class="stat-delta up">▲ <span id="newpos">2</span> new today</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-label">Today's P&L</div>
+        <div class="stat-value" style="color:var(--green)">+$<span id="daypnl">892</span></div>
+        <div class="stat-delta up">▲ <span id="ntrades">12</span> trades</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-label">Avg Tick Latency</div>
+        <div class="stat-value" style="color:var(--purple)"><span id="avglat">12</span>μs</div>
+        <div class="stat-delta up">▲ C++ Hot Path</div>
+      </div>
+    </div>
+    <div class="panel chart-area">
+      <div class="chart-title"><span>📊 BTCUSDT Price Action</span><span style="color:var(--text3)">1m • Real-time</span></div>
+      <canvas id="priceChart"></canvas>
+    </div>
+    <div class="panel orderbook">
+      <div class="ob-header"><span>Order Book (BTCUSDT)</span><span id="spread" style="color:var(--cyan)">Spread: 2.50</span></div>
+      <div class="ob-rows" id="obRows"></div>
+    </div>
+    <div class="panel" style="grid-column:1/-1;">
+      <div class="trades-title">🔥 Arbitrage Scanner — Cross-Exchange Opportunities</div>
+      <div class="trade-row trade-header">
+        <span>Pair</span><span>Buy @</span><span>Sell @</span><span>Profit</span><span>Status</span>
+      </div>
+      <div id="arbRows"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ── Price Chart ── */
+const canvas = document.getElementById('priceChart');
+const ctx = canvas.getContext('2d');
+let priceHistory = [];
+let lastPrice = 50313.75;
+
+function resizeCanvas() {
+  const dpr = window.devicePixelRatio || 1;
+  const rect = canvas.getBoundingClientRect();
+  canvas.width = rect.width * dpr;
+  canvas.height = rect.height * dpr;
+  ctx.scale(dpr, dpr);
+}
+window.addEventListener('resize', resizeCanvas);
+resizeCanvas();
+
+function genCandle() {
+  const open = lastPrice;
+  const volatility = open * 0.001;
+  const close = open + (Math.random() - 0.48) * volatility;
+  const high = Math.max(open, close) + Math.random() * volatility * 0.5;
+  const low = Math.min(open, close) - Math.random() * volatility * 0.5;
+  lastPrice = close;
+  return { open, high, low, close, time: Date.now() };
+}
+
+for (let i = 0; i < 60; i++) priceHistory.push(genCandle());
+
+function drawChart() {
+  const w = canvas.width / (window.devicePixelRatio || 1);
+  const h = canvas.height / (window.devicePixelRatio || 1);
+  ctx.clearRect(0, 0, w, h);
+
+  // Grid
+  ctx.strokeStyle = 'rgba(255,255,255,0.03)';
+  ctx.lineWidth = 1;
+  for (let i = 0; i < 5; i++) {
+    const y = h * i / 4;
+    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke();
+  }
+
+  const prices = priceHistory.map(c => [c.low, c.high, c.open, c.close]).flat();
+  const minP = Math.min(...prices) * 0.9998;
+  const maxP = Math.max(...prices) * 1.0002;
+  const range = maxP - minP;
+  const barW = w / priceHistory.length * 0.7;
+  const step = w / priceHistory.length;
+
+  priceHistory.forEach((c, i) => {
+    const x = i * step + step / 2;
+    const yHigh = h - (c.high - minP) / range * h;
+    const yLow = h - (c.low - minP) / range * h;
+    const yOpen = h - (c.open - minP) / range * h;
+    const yClose = h - (c.close - minP) / range * h;
+    const isUp = c.close >= c.open;
+
+    ctx.fillStyle = isUp ? '#69f0ae' : '#ff5252';
+    ctx.strokeStyle = isUp ? '#69f0ae' : '#ff5252';
+
+    // Wick
+    ctx.beginPath(); ctx.moveTo(x, yHigh); ctx.lineTo(x, yLow); ctx.stroke();
+    // Body
+    const bodyTop = Math.min(yOpen, yClose);
+    const bodyH = Math.abs(yClose - yOpen) || 1;
+    ctx.fillRect(x - barW / 2, bodyTop, barW, bodyH);
+  });
+
+  // Current price line
+  const yLast = h - (lastPrice - minP) / range * h;
+  ctx.strokeStyle = '#00e5ff'; ctx.setLineDash([4, 4]); ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(0, yLast); ctx.lineTo(w, yLast); ctx.stroke();
+  ctx.setLineDash([]);
+
+  // Price label
+  ctx.fillStyle = '#00e5ff'; ctx.font = '11px ' + getComputedStyle(document.body).fontFamily;
+  ctx.fillText(lastPrice.toFixed(2), w - 70, yLast - 5);
+}
+
+/* ── Order Book ── */
+function renderOrderBook() {
+  const mid = lastPrice;
+  const rows = document.getElementById('obRows');
+  let html = '';
+  for (let i = 5; i >= 1; i--) {
+    const price = mid - i * 2.5 + (Math.random() - 0.5);
+    const size = (Math.random() * 4 + 0.5).toFixed(3);
+    const depthPct = Math.random() * 80 + 10;
+    html += `<div class="ob-row ob-bid">
+      <span>${price.toFixed(2)}</span>
+      <span>${size}</span>
+      <div class="ob-depth"><div class="ob-bar" style="width:${depthPct}%"></div></div>
+    </div>`;
+  }
+  html += `<div style="text-align:center;padding:4px 0;font-size:11px;color:#00e5ff;font-weight:700;">${mid.toFixed(2)}</div>`;
+  for (let i = 1; i <= 5; i++) {
+    const price = mid + i * 2.5 + (Math.random() - 0.5);
+    const size = (Math.random() * 4 + 0.5).toFixed(3);
+    const depthPct = Math.random() * 80 + 10;
+    html += `<div class="ob-row ob-ask">
+      <span>${price.toFixed(2)}</span>
+      <span>${size}</span>
+      <div class="ob-depth"><div class="ob-bar" style="width:${depthPct}%"></div></div>
+    </div>`;
+  }
+  rows.innerHTML = html;
+}
+
+/* ── Arbitrage ── */
+const arbData = [
+  { pair: 'BTCUSDT', buy: 'Binance $50,245', sell: 'Bybit $50,312', profit: '+5.3 bps', status: 'Active', color: 'var(--green)' },
+  { pair: 'ETHUSDT', buy: 'OKX $3,008', sell: 'Binance $3,015', profit: '+3.1 bps', status: 'Active', color: 'var(--green)' },
+  { pair: 'SOLUSDT', buy: 'Bybit $142.10', sell: 'Binance $142.30', profit: '+1.8 bps', status: 'Marginal', color: 'var(--orange)' },
+  { pair: 'DOGEUSDT', buy: '—', sell: '—', profit: '—', status: 'None', color: 'var(--text3)' },
+];
+function renderArb() {
+  const rows = document.getElementById('arbRows');
+  rows.innerHTML = arbData.map(a => `
+    <div class="trade-row">
+      <span style="font-weight:600">${a.pair}</span>
+      <span style="color:var(--text2)">${a.buy}</span>
+      <span style="color:var(--text2)">${a.sell}</span>
+      <span class="trade-profit" style="color:${a.color}">${a.profit}</span>
+      <span style="color:${a.color};font-size:11px">● ${a.status}</span>
+    </div>
+  `).join('');
+}
+
+/* ── Live Updates ── */
+function update() {
+  priceHistory.push(genCandle());
+  if (priceHistory.length > 60) priceHistory.shift();
+  drawChart();
+  renderOrderBook();
+
+  // Update stats with jitter
+  const jitter = (Math.random() - 0.5) * 200;
+  document.getElementById('portfolio').textContent = (124892 + jitter).toLocaleString('en', {minimumFractionDigits:0, maximumFractionDigits:0});
+  document.getElementById('latency').textContent = (10 + Math.random() * 8 | 0) + 'μs';
+
+  // Random arb profit updates
+  arbData.forEach(a => {
+    if (a.status === 'Active') {
+      const base = parseFloat(a.profit);
+      if (!isNaN(base)) {
+        const newVal = (base + (Math.random() - 0.5) * 0.5).toFixed(1);
+        a.profit = (newVal >= 0 ? '+' : '') + newVal + ' bps';
+      }
+    }
+  });
+  renderArb();
+}
+
+renderArb();
+setInterval(update, 1000);
+</script>
+</body>
+</html>
