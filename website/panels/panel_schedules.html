@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MAGNATRIX Schedules</title>
+<style>
+:root { --bg:#0a0a0f; --bg2:#111118; --bg3:#1a1a24; --text:#e8e8f0; --text2:#8888a0; --text3:#555570; --cyan:#00e5ff; --green:#69f0ae; --orange:#ffab40; --purple:#b388ff; --border:rgba(255,255,255,0.06); --font-mono:'SF Mono','Fira Code',monospace; }
+* { margin:0; padding:0; box-sizing:border-box; }
+body { background:var(--bg); color:var(--text); font-family:var(--font-mono); font-size:13px; height:100vh; overflow:hidden; }
+.app { display:grid; grid-template-rows:48px 1fr; height:100vh; }
+.topbar { display:flex; align-items:center; justify-content:space-between; padding:0 20px; background:var(--bg2); border-bottom:1px solid var(--border); }
+.topbar .title { font-size:14px; font-weight:600; }
+.add-btn { background:var(--bg3); border:1px solid var(--border); color:var(--text); padding:5px 14px; border-radius:6px; font-size:12px; cursor:pointer; }
+.main { padding:16px; overflow:auto; }
+
+.calendar { display:grid; grid-template-columns:repeat(7,1fr); gap:1px; background:var(--border); border-radius:8px; overflow:hidden; }
+.cal-header { background:var(--bg2); padding:8px; text-align:center; font-size:11px; color:var(--text2); text-transform:uppercase; }
+.cal-day { background:var(--bg); padding:8px; min-height:80px; font-size:11px; }
+.cal-day:hover { background:rgba(255,255,255,0.02); }
+.cal-num { font-size:13px; font-weight:600; margin-bottom:4px; }
+.cal-today { color:var(--cyan); }
+.cal-event { background:rgba(0,229,255,0.1); border-left:2px solid var(--cyan); padding:2px 4px; margin:2px 0; border-radius:0 3px 3px 0; font-size:10px; }
+
+.schedule-list { margin-top:16px; }
+.sch-row { display:grid; grid-template-columns:60px 1fr 100px 80px; gap:10px; padding:8px 0; border-bottom:1px solid var(--border); font-size:12px; align-items:center; }
+.sch-header { color:var(--text2); font-size:10px; text-transform:uppercase; font-weight:600; }
+.sch-status { font-size:10px; padding:2px 8px; border-radius:4px; font-weight:700; }
+.sch-pending { background:rgba(255,171,64,0.12); color:var(--orange); }
+.sch-running { background:rgba(0,229,255,0.12); color:var(--cyan); }
+.sch-done { background:rgba(105,240,174,0.12); color:var(--green); }
+
+::-webkit-scrollbar { width:4px; }
+::-webkit-scrollbar-thumb { background:var(--text3); border-radius:2px; }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="topbar">
+    <div class="title">📅 MAGNATRIX Schedules <span style="color:var(--text3);font-weight:400;">| Task Scheduler</span></div>
+    <button class="add-btn" onclick="addEvent()">+ Add Event</button>
+  </div>
+  <div class="main">
+    <div class="calendar" id="calendar"></div>
+    <div class="schedule-list">
+      <div class="sch-row sch-header"><span>Time</span><span>Task</span><span>Type</span><span>Status</span></div>
+      <div id="scheduleList"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const today = new Date();
+const year = today.getFullYear();
+const month = today.getMonth();
+const daysInMonth = new Date(year, month + 1, 0).getDate();
+const firstDay = new Date(year, month, 1).getDay();
+
+const events = {
+  5: [{text:'Audit v3', color:'var(--orange)'},{text:'Backup', color:'var(--green)'}],
+  12: [{text:'Model retrain', color:'var(--cyan)'}],
+  15: [{text:'P2P sync', color:'var(--purple)'}],
+  20: [{text:'Security scan', color:'var(--orange)'}],
+  26: [{text:'Release v2.1', color:'var(--green)'}],
+};
+
+function renderCalendar() {
+  const cal = document.getElementById('calendar');
+  const dayNames = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  let html = dayNames.map(d => `<div class="cal-header">${d}</div>`).join('');
+  for (let i = 0; i < firstDay; i++) html += '<div class="cal-day"></div>';
+  for (let d = 1; d <= daysInMonth; d++) {
+    const isToday = d === today.getDate();
+    const evs = events[d] || [];
+    html += `<div class="cal-day">
+      <div class="cal-num ${isToday ? 'cal-today' : ''}">${d}${isToday ? ' ●' : ''}</div>
+      ${evs.map(e => `<div class="cal-event" style="border-color:${e.color};background:${e.color}15">${e.text}</div>`).join('')}
+    </div>`;
+  }
+  cal.innerHTML = html;
+}
+
+const schedules = [
+  { time:'00:00', task:'Nightly backup', type:'System', status:'done', statusClass:'sch-done' },
+  { time:'06:00', task:'Entropy pool refresh', type:'Security', status:'done', statusClass:'sch-done' },
+  { time:'09:00', task:'P2P mesh heartbeat', type:'Network', status:'running', statusClass:'sch-running' },
+  { time:'12:00', task:'HFT engine warm-up', type:'Trading', status:'pending', statusClass:'sch-pending' },
+  { time:'15:00', task:'Model eval run', type:'AI', status:'pending', statusClass:'sch-pending' },
+  { time:'18:00', task:'Git commit sweep', type:'Dev', status:'pending', statusClass:'sch-pending' },
+  { time:'23:00', task:'Memory compaction', type:'System', status:'pending', statusClass:'sch-pending' },
+];
+
+function renderSchedules() {
+  document.getElementById('scheduleList').innerHTML = schedules.map(s => `
+    <div class="sch-row">
+      <span style="color:var(--text3)">${s.time}</span>
+      <span>${s.task}</span>
+      <span style="color:var(--text2);font-size:11px">${s.type}</span>
+      <span class="sch-status ${s.statusClass}">${s.status}</span>
+    </div>
+  `).join('');
+}
+
+function addEvent() {
+  const day = parseInt(prompt('Day of month:'));
+  const text = prompt('Event text:');
+  if (!day || !text) return;
+  if (!events[day]) events[day] = [];
+  events[day].push({ text, color: 'var(--cyan)' });
+  renderCalendar();
+}
+
+renderCalendar();
+renderSchedules();
+</script>
+</body>
+</html>

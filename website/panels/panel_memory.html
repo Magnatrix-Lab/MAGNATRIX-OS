@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MAGNATRIX Memory</title>
+<style>
+:root { --bg:#0a0a0f; --bg2:#111118; --bg3:#1a1a24; --text:#e8e8f0; --text2:#8888a0; --text3:#555570; --cyan:#00e5ff; --green:#69f0ae; --purple:#b388ff; --orange:#ffab40; --border:rgba(255,255,255,0.06); --font-mono:'SF Mono','Fira Code',monospace; }
+* { margin:0; padding:0; box-sizing:border-box; }
+body { background:var(--bg); color:var(--text); font-family:var(--font-mono); font-size:13px; height:100vh; overflow:hidden; }
+.app { display:grid; grid-template-rows:48px 1fr; height:100vh; }
+.topbar { display:flex; align-items:center; justify-content:space-between; padding:0 20px; background:var(--bg2); border-bottom:1px solid var(--border); }
+.topbar .title { font-size:14px; font-weight:600; }
+.add-btn { background:var(--bg3); border:1px solid var(--border); color:var(--text); padding:5px 14px; border-radius:6px; font-size:12px; cursor:pointer; }
+.add-btn:hover { border-color:var(--cyan); }
+.main { display:grid; grid-template-columns:1fr 1fr; gap:1px; background:var(--border); overflow:hidden; }
+.panel { background:var(--bg); padding:16px; overflow:auto; }
+
+.mem-card { background:var(--bg2); border:1px solid var(--border); border-radius:8px; padding:10px; margin-bottom:8px; font-size:11px; }
+.mem-key { color:var(--cyan); font-weight:600; margin-bottom:4px; }
+.mem-val { color:var(--text2); word-break:break-all; }
+.mem-time { color:var(--text3); font-size:10px; margin-top:4px; }
+
+.gauge { display:flex; align-items:center; gap:10px; margin-bottom:10px; }
+.gauge-bar { flex:1; height:8px; background:var(--bg2); border-radius:4px; overflow:hidden; }
+.gauge-fill { height:100%; border-radius:4px; transition:width 0.3s; }
+.gauge-label { font-size:11px; color:var(--text2); min-width:60px; }
+.gauge-pct { font-size:11px; color:var(--text); min-width:40px; text-align:right; }
+
+::-webkit-scrollbar { width:4px; }
+::-webkit-scrollbar-thumb { background:var(--text3); border-radius:2px; }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="topbar">
+    <div class="title">🧠 MAGNATRIX Memory <span style="color:var(--text3);font-weight:400;">| Short-term + Long-term</span></div>
+    <button class="add-btn" onclick="addMemory()">+ Add Entry</button>
+  </div>
+  <div class="main">
+    <div class="panel">
+      <div style="font-size:12px;color:var(--text2);font-weight:600;margin-bottom:12px;">⚡ Short-term Buffer (Rolling)</div>
+      <div id="shortTerm"></div>
+      <div style="margin-top:16px;">
+        <div class="gauge">
+          <span class="gauge-label">Buffer</span>
+          <div class="gauge-bar"><div class="gauge-fill" id="shortGauge" style="width:68%;background:var(--cyan)"></div></div>
+          <span class="gauge-pct" id="shortPct">68%</span>
+        </div>
+      </div>
+    </div>
+    <div class="panel">
+      <div style="font-size:12px;color:var(--text2);font-weight:600;margin-bottom:12px;">💾 Long-term Storage (JSON Persistence)</div>
+      <div id="longTerm"></div>
+      <div style="margin-top:16px;">
+        <div class="gauge">
+          <span class="gauge-label">Storage</span>
+          <div class="gauge-bar"><div class="gauge-fill" id="longGauge" style="width:42%;background:var(--green)"></div></div>
+          <span class="gauge-pct" id="longPct">42%</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const shortTerm = [
+  { key:'User Goal', val:'Research agentic AI operating systems', time:'Just now', role:'user' },
+  { key:'Agent Action', val:'Decomposed into 3 subtasks via GoalDecomposer', time:'5s ago', role:'system' },
+  { key:'Tool Call', val:'SEARCH: agentic AI operating systems', time:'8s ago', role:'tool' },
+  { key:'Tool Result', val:'Found 3 relevant documents', time:'10s ago', role:'tool' },
+  { key:'Agent Synthesis', val:'Merged results into coherent answer', time:'12s ago', role:'assistant' },
+  { key:'Self-Critique', val:'Score: 0.85 — 2/3 tasks succeeded', time:'15s ago', role:'system' },
+];
+
+const longTerm = [
+  { key:'preferences.model', val:'Local GGUF (Q4_K_M)', time:'2d ago' },
+  { key:'preferences.theme', val:'dark-glassmorphism', time:'2d ago' },
+  { key:'api_keys.groq', val:'grk_••••••••••9f2a', time:'1w ago' },
+  { key:'p2p.bootstrap_nodes', val:'[127.0.0.1:17777, 192.168.1.42:17777]', time:'3d ago' },
+  { key:'trading.paper_mode', val:'true', time:'1d ago' },
+  { key:'security.audit_v2', val:'17 weaknesses documented', time:'12h ago' },
+  { key:'constitution.rules', val:'[no_harm, transparency, user_consent]', time:'1w ago' },
+];
+
+function renderShort() {
+  document.getElementById('shortTerm').innerHTML = shortTerm.map(m => `
+    <div class="mem-card">
+      <div class="mem-key">${m.role === 'user' ? '👤' : m.role === 'tool' ? '🔧' : m.role === 'assistant' ? '🤖' : '⚙️'} ${m.key}</div>
+      <div class="mem-val">${m.val}</div>
+      <div class="mem-time">${m.time}</div>
+    </div>
+  `).join('');
+}
+
+function renderLong() {
+  document.getElementById('longTerm').innerHTML = longTerm.map(m => `
+    <div class="mem-card">
+      <div class="mem-key">📦 ${m.key}</div>
+      <div class="mem-val">${m.val}</div>
+      <div class="mem-time">${m.time}</div>
+    </div>
+  `).join('');
+}
+
+function addMemory() {
+  const key = prompt('Memory key:');
+  if (!key) return;
+  const val = prompt('Value:');
+  longTerm.unshift({ key, val: val || '', time: 'Just now' });
+  renderLong();
+  document.getElementById('longGauge').style.width = Math.min(42 + longTerm.length * 3, 95) + '%';
+  document.getElementById('longPct').textContent = Math.min(42 + longTerm.length * 3, 95) + '%';
+}
+
+renderShort();
+renderLong();
+</script>
+</body>
+</html>

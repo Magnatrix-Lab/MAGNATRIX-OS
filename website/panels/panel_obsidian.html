@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MAGNATRIX Obsidian</title>
+<style>
+:root { --bg:#0a0a0f; --bg2:#111118; --bg3:#1a1a24; --text:#e8e8f0; --text2:#8888a0; --text3:#555570; --cyan:#00e5ff; --purple:#b388ff; --border:rgba(255,255,255,0.06); --font-mono:'SF Mono','Fira Code',monospace; }
+* { margin:0; padding:0; box-sizing:border-box; }
+body { background:var(--bg); color:var(--text); font-family:var(--font-mono); font-size:13px; height:100vh; overflow:hidden; }
+.app { display:grid; grid-template-rows:48px 1fr; height:100vh; }
+.topbar { display:flex; align-items:center; justify-content:space-between; padding:0 20px; background:var(--bg2); border-bottom:1px solid var(--border); }
+.topbar .title { font-size:14px; font-weight:600; }
+.main { display:grid; grid-template-columns:220px 1fr; gap:1px; background:var(--border); overflow:hidden; }
+.panel { background:var(--bg); padding:12px; overflow:auto; }
+
+.file-tree { font-size:12px; }
+.tree-folder { color:var(--text2); padding:4px 0; cursor:pointer; }
+.tree-folder:hover { color:var(--text); }
+.tree-file { color:var(--text3); padding:2px 0 2px 16px; cursor:pointer; font-size:11px; }
+.tree-file:hover { color:var(--cyan); }
+.tree-file.active { color:var(--cyan); background:rgba(0,229,255,0.05); border-radius:4px; }
+
+.editor { width:100%; height:calc(100% - 30px); background:var(--bg2); border:1px solid var(--border); border-radius:8px; padding:16px; color:var(--text); font-family:var(--font-mono); font-size:13px; line-height:1.7; outline:none; resize:none; }
+.editor-title { font-size:12px; color:var(--text2); margin-bottom:8px; }
+
+::-webkit-scrollbar { width:4px; }
+::-webkit-scrollbar-thumb { background:var(--text3); border-radius:2px; }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="topbar">
+    <div class="title">📝 MAGNATRIX Obsidian <span style="color:var(--text3);font-weight:400;">| Knowledge Vault</span></div>
+  </div>
+  <div class="main">
+    <div class="panel">
+      <div class="file-tree" id="fileTree"></div>
+    </div>
+    <div class="panel">
+      <div class="editor-title" id="editorTitle">Select a note...</div>
+      <textarea class="editor" id="editor" placeholder="Edit your knowledge vault notes here..."></textarea>
+    </div>
+  </div>
+</div>
+
+<script>
+const vault = {
+  'README.md': '# MAGNATRIX-OS Knowledge Vault\n\nThis is the central knowledge repository for the MAGNATRIX operating system.\n\n## Architecture\n- 15-layer agentic OS\n- Tri-language: Python + C++ + Rust\n- P2P mesh via Kademlia DHT\n\n## Patterns\n- AMATI-PELAJARI-TIRU: observe, learn, imitate',
+  'AI/Theorem-Proving.md': '# Theorem Proving\n\nNeuro-symbolic approach combining LLM-generated sketches with symbolic verification.\n\n## Tactics\n- intro, apply, rewrite, split, simpl\n- sorry (admission), qed (completion)\n\n## Search\n- BFS, Best-First, MCTS-inspired',
+  'AI/RAG-Patterns.md': '# RAG Patterns\n\nAgentic RAG dengan hybrid retrieval.\n\n## Components\n- HashEmbedding (deterministic, no numpy)\n- VectorStore (cosine similarity)\n- MCPClient (mock external tools)',
+  'Runtime/JIT-Compiler.md': '# JIT Compiler\n\n4-tier compilation pipeline dari V8 architecture.\n\n## Tiers\n1. Ignition (interpreter)\n2. Sparkplug (baseline JIT)\n3. Maglev (mid-tier JIT)\n4. TurboFan (optimizing JIT)',
+  'Security/Crypto-Engine.md': '# Crypto Engine\n\nRust-based cryptographic primitives via PyO3.\n\n## Primitives\n- Ed25519, X25519\n- ChaCha20-Poly1305, AES-256-GCM\n- Argon2id, SHA-2/3, BLAKE3',
+  'Trading/HFT-Engine.md': '# HFT Engine\n\nC++ hot path untuk high-frequency trading.\n\n## Features\n- Lock-based order book (std::map)\n- Fixed-point arithmetic (1e8)\n- Cross-exchange arbitrage',
+};
+
+function renderTree() {
+  const tree = document.getElementById('fileTree');
+  let html = '<div class="tree-folder">📁 Vault</div>';
+  for (const [path, content] of Object.entries(vault)) {
+    const name = path.split('/').pop();
+    html += `<div class="tree-file" data-path="${path}">${name}</div>`;
+  }
+  tree.innerHTML = html;
+  document.querySelectorAll('.tree-file').forEach(f => {
+    f.addEventListener('click', () => {
+      document.querySelectorAll('.tree-file').forEach(x => x.classList.remove('active'));
+      f.classList.add('active');
+      const path = f.dataset.path;
+      document.getElementById('editorTitle').textContent = path;
+      document.getElementById('editor').value = vault[path];
+    });
+  });
+}
+
+renderTree();
+</script>
+</body>
+</html>

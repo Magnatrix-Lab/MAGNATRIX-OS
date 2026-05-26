@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MAGNATRIX Settings</title>
+<style>
+:root { --bg:#0a0a0f; --bg2:#111118; --bg3:#1a1a24; --text:#e8e8f0; --text2:#8888a0; --text3:#555570; --cyan:#00e5ff; --green:#69f0ae; --orange:#ffab40; --border:rgba(255,255,255,0.06); --font-mono:'SF Mono','Fira Code',monospace; }
+* { margin:0; padding:0; box-sizing:border-box; }
+body { background:var(--bg); color:var(--text); font-family:var(--font-mono); font-size:13px; height:100vh; overflow:hidden; }
+.app { display:grid; grid-template-rows:48px 1fr; height:100vh; }
+.topbar { display:flex; align-items:center; justify-content:space-between; padding:0 20px; background:var(--bg2); border-bottom:1px solid var(--border); }
+.topbar .title { font-size:14px; font-weight:600; }
+.save-btn { background:rgba(0,229,255,0.12); border:1px solid rgba(0,229,255,0.3); color:var(--cyan); padding:5px 16px; border-radius:6px; font-size:12px; cursor:pointer; }
+.main { display:grid; grid-template-columns:200px 1fr; gap:1px; background:var(--border); overflow:hidden; }
+
+.sidebar { background:var(--bg); padding:12px; }
+.nav-item { padding:8px 12px; border-radius:6px; cursor:pointer; font-size:13px; color:var(--text2); margin-bottom:2px; }
+.nav-item:hover { background:rgba(255,255,255,0.03); color:var(--text); }
+.nav-item.active { background:rgba(0,229,255,0.08); color:var(--cyan); border:1px solid rgba(0,229,255,0.15); }
+
+.panel { background:var(--bg); padding:20px; overflow:auto; }
+.section-title { font-size:14px; font-weight:600; margin-bottom:16px; }
+.setting-row { display:flex; justify-content:space-between; align-items:center; padding:12px 0; border-bottom:1px solid var(--border); }
+.setting-label { font-size:13px; }
+.setting-desc { font-size:11px; color:var(--text2); margin-top:2px; }
+
+input[type="text"], input[type="number"], select { background:var(--bg3); border:1px solid var(--border); border-radius:6px; padding:6px 10px; color:var(--text); font-size:12px; outline:none; min-width:160px; }
+input:focus, select:focus { border-color:var(--cyan); }
+
+toggle { appearance:none; width:40px; height:20px; background:var(--bg3); border-radius:10px; position:relative; cursor:pointer; border:1px solid var(--border); }
+toggle::after { content:''; position:absolute; width:16px; height:16px; background:var(--text3); border-radius:50%; top:1px; left:1px; transition:0.2s; }
+toggle:checked { background:rgba(0,229,255,0.2); border-color:var(--cyan); }
+toggle:checked::after { left:21px; background:var(--cyan); }
+
+::-webkit-scrollbar { width:4px; }
+::-webkit-scrollbar-thumb { background:var(--text3); border-radius:2px; }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="topbar">
+    <div class="title">⚙️ MAGNATRIX Settings <span style="color:var(--text3);font-weight:400;">| Configuration</span></div>
+    <button class="save-btn" onclick="saveSettings()">💾 Save</button>
+  </div>
+  <div class="main">
+    <div class="sidebar">
+      <div class="nav-item active" onclick="showTab('general')">General</div>
+      <div class="nav-item" onclick="showTab('ai')">AI / Models</div>
+      <div class="nav-item" onclick="showTab('security')">Security</div>
+      <div class="nav-item" onclick="showTab('network')">Network / P2P</div>
+      <div class="nav-item" onclick="showTab('trading')">Trading</div>
+      <div class="nav-item" onclick="showTab('advanced')">Advanced</div>
+    </div>
+    <div class="panel" id="settingsPanel">
+      <div id="tab-general">
+        <div class="section-title">General Settings</div>
+        <div class="setting-row"><div><div class="setting-label">System Name</div><div class="setting-desc">Display name for this node</div></div><input type="text" value="MAGNATRIX-OS"></div>
+        <div class="setting-row"><div><div class="setting-label">Theme</div><div class="setting-desc">UI color scheme</div></div><select><option>dark-glassmorphism</option><option>dark-terminal</option><option>light-minimal</option></select></div>
+        <div class="setting-row"><div><div class="setting-label">Language</div><div class="setting-desc">Interface language</div></div><select><option>English</option><option>Indonesian</option></select></div>
+        <div class="setting-row"><div><div class="setting-label">Auto-start on boot</div><div class="setting-desc">Launch MAGNATRIX on system startup</div></div><input type="checkbox" checked></div>
+        <div class="setting-row"><div><div class="setting-label">Telemetry</div><div class="setting-desc">Anonymous usage metrics</div></div><input type="checkbox"></div>
+      </div>
+      <div id="tab-ai" style="display:none">
+        <div class="section-title">AI / Model Settings</div>
+        <div class="setting-row"><div><div class="setting-label">Default Model</div><div class="setting-desc">Model for general queries</div></div><select><option>MAGNATRIX Brain 7B</option><option>Groq Llama-3 70B</option><option>GPT-4o</option></select></div>
+        <div class="setting-row"><div><div class="setting-label">Temperature</div><div class="setting-desc">Creativity vs determinism</div></div><input type="number" value="0.7" step="0.1" min="0" max="2"></div>
+        <div class="setting-row"><div><div class="setting-label">Context Window</div><div class="setting-desc">Max tokens per conversation</div></div><input type="number" value="32768" step="1024"></div>
+        <div class="setting-row"><div><div class="setting-label">Tool Auto-execute</div><div class="setting-desc">Allow agent to run tools without confirmation</div></div><input type="checkbox"></div>
+      </div>
+      <div id="tab-security" style="display:none">
+        <div class="section-title">Security Settings</div>
+        <div class="setting-row"><div><div class="setting-label">Encryption Backend</div><div class="setting-desc">Crypto engine to use</div></div><select><option>Rust (PyO3) — Fast</option><option>Python — Portable</option></select></div>
+        <div class="setting-row"><div><div class="setting-label">Key Rotation Interval</div><div class="setting-desc">Days between automatic key rotation</div></div><input type="number" value="30"></div>
+        <div class="setting-row"><div><div class="setting-label">Audit Logging</div><div class="setting-desc">Log all security events</div></div><input type="checkbox" checked></div>
+        <div class="setting-row"><div><div class="setting-label">Constitutional AI</div><div class="setting-desc">Enforce safety constraints</div></div><input type="checkbox" checked></div>
+      </div>
+      <div id="tab-network" style="display:none">
+        <div class="section-title">Network / P2P</div>
+        <div class="setting-row"><div><div class="setting-label">Listen Port</div><div class="setting-desc">P2P mesh port</div></div><input type="number" value="17777"></div>
+        <div class="setting-row"><div><div class="setting-label">Bootstrap Nodes</div><div class="setting-desc">Comma-separated host:port</div></div><input type="text" value="127.0.0.1:17777,192.168.1.42:17777"></div>
+        <div class="setting-row"><div><div class="setting-label">NAT Traversal</div><div class="setting-desc">Enable STUN/TURN</div></div><input type="checkbox" checked></div>
+        <div class="setting-row"><div><div class="setting-label">Max Peers</div><div class="setting-desc">Maximum connected peers</div></div><input type="number" value="50"></div>
+      </div>
+      <div id="tab-trading" style="display:none">
+        <div class="section-title">Trading Settings</div>
+        <div class="setting-row"><div><div class="setting-label">Mode</div><div class="setting-desc">Paper or live trading</div></div><select><option>Paper Trading</option><option>Live (DANGER)</option></select></div>
+        <div class="setting-row"><div><div class="setting-label">Max Position Size</div><div class="setting-desc">USD per position</div></div><input type="number" value="10000"></div>
+        <div class="setting-row"><div><div class="setting-label">Arb Threshold</div><div class="setting-desc">Minimum bps to trigger</div></div><input type="number" value="1.5" step="0.1"></div>
+        <div class="setting-row"><div><div class="setting-label">Engine Backend</div><div class="setting-desc">HFT execution engine</div></div><select><option>C++ (Fast)</option><option>Python (Safe)</option></select></div>
+      </div>
+      <div id="tab-advanced" style="display:none">
+        <div class="section-title">Advanced</div>
+        <div class="setting-row"><div><div class="setting-label">Debug Mode</div><div class="setting-desc">Verbose logging</div></div><input type="checkbox"></div>
+        <div class="setting-row"><div><div class="setting-label">Auto Repo Hunter</div><div class="setting-desc">Discover new repos for AMATI</div></div><input type="checkbox" checked></div>
+        <div class="setting-row"><div><div class="setting-label">Log Level</div></div><select><option>INFO</option><option>DEBUG</option><option>TRACE</option></select></div>
+        <div class="setting-row"><div><div class="setting-label">Export Config</div><div class="setting-desc">Download JSON config</div></div><button class="save-btn" style="padding:4px 12px;font-size:11px" onclick="exportConfig()">📥 Export</button></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+let activeTab = 'general';
+function showTab(tab) {
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  event.target.classList.add('active');
+  ['general','ai','security','network','trading','advanced'].forEach(t => {
+    document.getElementById('tab-'+t).style.display = t === tab ? '' : 'none';
+  });
+}
+function saveSettings() { alert('Settings saved to magnatrix_config.json'); }
+function exportConfig() { alert('Config exported as magnatrix_config.json'); }
+</script>
+</body>
+</html>

@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MAGNATRIX Gateway</title>
+<style>
+:root { --bg:#0a0a0f; --bg2:#111118; --bg3:#1a1a24; --text:#e8e8f0; --text2:#8888a0; --text3:#555570; --cyan:#00e5ff; --green:#69f0ae; --orange:#ffab40; --purple:#b388ff; --blue:#448aff; --border:rgba(255,255,255,0.06); --font-mono:'SF Mono','Fira Code',monospace; }
+* { margin:0; padding:0; box-sizing:border-box; }
+body { background:var(--bg); color:var(--text); font-family:var(--font-mono); font-size:13px; height:100vh; overflow:hidden; }
+.app { display:grid; grid-template-rows:48px 1fr; height:100vh; }
+.topbar { display:flex; align-items:center; justify-content:space-between; padding:0 20px; background:var(--bg2); border-bottom:1px solid var(--border); }
+.topbar .title { font-size:14px; font-weight:600; }
+.main { display:grid; grid-template-columns:1fr 1fr; gap:1px; background:var(--border); overflow:hidden; }
+.panel { background:var(--bg); padding:16px; overflow:auto; }
+
+.req-row { display:grid; grid-template-columns:70px 1fr 80px 60px 70px; gap:8px; padding:6px 0; border-bottom:1px solid var(--border); font-size:11px; align-items:center; }
+.req-header { color:var(--text2); font-size:10px; text-transform:uppercase; font-weight:600; }
+.req-method { font-weight:700; padding:1px 6px; border-radius:3px; font-size:10px; text-align:center; }
+.m-get { background:rgba(105,240,174,0.12); color:var(--green); }
+.m-post { background:rgba(68,138,255,0.12); color:var(--blue); }
+.m-ws { background:rgba(179,136,255,0.12); color:var(--purple); }
+.req-status-ok { color:var(--green); }
+.req-status-warn { color:var(--orange); }
+
+.metric-box { background:var(--bg2); border:1px solid var(--border); border-radius:8px; padding:12px; margin-bottom:10px; }
+.metric-title { font-size:11px; color:var(--text2); margin-bottom:6px; }
+.metric-val { font-size:22px; font-weight:700; color:var(--cyan); }
+.metric-sub { font-size:10px; color:var(--text3); margin-top:2px; }
+
+::-webkit-scrollbar { width:4px; }
+::-webkit-scrollbar-thumb { background:var(--text3); border-radius:2px; }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="topbar">
+    <div class="title">🌉 MAGNATRIX Gateway <span style="color:var(--text3);font-weight:400;">| API Router</span></div>
+  </div>
+  <div class="main">
+    <div class="panel">
+      <div style="font-size:12px;color:var(--text2);font-weight:600;margin-bottom:12px;">📡 Live Request Log</div>
+      <div class="req-row req-header"><span>Method</span><span>Endpoint</span><span>Latency</span><span>Status</span><span>Time</span></div>
+      <div id="reqLog"></div>
+    </div>
+    <div class="panel">
+      <div style="font-size:12px;color:var(--text2);font-weight:600;margin-bottom:12px;">📊 Gateway Metrics</div>
+      <div class="metric-box">
+        <div class="metric-title">Requests / Second</div>
+        <div class="metric-val" id="rps">42</div>
+        <div class="metric-sub">Peak: 127 RPS</div>
+      </div>
+      <div class="metric-box">
+        <div class="metric-title">Avg Latency</div>
+        <div class="metric-val" id="latency" style="color:var(--green)">18ms</div>
+        <div class="metric-sub">p99: 45ms</div>
+      </div>
+      <div class="metric-box">
+        <div class="metric-title">Error Rate</div>
+        <div class="metric-val" style="color:var(--orange)">0.12%</div>
+        <div class="metric-sub">Last error: 3h ago</div>
+      </div>
+      <div class="metric-box">
+        <div class="metric-title">Active Routes</div>
+        <div class="metric-val" style="color:var(--purple)">24</div>
+        <div class="metric-sub">5 dynamic, 19 static</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const endpoints = [
+  { method:'GET', methodClass:'m-get', path:'/api/v1/agents', latency:'12ms', status:'200', statusClass:'req-status-ok', time:'12:00:01' },
+  { method:'POST', methodClass:'m-post', path:'/api/v1/chat', latency:'245ms', status:'200', statusClass:'req-status-ok', time:'12:00:02' },
+  { method:'GET', methodClass:'m-get', path:'/api/v1/models', latency:'8ms', status:'200', statusClass:'req-status-ok', time:'12:00:03' },
+  { method:'WS', methodClass:'m-ws', path:'/ws/p2p', latency:'—', status:'OPEN', statusClass:'req-status-ok', time:'12:00:00' },
+  { method:'GET', methodClass:'m-get', path:'/api/v1/trading/positions', latency:'45ms', status:'200', statusClass:'req-status-ok', time:'12:00:04' },
+  { method:'POST', methodClass:'m-post', path:'/api/v1/crypto/sign', latency:'3ms', status:'200', statusClass:'req-status-ok', time:'12:00:05' },
+  { method:'GET', methodClass:'m-get', path:'/api/v1/knowledge/search', latency:'120ms', status:'200', statusClass:'req-status-ok', time:'12:00:06' },
+  { method:'GET', methodClass:'m-get', path:'/health', latency:'1ms', status:'200', statusClass:'req-status-ok', time:'12:00:07' },
+];
+
+function render() {
+  document.getElementById('reqLog').innerHTML = endpoints.map(r => `
+    <div class="req-row">
+      <span class="req-method ${r.methodClass}">${r.method}</span>
+      <span style="color:var(--text2)">${r.path}</span>
+      <span style="color:var(--text3)">${r.latency}</span>
+      <span class="${r.statusClass}">${r.status}</span>
+      <span style="color:var(--text3)">${r.time}</span>
+    </div>
+  `).join('');
+}
+
+function updateMetrics() {
+  document.getElementById('rps').textContent = Math.floor(30 + Math.random() * 30);
+  document.getElementById('latency').textContent = Math.floor(10 + Math.random() * 20) + 'ms';
+}
+
+render();
+setInterval(updateMetrics, 3000);
+</script>
+</body>
+</html>

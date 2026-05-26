@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MAGNATRIX Skills</title>
+<style>
+:root { --bg:#0a0a0f; --bg2:#111118; --bg3:#1a1a24; --text:#e8e8f0; --text2:#8888a0; --text3:#555570; --cyan:#00e5ff; --green:#69f0ae; --purple:#b388ff; --orange:#ffab40; --border:rgba(255,255,255,0.06); --font-mono:'SF Mono','Fira Code',monospace; }
+* { margin:0; padding:0; box-sizing:border-box; }
+body { background:var(--bg); color:var(--text); font-family:var(--font-mono); font-size:13px; height:100vh; overflow:hidden; }
+.app { display:grid; grid-template-rows:48px 1fr; height:100vh; }
+.topbar { display:flex; align-items:center; justify-content:space-between; padding:0 20px; background:var(--bg2); border-bottom:1px solid var(--border); }
+.topbar .title { font-size:14px; font-weight:600; }
+.search-box { background:var(--bg3); border:1px solid var(--border); border-radius:6px; padding:5px 12px; color:var(--text); font-size:12px; width:200px; outline:none; }
+.search-box:focus { border-color:var(--cyan); }
+.main { padding:16px; overflow:auto; }
+
+.skill-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(240px,1fr)); gap:12px; }
+.skill-card { background:var(--bg2); border:1px solid var(--border); border-radius:10px; padding:14px; transition:all 0.15s; }
+.skill-card:hover { border-color:rgba(255,255,255,0.12); transform:translateY(-2px); }
+.skill-header { display:flex; align-items:center; gap:10px; margin-bottom:10px; }
+.skill-icon { font-size:24px; }
+.skill-name { font-size:13px; font-weight:600; }
+.skill-lang { font-size:10px; padding:2px 8px; border-radius:4px; font-weight:700; }
+.lang-py { background:rgba(255,171,64,0.12); color:var(--orange); }
+.lang-cpp { background:rgba(68,138,255,0.12); color:#448aff; }
+.lang-rs { background:rgba(255,82,82,0.12); color:#ff5252; }
+.lang-web { background:rgba(0,229,255,0.12); color:var(--cyan); }
+.skill-desc { font-size:11px; color:var(--text2); margin-bottom:10px; line-height:1.5; }
+.skill-meta { display:flex; justify-content:space-between; font-size:10px; color:var(--text3); }
+.skill-bar { width:100%; height:4px; background:var(--bg); border-radius:2px; margin-top:8px; overflow:hidden; }
+.skill-bar-fill { height:100%; border-radius:2px; transition:width 0.5s; }
+
+::-webkit-scrollbar { width:4px; }
+::-webkit-scrollbar-thumb { background:var(--text3); border-radius:2px; }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="topbar">
+    <div class="title">🛠️ MAGNATRIX Skills <span style="color:var(--text3);font-weight:400;">| Native Modules</span></div>
+    <input class="search-box" id="search" placeholder="Search skills..." oninput="filterSkills()">
+  </div>
+  <div class="main">
+    <div class="skill-grid" id="skillGrid"></div>
+  </div>
+</div>
+
+<script>
+const skills = [
+  { icon:'🧠', name:'Meta Agent', lang:'py', langClass:'lang-py', desc:'Prompt-driven agent framework with XML tools, variable system, optimizer', lines:'643', status:'Stable', fill:'var(--green)', pct:100 },
+  { icon:'📐', name:'Theorem Prover', lang:'py', langClass:'lang-py', desc:'Neuro-symbolic Draft/Sketch/Prove with BFS tree search, 18 tactics', lines:'2373', status:'Stable', fill:'var(--green)', pct:100 },
+  { icon:'🔍', name:'Agentic RAG', lang:'py', langClass:'lang-py', desc:'LangGraph+FAISS+MCP hybrid with hash embedding, sentence chunker', lines:'629', status:'Stable', fill:'var(--green)', pct:100 },
+  { icon:'⚡', name:'JIT Compiler', lang:'py', langClass:'lang-py', desc:'4-tier V8-style: Ignition→Sparkplug→Maglev→TurboFan', lines:'1056', status:'Stable', fill:'var(--green)', pct:100 },
+  { icon:'🤖', name:'Autonomous Agent', lang:'py', langClass:'lang-py', desc:'AutoGPT pattern: goal decomposition, tool execution, self-critique', lines:'557', status:'Stable', fill:'var(--green)', pct:100 },
+  { icon:'🗣️', name:'Local LLM Agent', lang:'py', langClass:'lang-py', desc:'Pure Python local agent: GGUF stub, prompt builder, telemetry', lines:'483', status:'Stable', fill:'var(--green)', pct:100 },
+  { icon:'📄', name:'Document Agent', lang:'py', langClass:'lang-py', desc:'Multi-document routing with BM25 reranker, meta-agent orchestration', lines:'752', status:'Stable', fill:'var(--green)', pct:100 },
+  { icon:'💹', name:'HFT Engine', lang:'cpp', langClass:'lang-cpp', desc:'Lock-based LOB, arbitrage detector, pybind11 bindings, fixed-point', lines:'450', status:'Stable', fill:'var(--green)', pct:100 },
+  { icon:'🔐', name:'Crypto Engine', lang:'rs', langClass:'lang-rs', desc:'PyO3: Ed25519, ChaCha20, AES-GCM, Argon2, SHA-2/3, BLAKE3', lines:'346', status:'Stable', fill:'var(--green)', pct:100 },
+  { icon:'🌉', name:'Tri-Language Bridge', lang:'py', langClass:'lang-py', desc:'Unified Python+C+Rust orchestration: auto-detection, fallback', lines:'588', status:'Stable', fill:'var(--green)', pct:100 },
+  { icon:'🗺️', name:'Kademlia DHT', lang:'py', langClass:'lang-py', desc:'160-bit XOR metric, k-buckets, iterative lookups, P2P mesh', lines:'380', status:'Stable', fill:'var(--green)', pct:95 },
+  { icon:'📦', name:'GGUF Parser', lang:'py', langClass:'lang-py', desc:'Q4_0, Q4_1, Q8_0, F16, F32 dequantizers in pure Python', lines:'290', status:'Stable', fill:'var(--green)', pct:95 },
+  { icon:'🌐', name:'Router Panel', lang:'web', langClass:'lang-web', desc:'3-tier LLM routing, RTK token saver, provider pool', lines:'613', status:'Stable', fill:'var(--green)', pct:100 },
+  { icon:'🔄', name:'CC Switch Panel', lang:'web', langClass:'lang-web', desc:'Multi-tool session manager, provider switcher, quick actions', lines:'760', status:'Stable', fill:'var(--green)', pct:100 },
+  { icon:'📊', name:'Trading Desk', lang:'web', langClass:'lang-web', desc:'Real-time candlesticks, order book, arbitrage scanner', lines:'350', status:'Stable', fill:'var(--green)', pct:100 },
+  { icon:'🛡️', name:'Security Center', lang:'web', langClass:'lang-web', desc:'Crypto primitives status, audit log, hash demo, key mgmt', lines:'280', status:'Stable', fill:'var(--green)', pct:100 },
+  { icon:'🕸️', name:'P2P Mesh Viz', lang:'web', langClass:'lang-web', desc:'Animated node graph, Kademlia table, packet log', lines:'310', status:'Stable', fill:'var(--green)', pct:100 },
+  { icon:'💬', name:'AI Chat', lang:'web', langClass:'lang-web', desc:'Streaming responses, conversation list, model selector', lines:'253', status:'Stable', fill:'var(--green)', pct:100 },
+  { icon:'📋', name:'Kanban Board', lang:'web', langClass:'lang-web', desc:'Drag-and-drop task management, 4 columns, priority tags', lines:'189', status:'Stable', fill:'var(--green)', pct:100 },
+];
+
+function renderSkills(filter='') {
+  const grid = document.getElementById('skillGrid');
+  const filtered = filter ? skills.filter(s => s.name.toLowerCase().includes(filter.toLowerCase()) || s.desc.toLowerCase().includes(filter.toLowerCase())) : skills;
+  grid.innerHTML = filtered.map(s => `
+    <div class="skill-card">
+      <div class="skill-header">
+        <span class="skill-icon">${s.icon}</span>
+        <div style="flex:1">
+          <div class="skill-name">${s.name}</div>
+          <div style="font-size:10px;color:var(--text3);margin-top:2px">${s.lines} lines · ${s.status}</div>
+        </div>
+        <span class="skill-lang ${s.langClass}">${s.lang}</span>
+      </div>
+      <div class="skill-desc">${s.desc}</div>
+      <div class="skill-meta"><span>Completion</span><span>${s.pct}%</span></div>
+      <div class="skill-bar"><div class="skill-bar-fill" style="width:${s.pct}%;background:${s.fill}"></div></div>
+    </div>
+  `).join('');
+}
+
+function filterSkills() {
+  renderSkills(document.getElementById('search').value);
+}
+
+renderSkills();
+</script>
+</body>
+</html>

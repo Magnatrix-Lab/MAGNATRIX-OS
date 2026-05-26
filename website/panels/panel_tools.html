@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MAGNATRIX Tools</title>
+<style>
+:root { --bg:#0a0a0f; --bg2:#111118; --bg3:#1a1a24; --text:#e8e8f0; --text2:#8888a0; --text3:#555570; --cyan:#00e5ff; --green:#69f0ae; --orange:#ffab40; --purple:#b388ff; --border:rgba(255,255,255,0.06); --font-mono:'SF Mono','Fira Code',monospace; }
+* { margin:0; padding:0; box-sizing:border-box; }
+body { background:var(--bg); color:var(--text); font-family:var(--font-mono); font-size:13px; height:100vh; overflow:hidden; }
+.app { display:grid; grid-template-rows:48px 1fr; height:100vh; }
+.topbar { display:flex; align-items:center; justify-content:space-between; padding:0 20px; background:var(--bg2); border-bottom:1px solid var(--border); }
+.topbar .title { font-size:14px; font-weight:600; }
+.main { padding:16px; overflow:auto; }
+
+.tool-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(200px,1fr)); gap:12px; }
+.tool-card { background:var(--bg2); border:1px solid var(--border); border-radius:10px; padding:14px; transition:all 0.15s; cursor:pointer; }
+.tool-card:hover { border-color:var(--cyan); transform:translateY(-2px); }
+.tool-icon { font-size:28px; margin-bottom:8px; }
+.tool-name { font-size:13px; font-weight:600; margin-bottom:4px; }
+.tool-desc { font-size:11px; color:var(--text2); line-height:1.5; }
+
+::-webkit-scrollbar { width:4px; }
+::-webkit-scrollbar-thumb { background:var(--text3); border-radius:2px; }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="topbar">
+    <div class="title">🧰 MAGNATRIX Tools <span style="color:var(--text3);font-weight:400;">| Utilities</span></div>
+  </div>
+  <div class="main">
+    <div class="tool-grid" id="toolGrid"></div>
+  </div>
+</div>
+
+<script>
+const tools = [
+  { icon:'🔍', name:'Search', desc:'Web search via DuckDuckGo API or local index' },
+  { icon:'📝', name:'Write File', desc:'Save content to filesystem with path validation' },
+  { icon:'📖', name:'Read File', desc:'Load and display file contents' },
+  { icon:'🧮', name:'Calculator', desc:'Safe arithmetic expression evaluator' },
+  { icon:'🌐', name:'HTTP GET', desc:'Fetch data from external APIs' },
+  { icon:'💻', name:'Execute Code', desc:'Restricted Python code execution' },
+  { icon:'🔐', name:'Hash', desc:'SHA-256/512, SHA3, BLAKE3 hashing' },
+  { icon:'✍️', name:'Sign', desc:'Ed25519 digital signature generation' },
+  { icon:'🔑', name:'Encrypt', desc:'ChaCha20-Poly1305 / AES-256-GCM' },
+  { icon:'🧂', name:'KDF', desc:'Argon2id key derivation' },
+  { icon:'🎲', name:'CSPRNG', desc:'Cryptographically secure random' },
+  { icon:'📊', name:'Trade', desc:'Execute HFT orders via C++ engine' },
+  { icon:'📈', name:'Chart', desc:'Generate price charts and indicators' },
+  { icon:'🗺️', name:'DHT Lookup', desc:'Kademlia key-value lookup' },
+  { icon:'📡', name:'Ping Peer', desc:'Measure P2P node latency' },
+  { icon:'🧹', name:'Memory Scrub', desc:'Securely wipe sensitive memory' },
+];
+
+function render() {
+  document.getElementById('toolGrid').innerHTML = tools.map(t => `
+    <div class="tool-card" onclick="alert('Tool: ${t.name}\n${t.desc}')">
+      <div class="tool-icon">${t.icon}</div>
+      <div class="tool-name">${t.name}</div>
+      <div class="tool-desc">${t.desc}</div>
+    </div>
+  `).join('');
+}
+render();
+</script>
+</body>
+</html>

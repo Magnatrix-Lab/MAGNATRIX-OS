@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MAGNATRIX Terminal</title>
+<style>
+:root { --bg:#0a0a0f; --bg2:#111118; --text:#e8e8f0; --text2:#8888a0; --text3:#555570; --cyan:#00e5ff; --green:#69f0ae; --orange:#ffab40; --border:rgba(255,255,255,0.06); --font-mono:'SF Mono','Fira Code',monospace; }
+* { margin:0; padding:0; box-sizing:border-box; }
+body { background:var(--bg); color:var(--text); font-family:var(--font-mono); font-size:13px; height:100vh; overflow:hidden; }
+.app { display:grid; grid-template-rows:48px 1fr; height:100vh; }
+.topbar { display:flex; align-items:center; justify-content:space-between; padding:0 20px; background:var(--bg2); border-bottom:1px solid var(--border); }
+.topbar .title { font-size:14px; font-weight:600; }
+
+.terminal { background:var(--bg); padding:12px 16px; overflow:auto; font-size:13px; line-height:1.6; }
+.term-line { display:flex; gap:8px; padding:1px 0; }
+.term-prompt { color:var(--green); white-space:nowrap; }
+.term-output { color:var(--text2); }
+.term-error { color:#ff5252; }
+.term-success { color:var(--green); }
+.term-cmd { color:var(--cyan); }
+.term-input-line { display:flex; align-items:center; gap:6px; margin-top:4px; }
+.term-input { flex:1; background:transparent; border:none; color:var(--text); font-family:var(--font-mono); font-size:13px; outline:none; caret-color:var(--cyan); }
+
+::-webkit-scrollbar { width:4px; }
+::-webkit-scrollbar-thumb { background:var(--text3); border-radius:2px; }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="topbar">
+    <div class="title">💻 MAGNATRIX Terminal <span style="color:var(--text3);font-weight:400;">| System Console</span></div>
+    <span style="font-size:11px;color:var(--text2)">bash — magnatrix-node</span>
+  </div>
+  <div class="terminal" id="terminal" onclick="document.getElementById('termInput').focus()">
+    <div class="term-line"><span class="term-prompt">magnatrix@node:~$</span><span class="term-cmd"> neofetch</span></div>
+    <div class="term-line term-output">OS: MAGNATRIX-OS 2.0.0-alpha</div>
+    <div class="term-line term-output">Kernel: Agentic OS v2.0</div>
+    <div class="term-line term-output">Uptime: 48h 12m</div>
+    <div class="term-line term-output">Native Modules: 132</div>
+    <div class="term-line term-output">GUI Panels: 9 standalone</div>
+    <div class="term-line term-output">C++ Engine: Active (12μs tick)</div>
+    <div class="term-line term-output">Rust Crypto: Active (PyO3)</div>
+    <div class="term-line term-output">P2P Peers: 12 online</div>
+    <div class="term-line"><span class="term-prompt">magnatrix@node:~$</span><span class="term-cmd"> magnatrix status</span></div>
+    <div class="term-line term-success">✓ All systems operational</div>
+    <div class="term-line term-success">✓ Git: 167 commits, main branch</div>
+    <div class="term-line term-success">✓ AI: 7 native agents loaded</div>
+    <div class="term-line term-success">✓ Security: Score 94/100</div>
+    <div class="term-line term-success">✓ Trading: Paper mode, 7 positions</div>
+    <div class="term-line" id="inputLine">
+      <div class="term-input-line">
+        <span class="term-prompt">magnatrix@node:~$</span>
+        <input class="term-input" id="termInput" autocomplete="off" spellcheck="false">
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const terminal = document.getElementById('terminal');
+const input = document.getElementById('termInput');
+const inputLine = document.getElementById('inputLine');
+
+const commands = {
+  help: () => `Available commands:
+  status    - System status
+  agents    - List AI agents
+  panels    - List GUI panels
+  git       - Git summary
+  clear     - Clear terminal
+  reboot    - Simulate reboot`,
+  status: () => `System: OK
+Uptime: 48h 12m
+Memory: 68% buffer, 42% storage
+Peers: 12 online
+Commits: 167`,
+  agents: () => `Active agents:
+  1. MetaAgent (643 lines)
+  2. TheoremProver (2,373 lines)
+  3. AgenticRAG (629 lines)
+  4. JITCompiler (1,056 lines)
+  5. AutonomousAgent (557 lines)
+  6. LocalLLMAgent (483 lines)
+  7. DocumentAgent (752 lines)`,
+  panels: () => `Standalone panels:
+  chat, kanban, models, providers
+  trading, security, p2p, router
+  ccswitch`,
+  git: () => `Branch: main
+Commits: 167
+Latest: fc50296 (GUI panels)
+Origin: github.com/Magnatrix-Lab/MAGNATRIX-OS`,
+  clear: () => { terminal.innerHTML = ''; terminal.appendChild(inputLine); return ''; },
+  reboot: () => `Rebooting MAGNATRIX-OS...
+[OK] Kernel loaded
+[OK] Crypto engine initialized
+[OK] P2P mesh connected
+[OK] All panels ready`,
+};
+
+function addLine(text, cls='term-output') {
+  const div = document.createElement('div');
+  div.className = 'term-line ' + cls;
+  div.textContent = text;
+  terminal.insertBefore(div, inputLine);
+}
+
+function addPrompt(cmd) {
+  const div = document.createElement('div');
+  div.className = 'term-line';
+  div.innerHTML = `<span class="term-prompt">magnatrix@node:~$</span><span class="term-cmd"> ${cmd}</span>`;
+  terminal.insertBefore(div, inputLine);
+}
+
+input.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') {
+    const cmd = input.value.trim();
+    if (!cmd) return;
+    addPrompt(cmd);
+    input.value = '';
+    const fn = commands[cmd.split(' ')[0]];
+    if (fn) {
+      const out = fn();
+      if (out) out.split('\n').forEach(l => addLine(l));
+    } else {
+      addLine(`Command not found: ${cmd}. Type 'help' for available commands.`, 'term-error');
+    }
+    terminal.scrollTop = terminal.scrollHeight;
+  }
+});
+
+input.focus();
+</script>
+</body>
+</html>
