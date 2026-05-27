@@ -1,0 +1,12 @@
+{
+  "ai_model": "claude-3-5-sonnet",
+  "tab_autocomplete": true,
+  "cmd_k": true,
+  "composer": true,
+  "context_depth": "full",
+  "magnatrix_bridge": {
+    "enabled": true,
+    "command_queue": "~/.magnatrix/cursor_cmd.json",
+    "feedback_file": "~/.magnatrix/cursor_feedback.json"
+  }
+}

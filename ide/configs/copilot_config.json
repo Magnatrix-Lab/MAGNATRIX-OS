@@ -1,0 +1,10 @@
+{
+  "enable": true,
+  "inline_suggestions": true,
+  "chat": true,
+  "agent": true,
+  "magnatrix_bridge": {
+    "enabled": true,
+    "context_provider": "magnatrix"
+  }
+}

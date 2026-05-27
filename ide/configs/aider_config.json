@@ -1,0 +1,12 @@
+{
+  "model": "gpt-4o",
+  "edit_format": "diff",
+  "auto_commits": true,
+  "dirty_commits": false,
+  "gitignore": true,
+  "test_cmd": "pytest tests/",
+  "lint_cmd": "ruff check .",
+  "map_tokens": 1024,
+  "map_refresh": "auto",
+  "max_chat_history_tokens": 8000
+}
