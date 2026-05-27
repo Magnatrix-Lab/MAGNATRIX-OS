@@ -26,7 +26,7 @@ jobs:
       - name: Lint with flake8
         run: flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
       - name: Type check with mypy
-        run: mypy collective-brain/ governance/ knowledge/ p2p-mesh/ trading/ --ignore-missing-imports
+        run: mypy collective_brain/ governance/ knowledge/ p2p_mesh/ trading/ --ignore-missing-imports
       - name: Test with pytest
         run: pytest --cov=. --cov-report=xml
       - name: Upload coverage
@@ -58,7 +58,7 @@ jobs:
       - name: Run Bandit security scan
         run: |
           pip install bandit
-          bandit -r . -f json -o bandit-report.json || true
+          bandit -r . -f json -o bandit-report.json
       - name: Upload security report
         uses: ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.6.2
         with:

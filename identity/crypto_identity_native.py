@@ -670,10 +670,9 @@ class IdentityRegistry:
 
     def save(self, name: str, keypair: Ed25519KeyPair, password: str) -> None:
         salt = os.urandom(32)
-        key_material = (password.encode() + salt)
-        for _ in range(100000):
-            key_material = hashlib.sha512(key_material).digest()
-        enc_key = key_material[:32]
+        enc_key = hashlib.scrypt(
+            password.encode(), salt=salt, n=2**16, r=8, p=1, dklen=32
+        )
         iv = os.urandom(12)
         plaintext = keypair.seed.hex().encode()
         cipher = AES256GCM(enc_key)
@@ -695,8 +694,9 @@ class IdentityRegistry:
         iv = bytes.fromhex(data["iv"])
         ct = bytes.fromhex(data["ciphertext"])
         tag = bytes.fromhex(data["tag"])
-        key_material = (password.encode() + salt)
-        for _ in range(100000):
+        enc_key = hashlib.scrypt(
+            password.encode(), salt=salt, n=2**16, r=8, p=1, dklen=32
+        )
             key_material = hashlib.sha512(key_material).digest()
         enc_key = key_material[:32]
         cipher = AES256GCM(enc_key)

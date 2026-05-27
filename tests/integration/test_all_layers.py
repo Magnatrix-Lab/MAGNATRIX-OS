@@ -29,10 +29,10 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 LAYER_MAP: Dict[str, Tuple[str, ...]] = {
     "kernel": ("kernel.kernel_native", "kernel.logging_engine", "config.magnatrix_config"),
     "protocol": ("protocol.protocol_native",),
-    "api_router": ("api-router.api_router_native",),
+    "api_router": ("api_router.api_router_native",),
     "identity": ("identity.identity_native",),
     "runtime": ("runtime.repo_hunter_native", "runtime.autodev_native", "runtime.go_patterns_native"),
-    "p2p_mesh": ("p2p-mesh.p2p_mesh_native",),
+    "p2p_mesh": ("p2p_mesh.p2p_mesh_native",),
     "knowledge": (
         "knowledge.arcticdb_native",
         "knowledge.openchronicle_native",

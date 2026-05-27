@@ -26,8 +26,10 @@ from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 # =============================================================================
 # Constants
 # =============================================================================
-DEFAULT_VAULT_PATH = "/tmp/magnatrix_vault.json"
-DEFAULT_MASTER_KEY_PATH = "/tmp/magnatrix_master.key"
+_VAULT_DIR = os.path.expanduser("~/.magnatrix")
+os.makedirs(_VAULT_DIR, mode=0o700, exist_ok=True)
+DEFAULT_VAULT_PATH = os.path.join(_VAULT_DIR, "vault.json")
+DEFAULT_MASTER_KEY_PATH = os.path.join(_VAULT_DIR, "master.key")
 MEMORY_ONLY_MARKER = "__MEMORY_ONLY__"
 
 

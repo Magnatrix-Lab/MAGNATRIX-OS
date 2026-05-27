@@ -58,19 +58,19 @@ jobs:
 
       - name: Run Ruff (linter)
         run: |
-          ruff check . --output-format=github || true
+          ruff check . --output-format=github
 
       - name: Run Ruff (formatter check)
         run: |
-          ruff format --check . || true
+          ruff format --check .
 
       - name: Run Black (format check)
         run: |
-          black --check --diff . || true
+          black --check --diff .
 
       - name: Run MyPy (type check)
         run: |
-          mypy --ignore-missing-imports --no-error-summary . || true
+          mypy --ignore-missing-imports --no-error-summary .
 
   # ── Job 2: Unit Tests ─────────────────────────────────────────────────────
   unit-tests:
@@ -94,7 +94,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip setuptools wheel
           pip install pytest pytest-asyncio pytest-cov coverage
-          pip install -e "." || true
+          pip install -e "."
 
       - name: Run syntax check on all native files
         run: |
@@ -115,12 +115,12 @@ jobs:
           python ai/gguf_llama_bridge_native.py || echo "GGUF bridge self-test completed"
           python kernel/interlayer_bridge_native.py || echo "Bridge self-test completed"
           python knowledge/vector_store_native.py || echo "Vector store self-test completed"
-          python p2p-mesh/dht_nat_native.py || echo "DHT NAT self-test completed"
+          python p2p_mesh/dht_nat_native.py || echo "DHT NAT self-test completed"
           python trading/exchange_adapter_native.py || echo "Exchange adapter self-test completed"
 
       - name: Run test suite
         run: |
-          pytest tests/ -v --tb=short --cov=. --cov-report=xml --cov-report=term || true
+          pytest tests/ -v --tb=short --cov=. --cov-report=xml --cov-report=term
 
       - name: Upload coverage
         if: matrix.python-version == '3.12'
@@ -147,8 +147,8 @@ jobs:
       - name: Run Bandit (Python security linter)
         run: |
           pip install bandit
-          bandit -r . -f json -o bandit-report.json || true
-          bandit -r . || true
+          bandit -r . -f json -o bandit-report.json
+          bandit -r .
 
       - name: Upload Bandit results
         uses: actions/upload-artifact@v4
@@ -184,12 +184,12 @@ jobs:
 
       - name: Test Docker image
         run: |
-          docker run --rm magnatrix-os:test --version || true
-          docker run --rm magnatrix-os:test --help || true
+          docker run --rm magnatrix-os:test --version
+          docker run --rm magnatrix-os:test --help
 
       - name: Test Docker Compose
         run: |
-          docker compose config || true
+          docker compose config
 
       - name: Log in to GitHub Container Registry
         if: github.ref == 'refs/heads/main'
@@ -281,7 +281,7 @@ jobs:
           echo "Total classes: $(grep -r '^class ' --include='*.py' . | wc -l)" >> metrics.txt
           echo "" >> metrics.txt
           echo "=== Layer Coverage ===" >> metrics.txt
-          for dir in kernel protocol api-router identity runtime p2p-mesh knowledge skills browser hft security ai governance ide trading uncensored llm collective-brain; do
+          for dir in kernel protocol api_router identity runtime p2p_mesh knowledge skills browser hft security ai governance ide trading uncensored llm collective_brain; do
             count=$(find "$dir" -name '*_native.py' 2>/dev/null | wc -l)
             lines=$(find "$dir" -name '*_native.py' -exec cat {} + 2>/dev/null | wc -l)
             echo "  $dir: $count files, $lines lines" >> metrics.txt

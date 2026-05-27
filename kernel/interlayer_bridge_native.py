@@ -8,7 +8,6 @@ Zero external dependencies.
 from __future__ import annotations
 
 import json
-import pickle
 import queue
 import socket
 import struct
@@ -44,11 +43,11 @@ class MessageEnvelope:
     trace: List[str] = field(default_factory=list)
 
     def to_bytes(self) -> bytes:
-        return pickle.dumps(asdict(self), protocol=pickle.HIGHEST_PROTOCOL)
+        return json.dumps(asdict(self), default=str).encode('utf-8')
 
     @classmethod
     def from_bytes(cls, data: bytes) -> MessageEnvelope:
-        d = pickle.loads(data)
+        d = json.loads(data.decode('utf-8'))
         d["priority"] = MessagePriority(d["priority"])
         return cls(**d)
 

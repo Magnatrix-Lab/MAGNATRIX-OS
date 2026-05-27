@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-p2p-mesh/dht_nat_native.py
+p2p_mesh/dht_nat_native.py
 MAGNATRIX-OS Layer 4 — Distributed Hash Table + NAT Traversal
 
 Pure-Python implementation:

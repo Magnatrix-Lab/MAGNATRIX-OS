@@ -91,7 +91,7 @@ class GlobalMesh:
         }
 
     def save(self):
-        with open("p2p-mesh/global_mesh_state.json", "w") as f:
+        with open("p2p_mesh/global_mesh_state.json", "w") as f:
             json.dump(self.get_mesh_stats(), f, indent=2)
 
 if __name__ == "__main__":

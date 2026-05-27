@@ -17,10 +17,20 @@ from health_aggregator_native import HealthAggregator
 
 @dataclass
 class VersionInfo:
-    semantic: str = "0.9.0"
+    semantic: str = "0.9.5-alpha"
     build_hash: str = "dev"
-    commit_date: str = "2026-05-24"
+    commit_date: str = "2026-05-27"
     layer_count: int = 15
+
+    @classmethod
+    def from_pyproject(cls) -> VersionInfo:
+        """Read version from pyproject.toml as single source of truth."""
+        try:
+            import importlib.metadata
+            ver = importlib.metadata.version("magnatrix-os")
+            return cls(semantic=ver)
+        except Exception:
+            return cls()
 
 
 class SignalHandler:
@@ -29,6 +39,8 @@ class SignalHandler:
     def __init__(self, shutdown_mgr: ShutdownManager):
         self.mgr = shutdown_mgr
         shutdown_mgr.install_signal_handlers()
+        signal.signal(signal.SIGINT, self._handle)
+        signal.signal(signal.SIGTERM, self._handle)
 
     def _handle(self, signum, frame):
         print(f"\nSignal {signum} received, initiating graceful shutdown...")
@@ -68,15 +80,15 @@ class CLIParser:
         boot.add_argument("--config", default="config/magnatrix.json", help="Config file path")
         boot.add_argument("--verbose", "-v", action="store_true", help="Verbose output")
 
-        sub.add_parser("shutdown", help="Graceful shutdown")
+        shutdown = sub.add_parser("shutdown", help="Graceful shutdown")
         shutdown.add_argument("--force", action="store_true", help="Force immediate shutdown")
 
         status = sub.add_parser("status", help="Show layer status")
-        sub.add_parser("restart", help="Restart a layer")
+        restart = sub.add_parser("restart", help="Restart a layer")
         restart.add_argument("--layer", type=int, required=True, help="Layer ID to restart")
 
         sub.add_parser("version", help="Show version")
-        sub.add_parser("logs", help="Show recent logs")
+        logs = sub.add_parser("logs", help="Show recent logs")
         logs.add_argument("--layer", type=int, help="Filter by layer ID")
         logs.add_argument("--lines", type=int, default=50, help="Number of lines")
 

@@ -1,5 +1,5 @@
 """
-p2p-mesh/distributed/real_p2p_mesh.py
+p2p_mesh/distributed/real_p2p_mesh.py
 ========================================
 MAGNATRIX Real Distributed P2P Mesh
 Layer 4: P2P Mesh (extends gitlawb_native_node)

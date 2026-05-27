@@ -4,9 +4,9 @@ on:
     branches: [main]
   workflow_dispatch:
 env:
-  HOSTINGER_HOST: 72.61.211.141
-  HOSTINGER_PORT: 65002
-  HOSTINGER_USER: u721595593
+  HOSTINGER_HOST: ${{ secrets.HOSTINGER_HOST }}
+  HOSTINGER_PORT: ${{ secrets.HOSTINGER_PORT }}
+  HOSTINGER_USER: ${{ secrets.HOSTINGER_USER }}
 jobs:
   deploy:
     runs-on: ubuntu-latest
@@ -43,7 +43,7 @@ jobs:
             cat > .env <<ENV
           MAGNATRIX_ENV=production
           SECRET_KEY=${{ secrets.MAG_SECRET_KEY }}
-          MAGNATRIX_DB_URL=mysql+pymysql://u721595593_z8x9N:${{ secrets.HOSTINGER_DB_PASSWORD }}@auth-db1867.hstgr.io:3306/u721595593_TfDUU?charset=utf8mb4
+          MAGNATRIX_DB_URL=${{ secrets.MAGNATRIX_DB_URL }}
           MAGNATRIX_REDIS_URL=redis://redis:6379
           OPENAI_API_KEY=${{ secrets.OPENAI_KEY }}
           ANTHROPIC_API_KEY=${{ secrets.ANTHROPIC_KEY }}
@@ -54,7 +54,7 @@ jobs:
           HOSTINGER_API_TOKEN=${{ secrets.HOSTINGER_API_TOKEN }}
           ENV
             # Build & run
-            docker-compose -f infrastructure/docker/docker-compose.hostinger.yml down || true
+            docker-compose -f infrastructure/docker/docker-compose.hostinger.yml down
             docker-compose -f infrastructure/docker/docker-compose.hostinger.yml up --build -d
             docker system prune -f
             echo "=== Deploy selesai ==="

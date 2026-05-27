@@ -122,9 +122,11 @@ def _encrypt_p2p(plaintext: bytes, key: bytes) -> bytes:
         cipher = ChaCha20Poly1305(key)
         ct, tag = cipher.encrypt(plaintext, nonce)
         return nonce + tag + ct
-    except Exception:
-        # Ultimate fallback — should never hit in production
-        return bytes(p ^ key[i % len(key)] for i, p in enumerate(plaintext))
+    except Exception as e:
+        raise RuntimeError(
+            f"P2P encryption requires ChaCha20-Poly1305 to be available. "
+            f"Install dependencies or fix crypto_identity_native import. Error: {e}"
+        )
 
 
 def _decrypt_p2p(ciphertext: bytes, key: bytes) -> Optional[bytes]:
@@ -138,8 +140,11 @@ def _decrypt_p2p(ciphertext: bytes, key: bytes) -> Optional[bytes]:
         ct = ciphertext[28:]
         cipher = ChaCha20Poly1305(key)
         return cipher.decrypt(ct, nonce, tag)
-    except Exception:
-        return None
+    except Exception as e:
+        raise RuntimeError(
+            f"P2P decryption requires ChaCha20-Poly1305 to be available. "
+            f"Install dependencies or fix crypto_identity_native import. Error: {e}"
+        )
 
 
 # ──────────────────────────────────────────────────────────────

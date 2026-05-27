@@ -352,9 +352,10 @@ class ExpressionEvaluator:
         }
 
     def evaluate(self, expression: str, context: Dict) -> Any:
-        """Evaluate single expression dengan context"""
+        """Evaluate single expression dengan context — SAFE (no eval)."""
+        import ast, operator
         try:
-            # Create safe locals dari context
+            # Build safe locals dari context
             locals_dict = {
                 "$json": context.get("$json", {}),
                 "$vars": context.get("$vars", {}),
@@ -367,14 +368,102 @@ class ExpressionEvaluator:
                 "$items": context.get("$items", []),
                 "$item": context.get("$item", {}),
             }
-
-            # Add result dari previous nodes
             for key, value in context.items():
                 if key not in locals_dict:
                     locals_dict[key] = value
 
-            result = eval(expression, self._globals, locals_dict)
-            return result
+            # Whitelist AST node types for safe evaluation
+            tree = ast.parse(expression, mode='eval')
+            _SAFE_NODES = (
+                ast.Expression, ast.BinOp, ast.UnaryOp, ast.Constant, ast.Name,
+                ast.Load, ast.Add, ast.Sub, ast.Mult, ast.Div, ast.Pow, ast.Mod,
+                ast.USub, ast.UAdd, ast.Not, ast.Compare, ast.Eq, ast.NotEq,
+                ast.Lt, ast.LtE, ast.Gt, ast.GtE, ast.In, ast.NotIn, ast.Is, ast.IsNot,
+                ast.BoolOp, ast.And, ast.Or, ast.Call, ast.Attribute, ast.Subscript,
+                ast.Index, ast.Slice, ast.List, ast.Tuple, ast.Dict, ast.Str,
+                ast.Num, ast.Bool, ast.JoinedStr, ast.FormattedValue, ast.IfExp,
+                ast.ListComp, ast.SetComp, ast.DictComp, ast.GeneratorExp,
+                ast.comprehension, ast.Lambda, ast.arg,
+            )
+            for node in ast.walk(tree):
+                if not isinstance(node, _SAFE_NODES):
+                    raise ValueError(f"Unsafe expression node: {type(node).__name__}")
+
+            # Safe operators
+            _OPS = {
+                ast.Add: operator.add, ast.Sub: operator.sub,
+                ast.Mult: operator.mul, ast.Div: operator.truediv,
+                ast.Pow: operator.pow, ast.Mod: operator.mod,
+                ast.FloorDiv: operator.floordiv,
+                ast.Eq: operator.eq, ast.NotEq: operator.ne,
+                ast.Lt: operator.lt, ast.LtE: operator.le,
+                ast.Gt: operator.gt, ast.GtE: operator.ge,
+                ast.In: lambda a, b: a in b, ast.NotIn: lambda a, b: a not in b,
+                ast.Is: operator.is_, ast.IsNot: operator.is_not,
+                ast.And: lambda a, b: a and b, ast.Or: lambda a, b: a or b,
+                ast.USub: operator.neg, ast.UAdd: operator.pos, ast.Not: operator.not_,
+            }
+
+            def _eval(node):
+                if isinstance(node, ast.Constant):
+                    return node.value
+                if isinstance(node, ast.Num):
+                    return node.n
+                if isinstance(node, ast.Str):
+                    return node.s
+                if isinstance(node, ast.Bool):
+                    return node.value
+                if isinstance(node, ast.Name):
+                    if node.id in self._globals:
+                        return self._globals[node.id]
+                    if node.id in locals_dict:
+                        return locals_dict[node.id]
+                    raise ValueError(f"Unknown name: {node.id}")
+                if isinstance(node, ast.BinOp):
+                    left = _eval(node.left)
+                    right = _eval(node.right)
+                    return _OPS[type(node.op)](left, right)
+                if isinstance(node, ast.UnaryOp):
+                    val = _eval(node.operand)
+                    return _OPS[type(node.op)](val)
+                if isinstance(node, ast.BoolOp):
+                    vals = [_eval(v) for v in node.values]
+                    op = _OPS[type(node.op)]
+                    result = vals[0]
+                    for v in vals[1:]:
+                        result = op(result, v)
+                    return result
+                if isinstance(node, ast.Compare):
+                    left = _eval(node.left)
+                    result = True
+                    for op, comparator in zip(node.ops, node.comparators):
+                        right = _eval(comparator)
+                        result = result and _OPS[type(op)](left, right)
+                        left = right
+                    return result
+                if isinstance(node, ast.Call):
+                    func = _eval(node.func)
+                    args = [_eval(a) for a in node.args]
+                    kwargs = {kw.arg: _eval(kw.value) for kw in node.keywords}
+                    return func(*args, **kwargs)
+                if isinstance(node, ast.Attribute):
+                    obj = _eval(node.value)
+                    return getattr(obj, node.attr)
+                if isinstance(node, ast.Subscript):
+                    obj = _eval(node.value)
+                    idx = _eval(node.slice)
+                    return obj[idx]
+                if isinstance(node, ast.List):
+                    return [_eval(e) for e in node.elts]
+                if isinstance(node, ast.Tuple):
+                    return tuple(_eval(e) for e in node.elts)
+                if isinstance(node, ast.Dict):
+                    return {_eval(k): _eval(v) for k, v in zip(node.keys, node.values)}
+                if isinstance(node, ast.IfExp):
+                    return _eval(node.body) if _eval(node.test) else _eval(node.orelse)
+                raise ValueError(f"Unsupported node: {type(node).__name__}")
+
+            return _eval(tree.body)
         except Exception as e:
             raise ValueError(f"Expression evaluation error: '{expression}' -> {e}")
 

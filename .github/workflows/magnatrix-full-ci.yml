@@ -20,7 +20,7 @@ jobs:
       - run: pip install ruff black mypy
       - run: ruff check . --select E,W,F,I
       - run: black --check .
-      - run: mypy collective-brain/ api-router/ trading/ knowledge/ --ignore-missing-imports
+      - run: mypy collective_brain/ api_router/ trading/ knowledge/ --ignore-missing-imports
   test:
     runs-on: ubuntu-latest
     needs: lint

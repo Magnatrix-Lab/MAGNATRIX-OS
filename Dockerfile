@@ -27,7 +27,7 @@ ENV PATH="/opt/venv/bin:$PATH"
 COPY pyproject.toml ./
 RUN pip install --no-cache-dir --upgrade pip setuptools wheel \
     && mkdir -p magnatrix_os && touch magnatrix_os/__init__.py \
-    && pip install --no-cache-dir -e ".[all]" || true
+    && pip install --no-cache-dir -e ".[all]"
 
 # ── Stage 2: Runtime image ────────────────────────────────────────────────────
 FROM python:3.12-slim-bookworm AS runtime
@@ -64,7 +64,7 @@ WORKDIR /app
 COPY --chown=magnatrix:magnatrix . /app/
 
 # Install magnatrix-os in editable mode (no build deps needed now)
-RUN pip install --no-cache-dir -e "." || true
+RUN pip install --no-cache-dir -e "."
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
