@@ -1,20 +1,110 @@
-name: Release Automation
+name: Release
+
 on:
   push:
-    tags: ['v*']
+    tags:
+      - 'v*'
+
 jobs:
-  release:
-    runs-on: ubuntu-latest
+  build-linux:
+    runs-on: ubuntu-22.04
     steps:
-      - uses: 11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
-      - name: Generate Release Notes
-        run: |
-          echo "## MAGNATRIX Release ${{ github.ref_name }}" > release_notes.md
-          echo "" >> release_notes.md
-          git log $(git describe --tags --abbrev=0 HEAD^)..HEAD --oneline >> release_notes.md
-      - uses: da05d552573ad5aba039eaac05058a918a7bf631  # v2.2.2
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
-          body_path: release_notes.md
+          python-version: '3.12'
+      - name: Install deps
+        run: |
+          pip install pyinstaller
+      - name: Build
+        run: |
+          mkdir -p packages
+          python packaging/pyinstaller_build.py --platform linux
+      - name: Sign
+        run: |
+          python packaging/sign_release.py packages/magnatrix-os-linux/
+      - name: Create tarball
+        run: |
+          cd packages && tar czf magnatrix-os-linux.tar.gz magnatrix-os-linux/
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: magnatrix-os-linux
+          path: packages/magnatrix-os-linux.tar.gz
+
+  build-macos:
+    runs-on: macos-13
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install deps
+        run: |
+          pip install pyinstaller
+      - name: Build
+        run: |
+          mkdir -p packages
+          python packaging/pyinstaller_build.py --platform mac
+      - name: Sign
+        run: |
+          python packaging/sign_release.py packages/magnatrix-os-mac/
+      - name: Create tarball
+        run: |
+          cd packages && tar czf magnatrix-os-mac.tar.gz magnatrix-os-mac/
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: magnatrix-os-mac
+          path: packages/magnatrix-os-mac.tar.gz
+
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install deps
+        run: |
+          pip install pyinstaller
+      - name: Build
+        run: |
+          mkdir packages
+          python packaging/pyinstaller_build.py --platform win
+        shell: cmd
+      - name: Create zip
+        run: |
+          cd packages && powershell Compress-Archive -Path magnatrix-os-win -DestinationPath magnatrix-os-win.zip
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: magnatrix-os-win
+          path: packages/magnatrix-os-win.zip
+
+  create-release:
+    needs: [build-linux, build-macos, build-windows]
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+      - name: Generate changelog
+        run: |
+          pip install packaging
+          python packaging/changelog_generator.py
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
           files: |
-            LICENSE
-            README.md
+            magnatrix-os-linux/magnatrix-os-linux.tar.gz
+            magnatrix-os-mac/magnatrix-os-mac.tar.gz
+            magnatrix-os-win/magnatrix-os-win.zip
+          body_path: CHANGELOG.md
+          draft: false
+          prerelease: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
