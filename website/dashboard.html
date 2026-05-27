@@ -1473,6 +1473,11 @@ html, body {
     <span class="nav-icon">🧠</span>
     <span class="nav-label">Models</span>
   </div>
+  <div class="nav-item" data-panel="llm" title="LLM Monitor">
+    <span class="nav-icon">🤖</span>
+    <span class="nav-label">LLM</span>
+    <span class="nav-badge" id="llm-badge">4</span>
+  </div>
   <div class="nav-item" data-panel="providers" title="Providers">
     <span class="nav-icon">🔗</span>
     <span class="nav-label">Providers</span>
@@ -1795,6 +1800,11 @@ html, body {
 <div class="panel" id="panel-models">
   <iframe src="panels/panel_models.html" style="width:100%;height:calc(100vh - 56px);border:none;display:block;"></iframe>
 </div>
+<!-- ── PANEL: LLM MONITOR ───────────────────────────────────────────────── -->
+<div class="panel" id="panel-llm">
+  <iframe src="panels/panel_llm.html" style="width:100%;height:calc(100vh - 56px);border:none;display:block;"></iframe>
+</div>
+
 <!-- ── PANEL: PROVIDERS ─────────────────────────────────────────────────── -->
 <div class="panel" id="panel-providers">
   <iframe src="panels/panel_providers.html" style="width:100%;height:calc(100vh - 56px);border:none;display:block;"></iframe>

@@ -1,0 +1,786 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MAGNATRIX-OS — LLM Monitor</title>
+<style>
+:root {
+  --bg-primary: #0a0a0f;
+  --bg-secondary: #111118;
+  --bg-card: rgba(20, 20, 30, 0.9);
+  --bg-glass: rgba(255, 255, 255, 0.03);
+  --border: rgba(255, 255, 255, 0.06);
+  --border-active: rgba(100, 200, 255, 0.3);
+  --text-primary: #e8e8f0;
+  --text-secondary: #8888a0;
+  --text-muted: #555570;
+  --accent-cyan: #00e5ff;
+  --accent-purple: #b388ff;
+  --accent-green: #69f0ae;
+  --accent-orange: #ffab40;
+  --accent-red: #ff5252;
+  --accent-pink: #ff4081;
+  --accent-yellow: #ffd740;
+  --accent-blue: #448aff;
+  --font-mono: 'SF Mono', 'Fira Code', 'JetBrains Mono', monospace;
+  --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  --shadow-glow: 0 0 20px rgba(0, 229, 255, 0.15);
+  --radius: 12px;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  min-height: 100vh;
+  overflow-y: auto;
+}
+
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+.llm-container {
+  padding: 24px;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+.llm-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+}
+
+.llm-header h1 {
+  font-size: 24px;
+  font-weight: 600;
+  letter-spacing: -0.5px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.llm-header h1 .pulse {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--accent-green);
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(1.2); }
+}
+
+.header-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.btn {
+  padding: 8px 16px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg-glass);
+  color: var(--text-primary);
+  cursor: pointer;
+  font-size: 12px;
+  font-family: var(--font-sans);
+  transition: all 0.2s;
+}
+
+.btn:hover {
+  background: rgba(255,255,255,0.06);
+  border-color: var(--border-active);
+}
+
+.btn-primary {
+  background: rgba(0, 229, 255, 0.1);
+  border-color: rgba(0, 229, 255, 0.3);
+  color: var(--accent-cyan);
+}
+
+.btn-primary:hover {
+  background: rgba(0, 229, 255, 0.2);
+}
+
+.grid {
+  display: grid;
+  gap: 16px;
+}
+
+.grid-4 {
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+}
+
+.grid-2 {
+  grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+}
+
+.grid-3 {
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+}
+
+.card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px;
+  backdrop-filter: blur(10px);
+}
+
+.card-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* ── Backend Status Cards ─────────────────────────────── */
+.backend-card {
+  position: relative;
+  overflow: hidden;
+}
+
+.backend-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+}
+
+.backend-card.online::before { background: var(--accent-green); }
+.backend-card.offline::before { background: var(--accent-red); }
+.backend-card.degraded::before { background: var(--accent-orange); }
+
+.backend-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.backend-name {
+  font-size: 16px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.backend-status {
+  font-size: 11px;
+  padding: 3px 10px;
+  border-radius: 20px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.status-online {
+  background: rgba(105, 240, 174, 0.1);
+  color: var(--accent-green);
+  border: 1px solid rgba(105, 240, 174, 0.2);
+}
+
+.status-offline {
+  background: rgba(255, 82, 82, 0.1);
+  color: var(--accent-red);
+  border: 1px solid rgba(255, 82, 82, 0.2);
+}
+
+.status-degraded {
+  background: rgba(255, 171, 64, 0.1);
+  color: var(--accent-orange);
+  border: 1px solid rgba(255, 171, 64, 0.2);
+}
+
+.backend-model {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-bottom: 12px;
+  font-family: var(--font-mono);
+}
+
+.backend-stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.stat-box {
+  background: var(--bg-glass);
+  border-radius: 8px;
+  padding: 10px;
+  text-align: center;
+}
+
+.stat-value {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+}
+
+.stat-label {
+  font-size: 10px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-top: 4px;
+}
+
+/* ── Circuit Breaker ──────────────────────────────────── */
+.circuit-chain {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.circuit-node {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+  font-family: var(--font-mono);
+}
+
+.circuit-closed {
+  background: rgba(105, 240, 174, 0.1);
+  color: var(--accent-green);
+  border: 1px solid rgba(105, 240, 174, 0.3);
+}
+
+.circuit-open {
+  background: rgba(255, 82, 82, 0.1);
+  color: var(--accent-red);
+  border: 1px solid rgba(255, 82, 82, 0.3);
+}
+
+.circuit-half {
+  background: rgba(255, 171, 64, 0.1);
+  color: var(--accent-orange);
+  border: 1px solid rgba(255, 171, 64, 0.3);
+}
+
+.circuit-arrow {
+  color: var(--text-muted);
+  font-size: 14px;
+}
+
+/* ── Fallback Chain ───────────────────────────────────── */
+.fallback-chain {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  margin-top: 12px;
+}
+
+.fallback-step {
+  padding: 8px 16px;
+  font-size: 12px;
+  font-weight: 600;
+  position: relative;
+}
+
+.fallback-step:first-child {
+  border-radius: 8px 0 0 8px;
+}
+
+.fallback-step:last-child {
+  border-radius: 0 8px 8px 0;
+}
+
+.fallback-step.active {
+  background: rgba(0, 229, 255, 0.15);
+  color: var(--accent-cyan);
+  border: 1px solid rgba(0, 229, 255, 0.3);
+}
+
+.fallback-step.inactive {
+  background: var(--bg-glass);
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+}
+
+.fallback-connector {
+  width: 20px;
+  height: 2px;
+  background: var(--border);
+}
+
+/* ── Token Usage Bar ──────────────────────────────────── */
+.token-bar-container {
+  margin-top: 8px;
+}
+
+.token-bar-label {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+}
+
+.token-bar-track {
+  height: 6px;
+  background: var(--bg-glass);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.token-bar-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.5s ease;
+}
+
+.token-bar-fill.green { background: var(--accent-green); }
+.token-bar-fill.yellow { background: var(--accent-yellow); }
+.token-bar-fill.red { background: var(--accent-red); }
+
+/* ── Test Prompt ────────────────────────────────────────── */
+.test-prompt-area {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.prompt-input-row {
+  display: flex;
+  gap: 10px;
+}
+
+.prompt-input {
+  flex: 1;
+  padding: 12px 16px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--bg-glass);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  outline: none;
+  resize: vertical;
+  min-height: 80px;
+}
+
+.prompt-input:focus {
+  border-color: var(--border-active);
+}
+
+.select-backend {
+  padding: 10px 14px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--bg-glass);
+  color: var(--text-primary);
+  font-size: 13px;
+  outline: none;
+  min-width: 160px;
+}
+
+.response-output {
+  background: var(--bg-glass);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 16px;
+  min-height: 120px;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text-secondary);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.response-output .thinking {
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.response-output .error {
+  color: var(--accent-red);
+}
+
+.response-output .success {
+  color: var(--accent-green);
+}
+
+/* ── Log Stream ─────────────────────────────────────────── */
+.log-entry {
+  display: flex;
+  gap: 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.log-entry:last-child { border-bottom: none; }
+
+.log-time {
+  color: var(--text-muted);
+  min-width: 70px;
+  flex-shrink: 0;
+}
+
+.log-backend {
+  color: var(--accent-cyan);
+  min-width: 90px;
+  flex-shrink: 0;
+}
+
+.log-event {
+  color: var(--text-secondary);
+}
+
+.log-event.error { color: var(--accent-red); }
+.log-event.success { color: var(--accent-green); }
+.log-event.warn { color: var(--accent-orange); }
+
+.log-scroll {
+  max-height: 300px;
+  overflow-y: auto;
+  padding-right: 8px;
+}
+
+/* ── Animations ─────────────────────────────────────────── */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.card {
+  animation: fadeIn 0.3s ease-out;
+}
+</style>
+</head>
+<body>
+
+<div class="llm-container">
+
+  <div class="llm-header">
+    <h1><span class="pulse"></span> 🤖 LLM Monitor</h1>
+    <div class="header-actions">
+      <button class="btn" onclick="refreshAll()">🔄 Refresh</button>
+      <button class="btn btn-primary" onclick="resetCircuits()">🔓 Reset Circuits</button>
+    </div>
+  </div>
+
+  <!-- ── Backend Status ─────────────────────────────────── -->
+  <div class="grid grid-4" id="backend-grid">
+    <div class="card backend-card online" id="backend-ollama">
+      <div class="backend-header">
+        <div class="backend-name">🏠 Ollama</div>
+        <div class="backend-status status-online" id="status-ollama">UP</div>
+      </div>
+      <div class="backend-model" id="model-ollama">llama3.2:latest</div>
+      <div class="backend-stats">
+        <div class="stat-box">
+          <div class="stat-value" id="req-ollama">0</div>
+          <div class="stat-label">Requests</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-value" id="tok-ollama">0</div>
+          <div class="stat-label">Tokens</div>
+        </div>
+      </div>
+      <div class="token-bar-container">
+        <div class="token-bar-label"><span>Rate Limit</span><span id="rate-ollama">0/1000</span></div>
+        <div class="token-bar-track"><div class="token-bar-fill green" id="ratebar-ollama" style="width:0%"></div></div>
+      </div>
+    </div>
+
+    <div class="card backend-card online" id="backend-groq">
+      <div class="backend-header">
+        <div class="backend-name">⚡ Groq</div>
+        <div class="backend-status status-online" id="status-groq">UP</div>
+      </div>
+      <div class="backend-model" id="model-groq">llama-3.3-70b</div>
+      <div class="backend-stats">
+        <div class="stat-box">
+          <div class="stat-value" id="req-groq">0</div>
+          <div class="stat-label">Requests</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-value" id="tok-groq">0</div>
+          <div class="stat-label">Tokens</div>
+        </div>
+      </div>
+      <div class="token-bar-container">
+        <div class="token-bar-label"><span>Rate Limit</span><span id="rate-groq">0/30</span></div>
+        <div class="token-bar-track"><div class="token-bar-fill green" id="ratebar-groq" style="width:0%"></div></div>
+      </div>
+    </div>
+
+    <div class="card backend-card offline" id="backend-together">
+      <div class="backend-header">
+        <div class="backend-name">🌐 Together</div>
+        <div class="backend-status status-offline" id="status-together">DOWN</div>
+      </div>
+      <div class="backend-model" id="model-together">Llama-3.3-70B</div>
+      <div class="backend-stats">
+        <div class="stat-box">
+          <div class="stat-value" id="req-together">0</div>
+          <div class="stat-label">Requests</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-value" id="tok-together">0</div>
+          <div class="stat-label">Tokens</div>
+        </div>
+      </div>
+      <div class="token-bar-container">
+        <div class="token-bar-label"><span>Rate Limit</span><span id="rate-together">0/20</span></div>
+        <div class="token-bar-track"><div class="token-bar-fill green" id="ratebar-together" style="width:0%"></div></div>
+      </div>
+    </div>
+
+    <div class="card backend-card offline" id="backend-huggingface">
+      <div class="backend-header">
+        <div class="backend-name">🤗 HuggingFace</div>
+        <div class="backend-status status-offline" id="status-huggingface">DOWN</div>
+      </div>
+      <div class="backend-model" id="model-huggingface">Phi-3-mini</div>
+      <div class="backend-stats">
+        <div class="stat-box">
+          <div class="stat-value" id="req-huggingface">0</div>
+          <div class="stat-label">Requests</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-value" id="tok-huggingface">0</div>
+          <div class="stat-label">Tokens</div>
+        </div>
+      </div>
+      <div class="token-bar-container">
+        <div class="token-bar-label"><span>Rate Limit</span><span id="rate-huggingface">0/10</span></div>
+        <div class="token-bar-track"><div class="token-bar-fill green" id="ratebar-huggingface" style="width:0%"></div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Circuit Breaker + Fallback Chain ─────────────────── -->
+  <div class="grid grid-2" style="margin-top: 16px;">
+    <div class="card">
+      <div class="card-title">🔒 Circuit Breaker States</div>
+      <div class="circuit-chain" id="circuit-chain">
+        <div class="circuit-node circuit-closed" id="circuit-ollama">● ollama: CLOSED</div>
+        <span class="circuit-arrow">→</span>
+        <div class="circuit-node circuit-closed" id="circuit-groq">● groq: CLOSED</div>
+        <span class="circuit-arrow">→</span>
+        <div class="circuit-node circuit-open" id="circuit-together">● together: OPEN</div>
+        <span class="circuit-arrow">→</span>
+        <div class="circuit-node circuit-open" id="circuit-huggingface">● hf: OPEN</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">⛓️ Fallback Chain</div>
+      <div class="fallback-chain" id="fallback-chain">
+        <div class="fallback-step active">🏠 Local</div>
+        <div class="fallback-connector"></div>
+        <div class="fallback-step active">⚡ Cloud</div>
+        <div class="fallback-connector"></div>
+        <div class="fallback-step inactive">🆓 Free</div>
+      </div>
+      <div style="margin-top: 12px; font-size: 12px; color: var(--text-muted);">
+        Current active: <span style="color: var(--accent-cyan); font-weight: 600;">Ollama → Groq</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Test Prompt + Logs ───────────────────────────────── -->
+  <div class="grid grid-2" style="margin-top: 16px;">
+    <div class="card">
+      <div class="card-title">🧪 Test Prompt</div>
+      <div class="test-prompt-area">
+        <div class="prompt-input-row">
+          <select class="select-backend" id="select-backend">
+            <option value="auto">🔄 Auto Fallback</option>
+            <option value="ollama">🏠 Ollama</option>
+            <option value="groq">⚡ Groq</option>
+            <option value="together">🌐 Together</option>
+            <option value="huggingface">🤗 HuggingFace</option>
+          </select>
+        </div>
+        <textarea class="prompt-input" id="test-prompt" placeholder="Enter test prompt here... (e.g., What is 2+2?)"></textarea>
+        <div class="prompt-input-row">
+          <button class="btn btn-primary" onclick="sendTestPrompt()" style="flex:1;">▶ Send</button>
+          <button class="btn" onclick="clearResponse()">Clear</button>
+        </div>
+        <div class="response-output" id="response-output">
+<span class="thinking">Response will appear here...</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">📋 Request Log</div>
+      <div class="log-scroll" id="log-stream">
+        <div class="log-entry">
+          <span class="log-time">--:--</span>
+          <span class="log-backend">system</span>
+          <span class="log-event">LLM Monitor initialized. Waiting for first request...</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// ── Mock Data & State ──────────────────────────────────────
+const backends = ['ollama', 'groq', 'together', 'huggingface'];
+let stats = {
+  ollama: { requests: 0, tokens: 0, rate: 0, limit: 1000, online: true, circuit: 'closed' },
+  groq: { requests: 0, tokens: 0, rate: 0, limit: 30, online: true, circuit: 'closed' },
+  together: { requests: 0, tokens: 0, rate: 0, limit: 20, online: false, circuit: 'open' },
+  huggingface: { requests: 0, tokens: 0, rate: 0, limit: 10, online: false, circuit: 'open' }
+};
+
+// ── Update UI ──────────────────────────────────────────────
+function updateBackendCard(name) {
+  const s = stats[name];
+  const card = document.getElementById('backend-' + name);
+  const statusEl = document.getElementById('status-' + name);
+
+  card.className = 'card backend-card ' + (s.online ? 'online' : 'offline');
+  statusEl.className = 'backend-status status-' + (s.online ? 'online' : 'offline');
+  statusEl.textContent = s.online ? 'UP' : 'DOWN';
+
+  document.getElementById('req-' + name).textContent = s.requests;
+  document.getElementById('tok-' + name).textContent = s.tokens;
+  document.getElementById('rate-' + name).textContent = s.rate + '/' + s.limit;
+
+  const pct = (s.rate / s.limit) * 100;
+  const bar = document.getElementById('ratebar-' + name);
+  bar.style.width = pct + '%';
+  bar.className = 'token-bar-fill ' + (pct > 80 ? 'red' : pct > 50 ? 'yellow' : 'green');
+
+  // Circuit breaker
+  const circuitEl = document.getElementById('circuit-' + name);
+  if (circuitEl) {
+    circuitEl.className = 'circuit-node circuit-' + s.circuit;
+    circuitEl.innerHTML = '● ' + name + ': ' + s.circuit.toUpperCase();
+  }
+}
+
+function refreshAll() {
+  backends.forEach(updateBackendCard);
+  addLog('system', 'Manual refresh triggered', 'success');
+}
+
+function resetCircuits() {
+  backends.forEach(b => { stats[b].circuit = 'closed'; });
+  refreshAll();
+  addLog('system', 'All circuit breakers reset to CLOSED', 'success');
+}
+
+// ── Test Prompt ────────────────────────────────────────────
+function sendTestPrompt() {
+  const prompt = document.getElementById('test-prompt').value.trim();
+  const backend = document.getElementById('select-backend').value;
+  const output = document.getElementById('response-output');
+
+  if (!prompt) {
+    output.innerHTML = '<span class="error">Please enter a prompt.</span>';
+    return;
+  }
+
+  output.innerHTML = '<span class="thinking">Thinking... (' + (backend === 'auto' ? 'auto-fallback' : backend) + ')</span>';
+  addLog(backend === 'auto' ? 'auto' : backend, '→ ' + prompt.substring(0, 40) + (prompt.length > 40 ? '...' : ''), 'warn');
+
+  // Simulate async response
+  setTimeout(() => {
+    const chosen = backend === 'auto' ? pickActiveBackend() : backend;
+    if (!stats[chosen].online) {
+      output.innerHTML = '<span class="error">Backend "' + chosen + '" is offline. Fallback attempted.</span>';
+      addLog(chosen, 'Backend offline — fallback triggered', 'error');
+      return;
+    }
+
+    stats[chosen].requests++;
+    const tok = Math.floor(Math.random() * 100) + 20;
+    stats[chosen].tokens += tok;
+    stats[chosen].rate = Math.min(stats[chosen].rate + 1, stats[chosen].limit);
+
+    const responses = [
+      'The answer is derived from first principles.',
+      'Based on the available data, this appears correct.',
+      'I can confirm this with high confidence.',
+      'This requires further context to answer accurately.',
+      'Processing complete. Result validated.'
+    ];
+    const response = responses[Math.floor(Math.random() * responses.length)];
+
+    output.innerHTML = '<span class="success">[' + chosen + '] ' + response + '</span>\n<span class="thinking">Tokens: ' + tok + ' | Latency: ~' + (Math.random() * 500 + 100).toFixed(0) + 'ms</span>';
+    addLog(chosen, '← Response (' + tok + ' tokens)', 'success');
+    updateBackendCard(chosen);
+  }, 800 + Math.random() * 1200);
+}
+
+function pickActiveBackend() {
+  if (stats.ollama.online && stats.ollama.circuit !== 'open') return 'ollama';
+  if (stats.groq.online && stats.groq.circuit !== 'open') return 'groq';
+  if (stats.together.online && stats.together.circuit !== 'open') return 'together';
+  return 'huggingface';
+}
+
+function clearResponse() {
+  document.getElementById('response-output').innerHTML = '<span class="thinking">Response will appear here...</span>';
+}
+
+// ── Logging ────────────────────────────────────────────────
+function addLog(backend, event, type) {
+  const now = new Date();
+  const time = now.getHours().toString().padStart(2, '0') + ':' + now.getMinutes().toString().padStart(2, '0') + ':' + now.getSeconds().toString().padStart(2, '0');
+  const stream = document.getElementById('log-stream');
+  const entry = document.createElement('div');
+  entry.className = 'log-entry';
+  entry.innerHTML = '<span class="log-time">' + time + '</span><span class="log-backend">' + backend + '</span><span class="log-event ' + type + '">' + event + '</span>';
+  stream.insertBefore(entry, stream.firstChild);
+  // Keep max 50 entries
+  while (stream.children.length > 50) {
+    stream.removeChild(stream.lastChild);
+  }
+}
+
+// ── Auto-refresh ───────────────────────────────────────────
+setInterval(() => {
+  // Random fluctuation for demo
+  if (Math.random() < 0.1) {
+    const b = backends[Math.floor(Math.random() * backends.length)];
+    if (Math.random() < 0.3) {
+      stats[b].circuit = stats[b].circuit === 'closed' ? 'open' : 'closed';
+      addLog(b, 'Circuit breaker flipped to ' + stats[b].circuit.toUpperCase(), 'warn');
+      updateBackendCard(b);
+    }
+  }
+}, 5000);
+
+// ── Init ───────────────────────────────────────────────────
+refreshAll();
+addLog('system', 'LLM Monitor panel loaded. 4 backends registered.', 'success');
+</script>
+
+</body>
+</html>
