@@ -1,105 +1,142 @@
 #!/usr/bin/env python3
 """
-config/config_schema_native.py
-==============================
-Configuration Schema Validation
-
-Validates MAGNATRIX-OS configuration against typed schema on boot.
-Prevents silent misconfigurations.
+MAGNATRIX-OS Config Schema Native
+Configuration schema validation and management.
+Pure Python stdlib.
 """
-
-from __future__ import annotations
-
+import json, os, re
+from typing import Dict, List, Any, Optional, Union, Callable
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Type, Union
 
 
 @dataclass
 class FieldSpec:
-    type: Type
+    type: type
     required: bool = True
     default: Any = None
-    default_factory: Any = None
     min: Optional[Union[int, float]] = None
     max: Optional[Union[int, float]] = None
     allowed: Optional[List[Any]] = None
+    validator: Optional[Callable] = None
 
 
-class ConfigSchema:
-    """Schema validator for MAGNATRIX configuration."""
+class ConfigSchemaNative:
+    """
+    Schema-based configuration validation.
+    Defines expected fields, types, ranges, and custom validators.
+    """
 
-    SCHEMA: Dict[str, Dict[str, FieldSpec]] = {
-        "kernel": {
-            "log_level": FieldSpec(str, default="INFO", allowed=["DEBUG", "INFO", "WARN", "ERROR"]),
-            "max_workers": FieldSpec(int, default=4, min=1, max=64),
-        },
-        "identity": {
-            "key_store": FieldSpec(str, default="/var/lib/magnatrix/identities"),
-            "auto_rotate": FieldSpec(bool, default=True),
-        },
-        "p2p": {
-            "listen_port": FieldSpec(int, default=8000, min=1024, max=65535),
-            "bootstrap_peers": FieldSpec(list, default_factory=list),
-        },
-        "sandbox": {
-            "enabled": FieldSpec(bool, default=True),
-            "max_cpu_percent": FieldSpec(int, default=80, min=1, max=100),
-        },
-    }
+    def __init__(self, schema: Dict[str, FieldSpec] = None):
+        self.schema = schema or {}
+        self._errors: List[str] = []
+
+    def validate(self, config: Dict[str, Any]) -> Dict[str, Any]:
+        """Validate config against schema, return validated config."""
+        self._errors = []
+        validated = {}
+
+        for key, spec in self.schema.items():
+            value = config.get(key)
+            if value is None:
+                if spec.required and spec.default is None:
+                    self._errors.append(f"Missing required field: {key}")
+                    continue
+                value = spec.default
+
+            # Type check
+            if value is not None and not isinstance(value, spec.type):
+                try:
+                    value = spec.type(value)
+                except (ValueError, TypeError):
+                    self._errors.append(f"Field '{key}': expected {spec.type.__name__}, got {type(value).__name__}")
+                    continue
+
+            # Range check
+            if spec.min is not None and value < spec.min:
+                self._errors.append(f"Field '{key}': value {value} < min {spec.min}")
+            if spec.max is not None and value > spec.max:
+                self._errors.append(f"Field '{key}': value {value} > max {spec.max}")
+
+            # Allowed values check
+            if spec.allowed is not None and value not in spec.allowed:
+                self._errors.append(f"Field '{key}': value {value} not in allowed {spec.allowed}")
+
+            # Custom validator
+            if spec.validator and not spec.validator(value):
+                self._errors.append(f"Field '{key}': custom validation failed")
+
+            validated[key] = value
+
+        # Check for unknown fields
+        for key in config:
+            if key not in self.schema:
+                self._errors.append(f"Unknown field: {key}")
+
+        return validated
+
+    def is_valid(self) -> bool:
+        return len(self._errors) == 0
+
+    def errors(self) -> List[str]:
+        return self._errors
+
+    def to_json(self) -> str:
+        """Serialize schema to JSON."""
+        schema_dict = {}
+        for key, spec in self.schema.items():
+            schema_dict[key] = {
+                "type": spec.type.__name__,
+                "required": spec.required,
+                "default": spec.default,
+                "min": spec.min,
+                "max": spec.max,
+                "allowed": spec.allowed,
+            }
+        return json.dumps(schema_dict, indent=2)
 
     @classmethod
-    def validate(cls, config: Dict[str, Any]) -> List[str]:
-        """Validate config against schema. Returns list of error messages."""
-        errors: List[str] = []
-        for section, fields in cls.SCHEMA.items():
-            section_data = config.get(section, {})
-            if not isinstance(section_data, dict):
-                errors.append(f"Section '{section}' must be a dict, got {type(section_data).__name__}")
-                continue
-            for field_name, spec in fields.items():
-                value = section_data.get(field_name, spec.default)
-                if value is None and spec.required:
-                    errors.append(f"Missing required field: {section}.{field_name}")
-                    continue
-                if value is not None and not isinstance(value, spec.type):
-                    errors.append(f"{section}.{field_name}: expected {spec.type.__name__}, got {type(value).__name__}")
-                    continue
-                if spec.min is not None and value is not None and value < spec.min:
-                    errors.append(f"{section}.{field_name}: {value} < minimum {spec.min}")
-                if spec.max is not None and value is not None and value > spec.max:
-                    errors.append(f"{section}.{field_name}: {value} > maximum {spec.max}")
-                if spec.allowed is not None and value is not None and value not in spec.allowed:
-                    errors.append(f"{section}.{field_name}: '{value}' not in allowed values {spec.allowed}")
-        return errors
-
-    @classmethod
-    def validate_or_raise(cls, config: Dict[str, Any]) -> None:
-        errors = cls.validate(config)
-        if errors:
-            raise ValueError("Configuration validation failed:\n  - " + "\n  - ".join(errors))
+    def from_json(cls, json_str: str) -> "ConfigSchemaNative":
+        """Deserialize schema from JSON."""
+        data = json.loads(json_str)
+        schema = {}
+        type_map = {"str": str, "int": int, "float": float, "bool": bool, "list": list, "dict": dict}
+        for key, spec_data in data.items():
+            schema[key] = FieldSpec(
+                type=type_map.get(spec_data["type"], str),
+                required=spec_data.get("required", True),
+                default=spec_data.get("default"),
+                min=spec_data.get("min"),
+                max=spec_data.get("max"),
+                allowed=spec_data.get("allowed"),
+            )
+        return cls(schema)
 
 
-def demo():
+def _demo():
     print("=" * 60)
-    print("MAGNATRIX-OS  |  CONFIG SCHEMA VALIDATION")
+    print("MAGNATRIX-OS Config Schema Demo")
     print("=" * 60)
-
-    good = {
-        "kernel": {"log_level": "INFO", "max_workers": 8},
-        "p2p": {"listen_port": 8000},
+    schema = {
+        "name": FieldSpec(str, required=True),
+        "port": FieldSpec(int, default=8080, min=1, max=65535),
+        "debug": FieldSpec(bool, default=False),
+        "log_level": FieldSpec(str, default="INFO", allowed=["DEBUG", "INFO", "WARN", "ERROR"]),
     }
-    print(f"Valid config: {ConfigSchema.validate(good)}")
+    validator = ConfigSchemaNative(schema)
 
-    bad = {
-        "kernel": {"log_level": "INVALID", "max_workers": 200},
-        "p2p": {"listen_port": 80},
-    }
-    errors = ConfigSchema.validate(bad)
-    for e in errors:
-        print(f"  Error: {e}")
+    print("\n[1] Valid config:")
+    valid = validator.validate({"name": "MAGNATRIX", "port": 8888, "debug": True})
+    print(f"    Valid: {validator.is_valid()}, Config: {valid}")
+
+    print("\n[2] Invalid config:")
+    invalid = validator.validate({"name": "Test", "port": 99999, "log_level": "INVALID"})
+    print(f"    Valid: {validator.is_valid()}, Errors: {validator.errors()}")
+
+    print("\n[3] Schema JSON:")
+    print(validator.to_json()[:200])
 
     print("=" * 60)
 
 
 if __name__ == "__main__":
-    demo()
+    _demo()

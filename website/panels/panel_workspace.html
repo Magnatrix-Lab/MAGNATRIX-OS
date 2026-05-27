@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MAGNATRIX-OS :: Workspace</title>
+<style>
+:root{--bg0:#0b0c15;--bg1:#121420;--bg2:#1a1d2e;--glass:rgba(20,22,40,.75);--cyan:#00f0ff;--purple:#b829dd;--green:#00e676;--red:#ff5252;--amber:#ffb300;--text:#c8cee0;--muted:#6b7280;--border:rgba(0,240,255,.15)}
+*{box-sizing:border-box;margin:0;padding:0;font-family:'Segoe UI',system-ui,sans-serif}
+body{background:var(--bg0);color:var(--text);height:100vh;overflow:hidden;display:flex;flex-direction:column}
+/* Header */
+.header{height:48px;background:var(--glass);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 16px;justify-content:space-between;backdrop-filter:blur(12px)}
+.header h1{font-size:14px;letter-spacing:2px;text-transform:uppercase;color:var(--cyan);display:flex;align-items:center;gap:8px}
+.header h1::before{content:"";display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--green);box-shadow:0 0 8px var(--green)}
+.header .status{font-size:11px;color:var(--muted)}
+/* Main layout */
+.workspace{display:flex;flex:1;overflow:hidden}
+/* Sidebar */
+.sidebar{width:220px;background:var(--bg1);border-right:1px solid var(--border);display:flex;flex-direction:column}
+.sidebar .section{padding:12px 14px;border-bottom:1px solid var(--border)}
+.sidebar .section-title{font-size:10px;text-transform:uppercase;letter-spacing:1.5px;color:var(--cyan);margin-bottom:8px;display:flex;align-items:center;justify-content:space-between}
+.sidebar .section-title .toggle{cursor:pointer;font-size:14px;transition:transform .2s}
+.sidebar .section.collapsed .toggle{transform:rotate(-90deg)}
+.sidebar .section.collapsed .section-body{display:none}
+.tree-item{padding:5px 8px;border-radius:4px;cursor:pointer;font-size:12px;display:flex;align-items:center;gap:6px;transition:background .15s;white-space:nowrap}
+.tree-item:hover{background:rgba(0,240,255,.08)}
+.tree-item.active{background:rgba(0,240,255,.12);color:var(--cyan)}
+.tree-item .icon{font-size:13px;width:16px;text-align:center}
+.tree-item.folder .icon{color:var(--amber)}
+.tree-item.file .icon{color:var(--muted)}
+.tree-children{padding-left:18px}
+/* Center */
+.center{flex:1;display:flex;flex-direction:column;min-width:0}
+/* Tabs */
+.tabs{display:flex;background:var(--bg1);border-bottom:1px solid var(--border);overflow-x:auto}
+.tab{padding:8px 16px;font-size:12px;cursor:pointer;border-right:1px solid var(--border);display:flex;align-items:center;gap:8px;white-space:nowrap;transition:background .15s}
+.tab:hover{background:rgba(0,240,255,.05)}
+.tab.active{background:var(--bg2);color:var(--cyan);border-bottom:2px solid var(--cyan)}
+.tab .close{font-size:14px;color:var(--muted);width:16px;text-align:center;border-radius:3px}
+.tab .close:hover{background:var(--red);color:#fff}
+.tab .dirty{color:var(--amber);font-weight:bold}
+/* Editor */
+.editor-container{flex:1;display:none;overflow:auto}
+.editor-container.active{display:flex}
+.editor{flex:1;display:flex;background:var(--bg0)}
+.line-numbers{width:48px;background:var(--bg1);border-right:1px solid var(--border);padding:12px 8px;text-align:right;font-size:13px;color:var(--muted);line-height:22px;user-select:none;font-family:'Consolas','Monaco',monospace}
+.code-area{flex:1;padding:12px 16px;font-size:13px;line-height:22px;font-family:'Consolas','Monaco',monospace;white-space:pre;overflow:auto;outline:none;color:var(--text)}
+/* Syntax highlighting */
+.code-area .kw{color:var(--purple);font-weight:bold}
+.code-area .str{color:var(--green)}
+.code-area .num{color:var(--amber)}
+.code-area .func{color:var(--cyan)}
+.code-area .comment{color:var(--muted);font-style:italic}
+/* Terminal */
+.terminal{display:none;flex-direction:column;background:var(--bg0);flex:1}
+.terminal.active{display:flex}
+.terminal-output{flex:1;padding:12px;font-family:'Consolas','Monaco',monospace;font-size:13px;line-height:20px;overflow:auto}
+.terminal-output .line{margin:1px 0}
+.terminal-output .prompt{color:var(--green)}
+.terminal-output .cmd{color:var(--text)}
+.terminal-output .out{color:var(--muted)}
+.terminal-output .err{color:var(--red)}
+.terminal-output .success{color:var(--green)}
+.terminal-input{display:flex;align-items:center;padding:8px 12px;border-top:1px solid var(--border);background:var(--bg1)}
+.terminal-input .prompt{color:var(--green);font-family:'Consolas',monospace;font-size:13px;margin-right:8px;white-space:nowrap}
+.terminal-input input{flex:1;background:transparent;border:none;color:var(--text);font-family:'Consolas',monospace;font-size:13px;outline:none}
+/* Right panel */
+.right-panel{width:260px;background:var(--bg1);border-left:1px solid var(--border);display:flex;flex-direction:column;overflow-y:auto}
+.right-panel .panel-title{padding:12px 14px;font-size:10px;text-transform:uppercase;letter-spacing:1.5px;color:var(--cyan);border-bottom:1px solid var(--border)}
+.ide-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:12px}
+.ide-card{background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:12px;text-align:center;cursor:pointer;transition:all .2s}
+.ide-card:hover{border-color:var(--cyan);transform:translateY(-2px);box-shadow:0 4px 12px rgba(0,240,255,.1)}
+.ide-card .ide-icon{font-size:24px;margin-bottom:6px}
+.ide-card .ide-name{font-size:11px;font-weight:600;margin-bottom:4px}
+.ide-card .ide-status{font-size:9px;padding:2px 6px;border-radius:10px;display:inline-block}
+.ide-card .installed{background:rgba(0,230,118,.15);color:var(--green)}
+.ide-card .missing{background:rgba(255,82,82,.15);color:var(--red)}
+.ide-card .launch-btn{margin-top:8px;padding:4px 10px;border:none;border-radius:4px;background:var(--cyan);color:var(--bg0);font-size:10px;font-weight:bold;cursor:pointer;opacity:.8;transition:opacity .2s}
+.ide-card .launch-btn:hover{opacity:1}
+/* Toolbar */
+.toolbar{height:36px;background:var(--bg1);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 12px;gap:8px}
+.toolbar button{padding:4px 10px;border:1px solid var(--border);border-radius:4px;background:var(--bg2);color:var(--text);font-size:11px;cursor:pointer;transition:all .15s}
+.toolbar button:hover{border-color:var(--cyan);color:var(--cyan)}
+.toolbar .sep{width:1px;height:20px;background:var(--border);margin:0 4px}
+/* Animations */
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
+.pulse{animation:pulse 2s infinite}
+</style>
+</head>
+<body>
+<div class="header">
+  <h1>MAGNATRIX Workspace</h1>
+  <span class="status">IDE Layer 12 | Multi-Tool Bridge Active</span>
+</div>
+<div class="workspace">
+  <!-- Sidebar: File Tree -->
+  <div class="sidebar">
+    <div class="section">
+      <div class="section-title">Explorer <span class="toggle">&#9662;</span></div>
+      <div class="section-body" id="fileTree">
+        <div class="tree-item folder" onclick="toggleFolder(this)"><span class="icon">&#9662;</span> MAGNATRIX-OS</div>
+        <div class="tree-children">
+          <div class="tree-item folder" onclick="toggleFolder(this)"><span class="icon">&#9662;</span> ai</div>
+          <div class="tree-children">
+            <div class="tree-item file" onclick="openFile('autonomous_agent_native.py')"><span class="icon">&#9998;</span> autonomous_agent_native.py</div>
+            <div class="tree-item file" onclick="openFile('local_agent_native.py')"><span class="icon">&#9998;</span> local_agent_native.py</div>
+            <div class="tree-item file" onclick="openFile('theorem_prover_native.py')"><span class="icon">&#9998;</span> theorem_prover_native.py</div>
+          </div>
+          <div class="tree-item folder" onclick="toggleFolder(this)"><span class="icon">&#9662;</span> knowledge</div>
+          <div class="tree-children">
+            <div class="tree-item file" onclick="openFile('agentic_rag_native.py')"><span class="icon">&#9998;</span> agentic_rag_native.py</div>
+            <div class="tree-item file" onclick="openFile('document_agent_native.py')"><span class="icon">&#9998;</span> document_agent_native.py</div>
+          </div>
+          <div class="tree-item folder" onclick="toggleFolder(this)"><span class="icon">&#9662;</span> runtime</div>
+          <div class="tree-children">
+            <div class="tree-item file" onclick="openFile('jit_compiler_native.py')"><span class="icon">&#9998;</span> jit_compiler_native.py</div>
+            <div class="tree-item file" onclick="openFile('multi_tool_agent_native.py')"><span class="icon">&#9998;</span> multi_tool_agent_native.py</div>
+          </div>
+          <div class="tree-item folder" onclick="toggleFolder(this)"><span class="icon">&#9662;</span> website</div>
+          <div class="tree-children">
+            <div class="tree-item file" onclick="openFile('dashboard.html')"><span class="icon">&#10084;</span> dashboard.html</div>
+            <div class="tree-item file" onclick="openFile('panel_workspace.html')"><span class="icon">&#10084;</span> panel_workspace.html</div>
+          </div>
+          <div class="tree-item file" onclick="openFile('README.md')"><span class="icon">&#9632;</span> README.md</div>
+        </div>
+      </div>
+    </div>
+    <div class="section">
+      <div class="section-title">Outline <span class="toggle">&#9662;</span></div>
+      <div class="section-body">
+        <div class="tree-item" onclick="goToLine(1)"><span class="icon">&#9656;</span> Imports</div>
+        <div class="tree-item" onclick="goToLine(20)"><span class="icon">&#9656;</span> BaseLayer</div>
+        <div class="tree-item" onclick="goToLine(60)"><span class="icon">&#9656;</span> CoreEngine</div>
+        <div class="tree-item" onclick="goToLine(120)"><span class="icon">&#9656;</span> Features</div>
+        <div class="tree-item" onclick="goToLine(200)"><span class="icon">&#9656;</span> Kernel</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Center: Editor + Terminal -->
+  <div class="center">
+    <div class="toolbar">
+      <button onclick="switchTab('main.py')">&#9998; Editor</button>
+      <button onclick="switchTab('terminal')">&#9632; Terminal</button>
+      <div class="sep"></div>
+      <button onclick="runCode()">&#9658; Run</button>
+      <button onclick="saveFile()">&#128190; Save</button>
+      <div class="sep"></div>
+      <button onclick="gitStatus()">&#9733; Git</button>
+    </div>
+    <div class="tabs" id="tabs">
+      <div class="tab active" data-file="main.py" onclick="switchTab('main.py')"><span>&#9998;</span> main.py <span class="dirty">&#9679;</span></div>
+      <div class="tab" data-file="README.md" onclick="switchTab('README.md')"><span>&#9632;</span> README.md</div>
+      <div class="tab" data-file="terminal" onclick="switchTab('terminal')"><span>&#9632;</span> Terminal</div>
+    </div>
+    <div class="editor-container active" id="editor-main.py">
+      <div class="editor">
+        <div class="line-numbers" id="ln-main.py"></div>
+        <div class="code-area" id="code-main.py" contenteditable="true" spellcheck="false"></div>
+      </div>
+    </div>
+    <div class="editor-container" id="editor-README.md">
+      <div class="editor">
+        <div class="line-numbers" id="ln-README.md"></div>
+        <div class="code-area" id="code-README.md" contenteditable="true" spellcheck="false"></div>
+      </div>
+    </div>
+    <div class="terminal" id="terminal">
+      <div class="terminal-output" id="termOut"></div>
+      <div class="terminal-input">
+        <span class="prompt">magnatrix@workspace:~$</span>
+        <input type="text" id="termIn" placeholder="Type command..." onkeydown="if(event.key==='Enter'){runTermCmd()}">
+      </div>
+    </div>
+  </div>
+
+  <!-- Right: IDE Launcher -->
+  <div class="right-panel">
+    <div class="panel-title">IDE Launcher</div>
+    <div class="ide-grid" id="ideGrid">
+      <div class="ide-card" onclick="launchIde('vscode')">
+        <div class="ide-icon">&#128421;</div>
+        <div class="ide-name">VS Code</div>
+        <span class="ide-status installed">&#9679; Installed</span>
+        <button class="launch-btn">Launch</button>
+      </div>
+      <div class="ide-card" onclick="launchIde('cursor')">
+        <div class="ide-icon">&#9889;</div>
+        <div class="ide-name">Cursor</div>
+        <span class="ide-status installed">&#9679; Installed</span>
+        <button class="launch-btn">Launch</button>
+      </div>
+      <div class="ide-card" onclick="launchIde('cline')">
+        <div class="ide-icon">&#9964;</div>
+        <div class="ide-name">Cline</div>
+        <span class="ide-status installed">&#9679; Installed</span>
+        <button class="launch-btn">Launch</button>
+      </div>
+      <div class="ide-card" onclick="launchIde('aider')">
+        <div class="ide-icon">&#9733;</div>
+        <div class="ide-name">Aider</div>
+        <span class="ide-status missing">&#9675; Not installed</span>
+        <button class="launch-btn">Install</button>
+      </div>
+      <div class="ide-card" onclick="launchIde('openclaw')">
+        <div class="ide-icon">&#128009;</div>
+        <div class="ide-name">OpenClaw</div>
+        <span class="ide-status installed">&#9679; Installed</span>
+        <button class="launch-btn">Launch</button>
+      </div>
+      <div class="ide-card" onclick="launchIde('windsurf')">
+        <div class="ide-icon">&#127754;</div>
+        <div class="ide-name">Windsurf</div>
+        <span class="ide-status missing">&#9675; Not installed</span>
+        <button class="launch-btn">Install</button>
+      </div>
+      <div class="ide-card" onclick="launchIde('copilot')">
+        <div class="ide-icon">&#128640;</div>
+        <div class="ide-name">GitHub Copilot</div>
+        <span class="ide-status installed">&#9679; Installed</span>
+        <button class="launch-btn">Launch</button>
+      </div>
+      <div class="ide-card" onclick="launchIde('claude_code')">
+        <div class="ide-icon">&#128220;</div>
+        <div class="ide-name">Claude Code</div>
+        <span class="ide-status installed">&#9679; Installed</span>
+        <button class="launch-btn">Launch</button>
+      </div>
+      <div class="ide-card" onclick="launchIde('kimi_claw')">
+        <div class="ide-icon">&#129302;</div>
+        <div class="ide-name">Kimi Claw</div>
+        <span class="ide-status installed">&#9679; Installed</span>
+        <button class="launch-btn">Launch</button>
+      </div>
+      <div class="ide-card" onclick="launchIde('openhand')">
+        <div class="ide-icon">&#9995;</div>
+        <div class="ide-name">OpenHand</div>
+        <span class="ide-status missing">&#9675; Not installed</span>
+        <button class="launch-btn">Install</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── Data ──
+const files={
+  "main.py":`#!/usr/bin/env python3
+"""MAGNATRIX-OS Workspace Demo"""
+from __future__ import annotations
+import json, os, sys
+from dataclasses import dataclass
+from typing import Dict, List, Any
+
+# ── BaseLayer ──
+@dataclass
+class WorkspaceNode:
+    name: str
+    node_type: str  # file | folder
+    children: List[str] = None
+
+class FileTree:
+    def __init__(self):
+        self.root = {"name": "workspace", "type": "folder", "children": {}}
+
+    def add(self, path: str):
+        parts = path.split("/")
+        curr = self.root["children"]
+        for p in parts[:-1]:
+            if p not in curr:
+                curr[p] = {"type": "folder", "children": {}}
+            curr = curr[p]["children"]
+        curr[parts[-1]] = {"type": "file"}
+
+    def ls(self, path: str = "") -> List[str]:
+        parts = path.split("/") if path else []
+        curr = self.root["children"]
+        for p in parts:
+            curr = curr.get(p, {}).get("children", {})
+        return list(curr.keys())
+
+# ── Kernel ──
+class WorkspaceKernel:
+    def __init__(self):
+        self.tree = FileTree()
+        self.tree.add("src/main.py")
+        self.tree.add("src/utils.py")
+        self.tree.add("tests/test_main.py")
+        self.tree.add("README.md")
+
+    def status(self) -> Dict[str, Any]:
+        return {
+            "files": len(self.tree.ls("src")),
+            "tests": len(self.tree.ls("tests")),
+            "ready": True,
+        }
+
+if __name__ == "__main__":
+    ws = WorkspaceKernel()
+    print(json.dumps(ws.status(), indent=2))
+`,
+  "README.md":`# MAGNATRIX-OS Workspace
+
+Multi-tool IDE integration panel for MAGNATRIX-OS.
+
+## Features
+- File manager with tree view
+- Terminal multiplexer
+- Code editor with syntax highlighting
+- IDE launcher (10+ tools)
+
+## Supported IDEs
+| Tool | Status |
+|------|--------|
+| VS Code | Installed |
+| Cursor | Installed |
+| Cline | Installed |
+| Claude Code | Installed |
+| OpenClaw | Installed |
+| Kimi Claw | Installed |
+| GitHub Copilot | Installed |
+| Aider | Not installed |
+| Windsurf | Not installed |
+| OpenHand | Not installed |
+
+---
+Powered by MAGNATRIX-OS Layer 12 (IDE Integration)
+`
+};
+const termHistory=[];
+let activeFile="main.py";
+
+// ── Syntax Highlight ──
+function highlightPython(code){
+  let html=code
+    .replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")
+    .replace(/(".*?"|'.*?')/gs,'<span class="str">$1</span>')
+    .replace(/\b(def|class|import|from|return|if|elif|else|for|while|try|except|with|as|in|is|not|and|or|None|True|False|lambda|yield|async|await|pass|break|continue)\b/g,'<span class="kw">$1</span>')
+    .replace(/\b(int|str|float|bool|list|dict|set|tuple|Any|Dict|List|Optional)\b/g,'<span class="func">$1</span>')
+    .replace(/\b(\d+)\b/g,'<span class="num">$1</span>')
+    .replace(/(#.*)/g,'<span class="comment">$1</span>')
+    .replace(/("""[\s\S]*?""")/g,'<span class="str">$1</span>');
+  return html;
+}
+
+// ── Editor ──
+function renderEditor(file){
+  const el=document.getElementById("code-"+file);
+  const ln=document.getElementById("ln-"+file);
+  if(!el||!ln) return;
+  const raw=files[file]||"";
+  const lines=raw.split("\n");
+  ln.innerHTML=lines.map((_,i)=>`<div>${i+1}</div>`).join("");
+  if(file.endsWith(".py")){
+    el.innerHTML=highlightPython(raw);
+  }else{
+    el.innerHTML=raw.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/\n/g,"<br>");
+  }
+}
+function switchTab(file){
+  document.querySelectorAll(".tab").forEach(t=>t.classList.remove("active"));
+  document.querySelectorAll(".editor-container").forEach(e=>e.classList.remove("active"));
+  document.querySelectorAll(".terminal").forEach(e=>e.classList.remove("active"));
+  const tab=document.querySelector(`.tab[data-file="${file}"]`);
+  if(tab) tab.classList.add("active");
+  if(file==="terminal"){
+    document.getElementById("terminal").classList.add("active");
+  }else{
+    const ed=document.getElementById("editor-"+file);
+    if(ed) ed.classList.add("active");
+    activeFile=file;
+  }
+}
+function openFile(file){switchTab(file);}
+function goToLine(n){switchTab("main.py");/* scroll to line n */}
+
+// ── Terminal ──
+function termPrint(text, cls="out"){
+  const out=document.getElementById("termOut");
+  const div=document.createElement("div");
+  div.className="line "+cls;
+  div.innerHTML=text;
+  out.appendChild(div);
+  out.scrollTop=out.scrollHeight;
+}
+function runTermCmd(){
+  const inp=document.getElementById("termIn");
+  const cmd=inp.value.trim();
+  if(!cmd) return;
+  termPrint(`<span class="prompt">magnatrix@workspace:~$</span> <span class="cmd">${cmd}</span>`, "line");
+  inp.value="";
+  // Simulate responses
+  const c=cmd.toLowerCase();
+  if(c==="ls"||c==="ll"){
+    termPrint("ai\nknowledge\nruntime\nsecurity\ntrading\nwebsite\nREADME.md", "out");
+  }else if(c==="git status"){
+    termPrint("On branch main\nYour branch is ahead of 'origin/main' by 3 commits.", "out");
+    termPrint("  (use "git push" to publish your local commits)", "out");
+  }else if(c.startsWith("python ")||c.startsWith("python3 ")){
+    const file=c.split(" ")[1]||"main.py";
+    termPrint(`Running ${file}...`, "out");
+    setTimeout(()=>termPrint("{'files': 3, 'tests': 1, 'ready': True}", "success"), 300);
+  }else if(c==="clear"){
+    document.getElementById("termOut").innerHTML="";
+  }else if(c==="help"){
+    termPrint("Available: ls, git status, python <file>, clear, help", "out");
+  }else{
+    termPrint(`Command not found: ${cmd}. Type 'help' for available commands.`, "err");
+  }
+}
+
+// ── Toolbar ──
+function runCode(){
+  switchTab("terminal");
+  termPrint("[Run] Executing current file...", "out");
+  setTimeout(()=>termPrint("Execution completed successfully. Output: 45", "success"), 400);
+}
+function saveFile(){termPrint("[Save] File saved.", "success");}
+function gitStatus(){switchTab("terminal");runTermCmd.call({value:"git status"},null);}
+
+// ── Tree ──
+function toggleFolder(el){
+  const icon=el.querySelector(".icon");
+  const next=el.nextElementSibling;
+  if(next&&next.classList.contains("tree-children")){
+    next.style.display=next.style.display==="none"?"block":"none";
+    icon.innerHTML=next.style.display==="none"?"&#9656;":"&#9662;";
+  }
+}
+
+// ── IDE Launcher ──
+function launchIde(name){
+  termPrint(`[IDE] Launching ${name}...`, "out");
+  setTimeout(()=>termPrint(`[IDE] ${name} opened in new window.`, "success"), 500);
+}
+
+// ── Init ──
+renderEditor("main.py");
+renderEditor("README.md");
+switchTab("main.py");
+termPrint("MAGNATRIX-OS Workspace Terminal v1.0", "out");
+termPrint("Type 'help' for available commands.", "out");
+</script>
+</body>
+</html>
