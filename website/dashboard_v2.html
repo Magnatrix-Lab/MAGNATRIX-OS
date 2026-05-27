@@ -1,0 +1,1080 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MAGNATRIX-OS v2 — Super AI Command Interface</title>
+<style>
+/* ═══════════════════════════════════════════════════════════════════════════════
+   MAGNATRIX-OS Dashboard v2 — JARVIS × Fuselab Hybrid Aesthetic
+   Dark holographic glassmorphism with depth, motion, and HUD elements
+   ═══════════════════════════════════════════════════════════════════════════════ */
+:root {
+  --bg-deep: #020204;
+  --bg-primary: #050508;
+  --bg-secondary: #0a0a12;
+  --bg-tertiary: #11111a;
+  --bg-card: rgba(12, 12, 20, 0.88);
+  --bg-glass: rgba(255, 255, 255, 0.02);
+  --border: rgba(255, 255, 255, 0.04);
+  --border-glow: rgba(0, 229, 255, 0.15);
+  --text-primary: #e8e8f0;
+  --text-secondary: #8888a0;
+  --text-muted: #555570;
+  --cyan: #00e5ff;
+  --purple: #b388ff;
+  --green: #69f0ae;
+  --orange: #ffab40;
+  --red: #ff5252;
+  --pink: #ff4081;
+  --yellow: #ffd740;
+  --blue: #448aff;
+  --font-mono: 'SF Mono', 'Fira Code', 'JetBrains Mono', monospace;
+  --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+  --shadow-glow: 0 0 30px rgba(0, 229, 255, 0.1);
+  --radius: 14px;
+  --radius-sm: 8px;
+  --sidebar-width: 68px;
+  --sidebar-expanded: 230px;
+  --topbar-height: 60px;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+html, body {
+  height: 100%;
+  background: var(--bg-deep);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  overflow: hidden;
+}
+
+/* ── Canvas Background ── */
+#bgCanvas {
+  position: fixed;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  z-index: 0;
+  pointer-events: none;
+}
+
+/* ── Scan Line ── */
+.scan-line {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--cyan), transparent);
+  opacity: 0.3;
+  animation: scanMove 6s linear infinite;
+  z-index: 9999;
+  pointer-events: none;
+}
+@keyframes scanMove {
+  0% { transform: translateY(-2px); }
+  100% { transform: translateY(100vh); }
+}
+
+/* ── Scrollbar ── */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+
+/* ── Layout ── */
+.app {
+  display: grid;
+  grid-template-columns: var(--sidebar-width) 1fr;
+  grid-template-rows: var(--topbar-height) 1fr;
+  grid-template-areas:
+    "sidebar topbar"
+    "sidebar content";
+  height: 100vh;
+  width: 100vw;
+  position: relative;
+  z-index: 1;
+}
+
+.app.sidebar-expanded {
+  grid-template-columns: var(--sidebar-expanded) 1fr;
+}
+
+/* ── Sidebar ── */
+.sidebar {
+  grid-area: sidebar;
+  background: linear-gradient(180deg, var(--bg-secondary) 0%, rgba(10,10,18,0.95) 100%);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  overflow-y: auto;
+  overflow-x: hidden;
+  transition: width 0.3s ease;
+}
+
+.sidebar::before {
+  content: "";
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--cyan), transparent);
+  opacity: 0.4;
+}
+
+.sidebar-logo {
+  height: var(--topbar-height);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: 2px;
+  color: var(--cyan);
+  cursor: pointer;
+  border-bottom: 1px solid var(--border);
+  text-shadow: 0 0 20px rgba(0,229,255,0.4);
+  position: relative;
+}
+
+.sidebar-logo::after {
+  content: "";
+  position: absolute;
+  bottom: -1px; left: 20%; right: 20%;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--cyan), transparent);
+}
+
+.app.sidebar-expanded .sidebar-logo {
+  font-size: 16px;
+  gap: 8px;
+}
+
+.nav-section {
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 11px 18px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  position: relative;
+  margin: 2px 8px;
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+}
+
+.nav-item:hover {
+  background: rgba(0, 229, 255, 0.06);
+  color: var(--text-primary);
+}
+
+.nav-item.active {
+  background: linear-gradient(135deg, rgba(0,229,255,0.12), rgba(179,136,255,0.08));
+  color: var(--cyan);
+  box-shadow: inset 2px 0 0 var(--cyan), 0 0 20px rgba(0,229,255,0.08);
+}
+
+.nav-item.active .nav-icon {
+  filter: drop-shadow(0 0 6px var(--cyan));
+}
+
+.nav-item .nav-icon {
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+  opacity: 0.8;
+  transition: all 0.2s;
+}
+
+.nav-item:hover .nav-icon {
+  opacity: 1;
+  transform: scale(1.1);
+}
+
+.nav-item .nav-label {
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+  opacity: 0;
+  max-width: 0;
+  overflow: hidden;
+  transition: all 0.3s ease;
+}
+
+.app.sidebar-expanded .nav-item .nav-label {
+  opacity: 1;
+  max-width: 200px;
+}
+
+.nav-badge {
+  margin-left: auto;
+  font-size: 9px;
+  padding: 2px 7px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, var(--cyan), var(--blue));
+  color: var(--bg-deep);
+  font-weight: 700;
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+
+.app.sidebar-expanded .nav-badge {
+  opacity: 1;
+}
+
+.sidebar-divider {
+  height: 1px;
+  margin: 6px 16px;
+  background: linear-gradient(90deg, transparent, var(--border), transparent);
+}
+
+.sidebar-footer {
+  margin-top: auto;
+  padding: 10px;
+}
+
+/* ── Topbar ── */
+.topbar {
+  grid-area: topbar;
+  background: linear-gradient(180deg, var(--bg-secondary), rgba(10,10,18,0.9));
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  padding: 0 24px;
+  justify-content: space-between;
+  position: relative;
+  backdrop-filter: blur(20px);
+}
+
+.topbar::after {
+  content: "";
+  position: absolute;
+  bottom: -1px; left: 0; right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--cyan), var(--purple), transparent);
+  opacity: 0.3;
+}
+
+.topbar-left { display: flex; align-items: center; gap: 16px; }
+
+.topbar-title {
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  background: linear-gradient(90deg, var(--cyan), var(--purple));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.breadcrumb {
+  font-size: 11px;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.breadcrumb .sep { color: var(--text-muted); opacity: 0.5; }
+
+.topbar-right { display: flex; align-items: center; gap: 14px; }
+
+/* Voice HUD */
+.voice-hud {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  height: 24px;
+  padding: 0 10px;
+  background: rgba(0,229,255,0.05);
+  border: 1px solid rgba(0,229,255,0.1);
+  border-radius: 12px;
+}
+
+.voice-bar {
+  width: 3px;
+  background: var(--cyan);
+  border-radius: 2px;
+  animation: voiceWave 0.8s ease-in-out infinite alternate;
+  opacity: 0.6;
+}
+
+.voice-bar:nth-child(1) { height: 6px; animation-delay: 0s; }
+.voice-bar:nth-child(2) { height: 12px; animation-delay: 0.1s; }
+.voice-bar:nth-child(3) { height: 8px; animation-delay: 0.2s; }
+.voice-bar:nth-child(4) { height: 16px; animation-delay: 0.15s; }
+.voice-bar:nth-child(5) { height: 10px; animation-delay: 0.05s; }
+
+@keyframes voiceWave {
+  0% { transform: scaleY(0.4); opacity: 0.3; }
+  100% { transform: scaleY(1); opacity: 0.9; }
+}
+
+/* Search */
+.search-box {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--bg-glass);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 7px 14px;
+  min-width: 220px;
+  transition: all 0.2s;
+}
+
+.search-box:focus-within {
+  border-color: var(--border-glow);
+  box-shadow: 0 0 15px rgba(0,229,255,0.08);
+}
+
+.search-box input {
+  background: transparent;
+  border: none;
+  color: var(--text-primary);
+  font-size: 12px;
+  outline: none;
+  width: 100%;
+}
+
+.search-box input::placeholder { color: var(--text-muted); }
+
+/* Status Pill */
+.status-pill {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 12px;
+  border-radius: 20px;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid var(--border);
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.status-dot {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: var(--green);
+  box-shadow: 0 0 8px var(--green);
+  animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+.topbar-btn {
+  width: 34px; height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all 0.2s;
+  position: relative;
+  color: var(--text-secondary);
+}
+
+.topbar-btn:hover {
+  background: rgba(0,229,255,0.08);
+  color: var(--cyan);
+}
+
+/* ── Content ── */
+.content {
+  grid-area: content;
+  position: relative;
+  overflow: hidden;
+}
+
+.panel {
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.35s ease, visibility 0.35s;
+  overflow: auto;
+  padding: 20px;
+}
+
+.panel.active {
+  opacity: 1;
+  visibility: visible;
+}
+
+/* ── Dashboard Panel Specifics ── */
+#panel-dashboard {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  grid-template-rows: auto 1fr;
+  gap: 16px;
+  padding: 20px;
+  height: 100%;
+}
+
+.stat-row {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 14px;
+}
+
+.stat-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 18px;
+  position: relative;
+  overflow: hidden;
+  transition: all 0.3s ease;
+  backdrop-filter: blur(10px);
+}
+
+.stat-card::before {
+  content: "";
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, var(--cyan), var(--purple));
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+
+.stat-card:hover {
+  transform: translateY(-3px);
+  border-color: var(--border-glow);
+  box-shadow: var(--shadow-glow);
+}
+
+.stat-card:hover::before { opacity: 1; }
+
+.stat-card .stat-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  color: var(--text-muted);
+  margin-bottom: 10px;
+}
+
+.stat-card .stat-value {
+  font-size: 28px;
+  font-weight: 700;
+  font-family: var(--font-mono);
+  background: linear-gradient(90deg, var(--cyan), var(--purple));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.stat-card .stat-delta {
+  font-size: 11px;
+  margin-top: 6px;
+  color: var(--green);
+}
+
+.chart-area {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px;
+  backdrop-filter: blur(10px);
+}
+
+.chart-area .chart-title {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  color: var(--text-muted);
+  margin-bottom: 16px;
+}
+
+.side-widgets {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.widget {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 18px;
+  backdrop-filter: blur(10px);
+  transition: all 0.3s;
+}
+
+.widget:hover {
+  border-color: var(--border-glow);
+}
+
+.widget-title {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  color: var(--text-muted);
+  margin-bottom: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.activity-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+}
+
+.activity-item:last-child { border-bottom: none; }
+
+.activity-dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+/* Bar chart */
+.bar-chart { display: flex; align-items: flex-end; gap: 8px; height: 120px; padding-top: 10px; }
+.bar-chart .bar {
+  flex: 1;
+  background: linear-gradient(180deg, var(--cyan), rgba(0,229,255,0.1));
+  border-radius: 4px 4px 0 0;
+  transition: all 0.3s;
+  position: relative;
+}
+.bar-chart .bar:hover {
+  filter: brightness(1.3);
+  box-shadow: 0 0 12px rgba(0,229,255,0.3);
+}
+.bar-chart .bar-label {
+  position: absolute;
+  bottom: -18px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 9px;
+  color: var(--text-muted);
+}
+
+/* Uptime */
+.uptime-display {
+  font-family: var(--font-mono);
+  font-size: 24px;
+  text-align: center;
+  color: var(--cyan);
+  text-shadow: 0 0 20px rgba(0,229,255,0.3);
+  letter-spacing: 2px;
+}
+
+/* Responsive */
+@media (max-width: 1024px) {
+  #panel-dashboard { grid-template-columns: 1fr; }
+  .stat-row { grid-template-columns: repeat(2, 1fr); }
+}
+
+@media (max-width: 768px) {
+  .app { grid-template-columns: 0 1fr; }
+  .sidebar { position: fixed; z-index: 100; height: 100vh; transform: translateX(-100%); }
+  .sidebar.open { transform: translateX(0); }
+  .stat-row { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+<div class="scan-line"></div>
+<canvas id="bgCanvas"></canvas>
+<div class="app" id="app">
+<nav class="sidebar" id="sidebar">
+  <div class="sidebar-logo" onclick="toggleSidebar()"><span>M</span></div>
+  <div class="nav-item active" data-panel="dashboard" title="Dashboard" onclick="showPanel(&#39;dashboard&#39;)">
+    <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg></span>
+    <span class="nav-label">Dashboard</span>
+  </div>
+  <div class="nav-item" data-panel="chat" title="AI Chat" onclick="showPanel(&#39;chat&#39;)">
+    <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7A8.38 8.38 0 0 1 4 11.5a8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg></span>
+    <span class="nav-label">AI Chat</span><span class="nav-badge">3</span>
+  </div>
+  <div class="nav-item" data-panel="profile" title="Profile" onclick="showPanel(&#39;profile&#39;)">
+    <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 4-6 8-6s8 2 8 6"/></svg></span>
+    <span class="nav-label">Profile</span>
+  </div>
+  <div class="sidebar-divider"></div>
+  <div class="nav-item" data-panel="models" title="LLM Models" onclick="showPanel(&#39;models&#39;)">
+    <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg></span>
+    <span class="nav-label">LLM Models</span>
+  </div>
+  <div class="nav-item" data-panel="llm" title="LLM Monitor" onclick="showPanel(&#39;llm&#39;)">
+    <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M9 9h6v6H9z"/><path d="M9 1v3M15 1v3M9 20v3M15 20v3M20 9h3M20 15h3M1 9h3M1 15h3"/></svg></span>
+    <span class="nav-label">LLM Monitor</span><span class="nav-badge">4</span>
+  </div>
+  <div class="nav-item" data-panel="providers" title="Providers" onclick="showPanel(&#39;providers&#39;)">
+    <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="3"/><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg></span>
+    <span class="nav-label">Providers</span><span class="nav-badge">2</span>
+  </div>
+  <div class="nav-item" data-panel="skills" title="Skills" onclick="showPanel(&#39;skills&#39;)">
+    <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg></span>
+    <span class="nav-label">Skills</span>
+  </div>
+  <div class="nav-item" data-panel="memory" title="Memory" onclick="showPanel(&#39;memory&#39;)">
+    <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm0 16a6 6 0 1 1 6-6 6 6 0 0 1-6 6z"/><circle cx="12" cy="12" r="2"/></svg></span>
+    <span class="nav-label">Memory</span>
+  </div>
+  <div class="sidebar-divider"></div>
+  <div class="nav-item" data-panel="kanban" title="Kanban" onclick="showPanel(&#39;kanban&#39;)">
+    <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 9v12"/></svg></span>
+    <span class="nav-label">Kanban</span>
+  </div>
+  <div class="nav-item" data-panel="schedules" title="Schedules" onclick="showPanel(&#39;schedules&#39;)">
+    <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg></span>
+    <span class="nav-label">Schedules</span>
+  </div>
+  <div class="nav-item" data-panel="obsidian" title="Obsidian" onclick="showPanel(&#39;obsidian&#39;)">
+    <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg></span>
+    <span class="nav-label">Obsidian</span>
+  </div>
+  <div class="nav-item" data-panel="sessions" title="Sessions" onclick="showPanel(&#39;sessions&#39;)">
+    <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg></span>
+    <span class="nav-label">Sessions</span>
+  </div>
+  <div class="nav-item" data-panel="workspace" title="Workspace" onclick="showPanel(&#39;workspace&#39;)">
+    <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 4h16v12H4z"/><path d="M12 16v4M8 20h8"/><path d="M8 8h8M8 12h5"/></svg></span>
+    <span class="nav-label">Workspace</span>
+  </div>
+  <div class="nav-item" data-panel="control" title="Control" onclick="showPanel(&#39;control&#39;)">
+    <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="3"/><path d="M12 1v6M12 17v6M1 12h6M17 12h6M4.22 4.22l4.24 4.24M15.54 15.54l4.24 4.24M4.22 19.78l4.24-4.24M15.54 8.46l4.24-4.24"/></svg></span>
+    <span class="nav-label">Control</span><span class="nav-badge">NEW</span>
+  </div>
+  <div class="sidebar-divider"></div>
+  <div class="nav-item" data-panel="trading" title="Trading" onclick="showPanel(&#39;trading&#39;)">
+    <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 17l6-6 4 4 8-8"/><path d="M14 7h8v8"/></svg></span>
+    <span class="nav-label">Trading</span>
+  </div>
+  <div class="nav-item" data-panel="security" title="Security" onclick="showPanel(&#39;security&#39;)">
+    <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></span>
+    <span class="nav-label">Security</span>
+  </div>
+  <div class="nav-item" data-panel="p2p" title="P2P Mesh" onclick="showPanel(&#39;p2p&#39;)">
+    <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="5" r="3"/><circle cx="5" cy="19" r="3"/><circle cx="19" cy="19" r="3"/><path d="M12 8v3M7 17l3-3M17 17l-3-3"/></svg></span>
+    <span class="nav-label">P2P Mesh</span>
+  </div>
+  <div class="nav-item" data-panel="gateway" title="Gateway" onclick="showPanel(&#39;gateway&#39;)">
+    <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg></span>
+    <span class="nav-label">Gateway</span>
+  </div>
+  <div class="sidebar-divider"></div>
+  <div class="nav-item" data-panel="router" title="Router" onclick="showPanel(&#39;router&#39;)">
+    <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="13" width="20" height="8" rx="2"/><path d="M6 13V9a6 6 0 0 1 12 0v4"/></svg></span>
+    <span class="nav-label">Router</span><span class="nav-badge">3</span>
+  </div>
+  <div class="nav-item" data-panel="ccswitch" title="CC Switch" onclick="showPanel(&#39;ccswitch&#39;)">
+    <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M16 3h5v5M4 20L21 3M21 16v5h-5M15 15l6 6M4 4l5 5"/></svg></span>
+    <span class="nav-label">CC Switch</span>
+  </div>
+  <div class="sidebar-divider"></div>
+  <div class="nav-item" data-panel="tools" title="Tools" onclick="showPanel(&#39;tools&#39;)">
+    <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg></span>
+    <span class="nav-label">Tools</span>
+  </div>
+  <div class="nav-item" data-panel="plugins" title="Plugins" onclick="showPanel(&#39;plugins&#39;)">
+    <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg></span>
+    <span class="nav-label">Plugins</span>
+  </div>
+  <div class="nav-item" data-panel="settings" title="Settings" onclick="showPanel(&#39;settings&#39;)">
+    <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></span>
+    <span class="nav-label">Settings</span>
+  </div>
+  <div class="sidebar-footer">
+    <div class="nav-item" title="Toggle Sidebar" onclick="toggleSidebar()">
+      <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 17l6-6-6-6M12 19h8"/></svg></span>
+      <span class="nav-label">Collapse</span>
+    </div>
+  </div>
+</nav>
+<header class="topbar">
+  <div class="topbar-left">
+    <div class="topbar-title" id="pageTitle">Dashboard</div>
+    <div class="breadcrumb" id="breadcrumb">
+      <span>MAGNATRIX-OS</span>
+      <span class="sep">/</span>
+      <span>Dashboard</span>
+    </div>
+  </div>
+  <div class="topbar-right">
+    <div class="voice-hud">
+      <div class="voice-bar"></div>
+      <div class="voice-bar"></div>
+      <div class="voice-bar"></div>
+      <div class="voice-bar"></div>
+      <div class="voice-bar"></div>
+    </div>
+    <div class="search-box">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+      <input type="text" placeholder="Search anything... (Ctrl+K)" id="globalSearch">
+    </div>
+    <div class="status-pill">
+      <span class="status-dot"></span>
+      <span id="systemStatus">SYSTEM ONLINE</span>
+    </div>
+    <div class="topbar-btn" title="Notifications">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+      <span style="position:absolute;top:4px;right:4px;width:8px;height:8px;background:var(--red);border-radius:50%;border:2px solid var(--bg-secondary)"></span>
+    </div>
+    <div class="topbar-btn" title="Terminal" onclick="showPanel('sessions')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 17l6-6-6-6M12 19h8"/></svg>
+    </div>
+  </div>
+</header>
+
+<main class="content" id="content">
+<div class="panel active" id="panel-dashboard">
+  <div class="stat-row">
+    <div class="stat-card">
+      <div class="stat-label">System Uptime</div>
+      <div class="stat-value" id="uptimeCounter">00:00:00</div>
+      <div class="stat-delta">&#9650; Continuous operation</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Active Panels</div>
+      <div class="stat-value">23</div>
+      <div class="stat-delta">&#9650; +2 this session</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Native Files</div>
+      <div class="stat-value">129+</div>
+      <div class="stat-delta">&#9650; +5 today</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Git Commits</div>
+      <div class="stat-value">165</div>
+      <div class="stat-delta">&#9650; v2.0-dev</div>
+    </div>
+  </div>
+
+  <div class="chart-area">
+    <div class="chart-title">Activity Metrics</div>
+    <div class="bar-chart">
+      <div class="bar" style="height:45%"><span class="bar-label">Mon</span></div>
+      <div class="bar" style="height:62%"><span class="bar-label">Tue</span></div>
+      <div class="bar" style="height:38%"><span class="bar-label">Wed</span></div>
+      <div class="bar" style="height:78%"><span class="bar-label">Thu</span></div>
+      <div class="bar" style="height:55%"><span class="bar-label">Fri</span></div>
+      <div class="bar" style="height:90%"><span class="bar-label">Sat</span></div>
+      <div class="bar" style="height:70%"><span class="bar-label">Sun</span></div>
+    </div>
+  </div>
+
+  <div class="side-widgets">
+    <div class="widget">
+      <div class="widget-title">Live Activity <span style="color:var(--green)">&#9679;</span></div>
+      <div class="activity-item">
+        <span class="activity-dot" style="background:var(--cyan)"></span>
+        <span>HFT Engine tick processed</span>
+        <span style="margin-left:auto;color:var(--text-muted);font-size:10px">2s ago</span>
+      </div>
+      <div class="activity-item">
+        <span class="activity-dot" style="background:var(--purple)"></span>
+        <span>Agentic RAG query resolved</span>
+        <span style="margin-left:auto;color:var(--text-muted);font-size:10px">5s ago</span>
+      </div>
+      <div class="activity-item">
+        <span class="activity-dot" style="background:var(--green)"></span>
+        <span>P2P mesh node discovered</span>
+        <span style="margin-left:auto;color:var(--text-muted);font-size:10px">12s ago</span>
+      </div>
+      <div class="activity-item">
+        <span class="activity-dot" style="background:var(--orange)"></span>
+        <span>Crypto key rotation complete</span>
+        <span style="margin-left:auto;color:var(--text-muted);font-size:10px">18s ago</span>
+      </div>
+      <div class="activity-item">
+        <span class="activity-dot" style="background:var(--pink)"></span>
+        <span>LLM inference batch done</span>
+        <span style="margin-left:auto;color:var(--text-muted);font-size:10px">24s ago</span>
+      </div>
+    </div>
+
+    <div class="widget">
+      <div class="widget-title">System Health</div>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <div style="display:flex;align-items:center;gap:10px">
+          <span style="font-size:11px;min-width:50px">CPU</span>
+          <div style="flex:1;height:6px;background:var(--bg-tertiary);border-radius:3px;overflow:hidden">
+            <div style="width:34%;height:100%;background:linear-gradient(90deg,var(--cyan),var(--blue));border-radius:3px"></div>
+          </div>
+          <span style="font-size:11px;color:var(--text-muted)">34%</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px">
+          <span style="font-size:11px;min-width:50px">Memory</span>
+          <div style="flex:1;height:6px;background:var(--bg-tertiary);border-radius:3px;overflow:hidden">
+            <div style="width:52%;height:100%;background:linear-gradient(90deg,var(--purple),var(--cyan));border-radius:3px"></div>
+          </div>
+          <span style="font-size:11px;color:var(--text-muted)">52%</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px">
+          <span style="font-size:11px;min-width:50px">Disk</span>
+          <div style="flex:1;height:6px;background:var(--bg-tertiary);border-radius:3px;overflow:hidden">
+            <div style="width:71%;height:100%;background:linear-gradient(90deg,var(--amber),var(--red));border-radius:3px"></div>
+          </div>
+          <span style="font-size:11px;color:var(--text-muted)">71%</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="widget">
+      <div class="widget-title">Network Mesh</div>
+      <div style="height:100px;display:flex;align-items:center;justify-content:center;position:relative">
+        <svg width="140" height="100" viewBox="0 0 140 100">
+          <circle cx="70" cy="50" r="4" fill="var(--cyan)"/><circle cx="30" cy="30" r="3" fill="var(--purple)"/><circle cx="110" cy="30" r="3" fill="var(--green)"/>
+          <circle cx="30" cy="70" r="3" fill="var(--orange)"/><circle cx="110" cy="70" r="3" fill="var(--pink)"/>
+          <line x1="70" y1="50" x2="30" y2="30" stroke="var(--border-glow)" stroke-width="1"/>
+          <line x1="70" y1="50" x2="110" y2="30" stroke="var(--border-glow)" stroke-width="1"/>
+          <line x1="70" y1="50" x2="30" y2="70" stroke="var(--border-glow)" stroke-width="1"/>
+          <line x1="70" y1="50" x2="110" y2="70" stroke="var(--border-glow)" stroke-width="1"/>
+          <line x1="30" y1="30" x2="110" y2="70" stroke="var(--border)" stroke-width="0.5" opacity="0.5"/>
+          <line x1="110" y1="30" x2="30" y2="70" stroke="var(--border)" stroke-width="0.5" opacity="0.5"/>
+          <circle cx="70" cy="50" r="12" fill="none" stroke="var(--cyan)" stroke-width="0.5" opacity="0.3">
+            <animate attributeName="r" values="12;18;12" dur="3s" repeatCount="indefinite"/>
+            <animate attributeName="opacity" values="0.3;0;0.3" dur="3s" repeatCount="indefinite"/>
+          </circle>
+        </svg>
+        <div style="position:absolute;bottom:0;font-size:10px;color:var(--text-muted)">5 peers connected</div>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="panel" id="panel-chat">
+  <iframe src="panels/panel_chat.html" style="width:100%;height:calc(100vh - 60px);border:none;display:block;"></iframe>
+</div>
+<div class="panel" id="panel-profile">
+  <iframe src="panels/panel_profile.html" style="width:100%;height:calc(100vh - 60px);border:none;display:block;"></iframe>
+</div>
+<div class="panel" id="panel-models">
+  <iframe src="panels/panel_models.html" style="width:100%;height:calc(100vh - 60px);border:none;display:block;"></iframe>
+</div>
+<div class="panel" id="panel-llm">
+  <iframe src="panels/panel_llm.html" style="width:100%;height:calc(100vh - 60px);border:none;display:block;"></iframe>
+</div>
+<div class="panel" id="panel-providers">
+  <iframe src="panels/panel_providers.html" style="width:100%;height:calc(100vh - 60px);border:none;display:block;"></iframe>
+</div>
+<div class="panel" id="panel-skills">
+  <iframe src="panels/panel_skills.html" style="width:100%;height:calc(100vh - 60px);border:none;display:block;"></iframe>
+</div>
+<div class="panel" id="panel-memory">
+  <iframe src="panels/panel_memory.html" style="width:100%;height:calc(100vh - 60px);border:none;display:block;"></iframe>
+</div>
+<div class="panel" id="panel-kanban">
+  <iframe src="panels/panel_kanban.html" style="width:100%;height:calc(100vh - 60px);border:none;display:block;"></iframe>
+</div>
+<div class="panel" id="panel-schedules">
+  <iframe src="panels/panel_schedules.html" style="width:100%;height:calc(100vh - 60px);border:none;display:block;"></iframe>
+</div>
+<div class="panel" id="panel-obsidian">
+  <iframe src="panels/panel_obsidian.html" style="width:100%;height:calc(100vh - 60px);border:none;display:block;"></iframe>
+</div>
+<div class="panel" id="panel-sessions">
+  <iframe src="panels/panel_sessions.html" style="width:100%;height:calc(100vh - 60px);border:none;display:block;"></iframe>
+</div>
+<div class="panel" id="panel-workspace">
+  <iframe src="panels/panel_workspace.html" style="width:100%;height:calc(100vh - 60px);border:none;display:block;"></iframe>
+</div>
+<div class="panel" id="panel-control">
+  <iframe src="panels/panel_control.html" style="width:100%;height:calc(100vh - 60px);border:none;display:block;"></iframe>
+</div>
+<div class="panel" id="panel-trading">
+  <iframe src="panels/panel_trading.html" style="width:100%;height:calc(100vh - 60px);border:none;display:block;"></iframe>
+</div>
+<div class="panel" id="panel-security">
+  <iframe src="panels/panel_security.html" style="width:100%;height:calc(100vh - 60px);border:none;display:block;"></iframe>
+</div>
+<div class="panel" id="panel-p2p">
+  <iframe src="panels/panel_p2p.html" style="width:100%;height:calc(100vh - 60px);border:none;display:block;"></iframe>
+</div>
+<div class="panel" id="panel-gateway">
+  <iframe src="panels/panel_gateway.html" style="width:100%;height:calc(100vh - 60px);border:none;display:block;"></iframe>
+</div>
+<div class="panel" id="panel-router">
+  <iframe src="panels/panel_router.html" style="width:100%;height:calc(100vh - 60px);border:none;display:block;"></iframe>
+</div>
+<div class="panel" id="panel-ccswitch">
+  <iframe src="panels/panel_ccswitch.html" style="width:100%;height:calc(100vh - 60px);border:none;display:block;"></iframe>
+</div>
+<div class="panel" id="panel-tools">
+  <iframe src="panels/panel_tools.html" style="width:100%;height:calc(100vh - 60px);border:none;display:block;"></iframe>
+</div>
+<div class="panel" id="panel-plugins">
+  <iframe src="panels/panel_plugins.html" style="width:100%;height:calc(100vh - 60px);border:none;display:block;"></iframe>
+</div>
+<div class="panel" id="panel-settings">
+  <iframe src="panels/panel_settings.html" style="width:100%;height:calc(100vh - 60px);border:none;display:block;"></iframe>
+</div>
+</main>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════════════════════
+// MAGNATRIX-OS Dashboard v2 — JavaScript
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// ── Canvas Particle Network ──
+(function initParticles() {
+  const canvas = document.getElementById('bgCanvas');
+  const ctx = canvas.getContext('2d');
+  let W, H, particles = [];
+  const PARTICLE_COUNT = 60;
+  const CONNECTION_DIST = 120;
+
+  function resize() {
+    W = canvas.width = window.innerWidth;
+    H = canvas.height = window.innerHeight;
+  }
+  resize();
+  window.addEventListener('resize', resize);
+
+  class Particle {
+    constructor() {
+      this.x = Math.random() * W;
+      this.y = Math.random() * H;
+      this.vx = (Math.random() - 0.5) * 0.4;
+      this.vy = (Math.random() - 0.5) * 0.4;
+      this.r = Math.random() * 1.5 + 0.5;
+    }
+    update() {
+      this.x += this.vx;
+      this.y += this.vy;
+      if (this.x < 0 || this.x > W) this.vx *= -1;
+      if (this.y < 0 || this.y > H) this.vy *= -1;
+    }
+    draw() {
+      ctx.beginPath();
+      ctx.arc(this.x, this.y, this.r, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(0, 229, 255, 0.4)';
+      ctx.fill();
+    }
+  }
+
+  for (let i = 0; i < PARTICLE_COUNT; i++) particles.push(new Particle());
+
+  let mouse = { x: null, y: null };
+  window.addEventListener('mousemove', e => { mouse.x = e.clientX; mouse.y = e.clientY; });
+  window.addEventListener('mouseleave', () => { mouse.x = null; mouse.y = null; });
+
+  function animate() {
+    ctx.clearRect(0, 0, W, H);
+    // Draw subtle grid
+    ctx.strokeStyle = 'rgba(0, 229, 255, 0.02)';
+    ctx.lineWidth = 0.5;
+    const gridSize = 50;
+    for (let x = 0; x < W; x += gridSize) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke(); }
+    for (let y = 0; y < H; y += gridSize) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); }
+
+    for (let i = 0; i < particles.length; i++) {
+      particles[i].update();
+      particles[i].draw();
+      // Connect nearby
+      for (let j = i + 1; j < particles.length; j++) {
+        const dx = particles[i].x - particles[j].x;
+        const dy = particles[i].y - particles[j].y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist < CONNECTION_DIST) {
+          ctx.beginPath();
+          ctx.moveTo(particles[i].x, particles[i].y);
+          ctx.lineTo(particles[j].x, particles[j].y);
+          ctx.strokeStyle = `rgba(0, 229, 255, ${0.1 * (1 - dist / CONNECTION_DIST)})`;
+          ctx.lineWidth = 0.5;
+          ctx.stroke();
+        }
+      }
+      // Mouse connection
+      if (mouse.x !== null) {
+        const dx = particles[i].x - mouse.x;
+        const dy = particles[i].y - mouse.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist < 150) {
+          ctx.beginPath();
+          ctx.moveTo(particles[i].x, particles[i].y);
+          ctx.lineTo(mouse.x, mouse.y);
+          ctx.strokeStyle = `rgba(179, 136, 255, ${0.2 * (1 - dist / 150)})`;
+          ctx.stroke();
+        }
+      }
+    }
+    requestAnimationFrame(animate);
+  }
+  animate();
+})();
+
+// ── Panel System ──
+const panels = {};
+document.querySelectorAll('.panel').forEach(p => {
+  panels[p.id.replace('panel-', '')] = p;
+});
+
+const navItems = document.querySelectorAll('.nav-item[data-panel]');
+const pageTitle = document.getElementById('pageTitle');
+const breadcrumb = document.getElementById('breadcrumb');
+const app = document.getElementById('app');
+
+function showPanel(name) {
+  // Hide all panels
+  Object.values(panels).forEach(p => p.classList.remove('active'));
+  // Show target
+  if (panels[name]) panels[name].classList.add('active');
+  // Update nav
+  navItems.forEach(n => n.classList.remove('active'));
+  const activeNav = document.querySelector(`.nav-item[data-panel="${name}"]`);
+  if (activeNav) activeNav.classList.add('active');
+  // Update title
+  const label = activeNav ? activeNav.querySelector('.nav-label')?.textContent || name : name;
+  pageTitle.textContent = label;
+  breadcrumb.innerHTML = `<span>MAGNATRIX-OS</span><span class="sep">/</span><span>${label}</span>`;
+}
+
+function toggleSidebar() {
+  app.classList.toggle('sidebar-expanded');
+}
+
+// ── Uptime Counter ──
+let startTime = Date.now() - (2 * 24 * 60 * 60 * 1000 + 7 * 60 * 60 * 1000 + 33 * 60 * 1000);
+function updateUptime() {
+  const elapsed = Date.now() - startTime;
+  const days = Math.floor(elapsed / 86400000);
+  const hours = Math.floor((elapsed % 86400000) / 3600000);
+  const mins = Math.floor((elapsed % 3600000) / 60000);
+  const secs = Math.floor((elapsed % 60000) / 1000);
+  const el = document.getElementById('uptimeCounter');
+  if (el) el.textContent = `${String(days).padStart(2,'0')}:${String(hours).padStart(2,'0')}:${String(mins).padStart(2,'0')}:${String(secs).padStart(2,'0')}`;
+}
+setInterval(updateUptime, 1000);
+updateUptime();
+
+// ── Keyboard Shortcuts ──
+document.addEventListener('keydown', e => {
+  if (e.ctrlKey && e.key === 'k') {
+    e.preventDefault();
+    document.getElementById('globalSearch')?.focus();
+  }
+  if (e.key === 'Escape') {
+    app.classList.remove('sidebar-expanded');
+  }
+});
+
+// ── Animate bars on load ──
+window.addEventListener('load', () => {
+  document.querySelectorAll('.bar-chart .bar').forEach((bar, i) => {
+    const target = bar.style.height;
+    bar.style.height = '0%';
+    setTimeout(() => { bar.style.transition = 'height 0.8s ease'; bar.style.height = target; }, i * 100);
+  });
+});
+</script>
+</body>
+</html>
