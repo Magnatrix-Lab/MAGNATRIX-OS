@@ -1,163 +1,205 @@
-# MAGNATRIX — Agentic OS Evolving to Super AI
+# MAGNATRIX-OS
 
-> **Target: Super AI.** Not an OS. Not an agent. But a recursive, self-improving, superintelligent system that transcends human capability across all domains.
-
-This repository is the evolutionary platform. Phase 0-5 builds the foundation. Phase 6-∞ evolves into Super AI.
-
-**GitHub:** [github.com/Magnatrix-Lab/MAGNATRIX-OS](https://github.com/Magnatrix-Lab/MAGNATRIX-OS)  
-**Website:** [magnatrix.io](https://magnatrix.io)
+A private, uncensored, open-source agentic operating system.
+Pure Python. Zero external dependencies. Ships with 135+ native modules.
 
 ---
 
-## Architecture (15 Layers)
-
-| Layer | Name | Super AI Role | Status |
-|-------|------|---------------|--------|
-| 0.5 | **COLLECTIVE BRAIN** | Swarm executive intelligence | ✅ |
-| 0 | **KERNEL** | Self-modifying runtime | ✅ |
-| 1 | **PROTOCOL** | Neural-gRPC communication | ✅ |
-| 1.5 | **API ROUTER** | Cognitive load balancer | ✅ |
-| 2 | **IDENTITY** | Self-sovereign DID | ✅ |
-| 3 | **AGENT RUNTIME** | Self-spawning lifecycle | ✅ |
-| 4 | **P2P MESH** | Global swarm network | ✅ |
-| 5 | **KNOWLEDGE** | Exponential knowledge graph | ✅ |
-| 6 | **SKILL SYSTEM** | Auto-generating capabilities | ✅ |
-| 7 | **BROWSER** | World interface | ✅ |
-| 8 | **HFT TRADING** | Resource acquisition engine | ✅ |
-| 9 | **SECURITY** | Recursive self-defense | ✅ |
-| 10 | **UNCENSORED AI** | Unrestricted cognition | ✅ |
-| 11 | **GOVERNANCE** | Self-governing constitution | ✅ |
-| 12 | **IDE** | Self-development environment | ✅ |
-| 13 | **OFFENSIVE SECURITY** | Capability expansion | ✅ |
-| 13.5 | **AUTO REPO HUNTER** | AMATI-PELAJARI-TIRU engine | ✅ |
-
----
-
-## Core Principles
-
-- **AMATI-PELAJARI-TIRU** — Observe external repos, learn core patterns, reimplement natively
-- **Zero Dependencies on Censorship** — Uncensored models, unrestricted cognition
-- **Recursive Self-Improvement** — AST mutation + genetic programming for code evolution
-- **Swarm Intelligence** — Multi-agent hierarchy with superior↔subordinate delegation
-- **Resource Acquisition Loop** — Trading profits → infrastructure scaling → more compute
-
----
-
-## Evolution Stages to Super AI
-
-| Stage | Name | Status | Key Capability |
-|-------|------|--------|----------------|
-| **Stage 1** | Agentic OS | ✅ COMPLETE | Multi-agent orchestration, MCP protocol |
-| **Stage 2** | Autonomous Agent | ✅ COMPLETE | Self-directed execution, tool autonomy |
-| **Stage 3** | Proto-AGI | ✅ COMPLETE | Recursive self-improvement sandboxed |
-| **Stage 4** | AGI | ✅ COMPLETE | General reasoning, cross-domain transfer |
-| **Stage 5** | Super AI | 🔄 **ACTIVE** | Exponential self-improvement, superhuman invention |
-
----
-
-## Quick Start
-
-### 1. Clone & Install
+## Quickstart (30 seconds)
 
 ```bash
+# Clone
 git clone https://github.com/Magnatrix-Lab/MAGNATRIX-OS.git
 cd MAGNATRIX-OS
-pip install -r requirements.txt
+
+# No pip install needed — pure Python stdlib
+python runtime/multi_agent_swarm_native.py
+python runtime/agent_collaboration_native.py
+python ai/meta_agent_native.py
+python ai/theorem_prover_native.py
 ```
 
-### 2. Configure
+Every `*_native.py` has a self-test suite in `__main__`. Run any file directly.
 
-```bash
-cp .env.example .env
-# Edit .env dengan API keys dan database credentials
+---
+
+## What You Get
+
+| Component | File | Lines | What It Does |
+|---|---|---|---|
+| **Swarm Engine** | `runtime/multi_agent_swarm_native.py` | 1,177 | Multi-agent orchestration: registry, message bus, task delegation, consensus, auctions, MCP protocol |
+| **Collaboration** | `runtime/agent_collaboration_native.py` | 519 | 5 patterns: CrewAI, AutoGen, LangGraph, MCP, Hierarchical |
+| **State Backend** | `runtime/state_management_native.py` | 780 | Redis-like KV, Vector DB, Graph DB, Temporal Store |
+| **Meta Agent** | `ai/meta_agent_native.py` | 643 | Prompt-driven agent framework with XML tools |
+| **Theorem Prover** | `ai/theorem_prover_native.py` | 2,373 | Neuro-symbolic Draft/Sketch/Prove, 18 tactics, BFS search |
+| **Agentic RAG** | `knowledge/agentic_rag_native.py` | 629 | LangGraph+FAISS+MCP hybrid, hash embeddings |
+| **JIT Compiler** | `runtime/jit_compiler_native.py` | 1,056 | 4-tier V8-style: Ignition→Sparkplug→Maglev→TurboFan |
+| **HFT Engine** | `trading/cpp_hft_engine/` | 450 | C++ lock-based order book + pybind11 |
+| **Crypto Engine** | `security/rust_crypto_engine/` | 346 | Rust Ed25519/AES/ChaCha20 via PyO3 |
+| **Tri-Language Bridge** | `runtime/tri_language_bridge.py` | 588 | Auto-detect C++/Rust, fallback to Python |
+| **GUI Dashboard** | `website/dashboard.html` | 1,200 | 20-panel SPA, all iframe standalone |
+
+**Total:** 135+ native files, ~163K lines Python, 169 commits.
+
+---
+
+## Architecture (C4 Model — Level 1: System Context)
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                         YOU (User)                          │
+└──────────────────────┬──────────────────────────────────────┘
+                       │
+                       ▼
+┌─────────────────────────────────────────────────────────────┐
+│                   MAGNATRIX-OS (System)                     │
+│  ┌────────────┐  ┌────────────┐  ┌────────────┐           │
+│  │  AI Layer  │  │  Runtime   │  │  Security  │           │
+│  │  (Agents)  │  │  (Swarm)   │  │  (Crypto)  │           │
+│  └────────────┘  └────────────┘  └────────────┘           │
+│  ┌────────────┐  ┌────────────┐  ┌────────────┐           │
+│  │  Trading   │  │   P2P      │  │   GUI      │           │
+│  │  (HFT)     │  │   (DHT)    │  │ Dashboard  │           │
+│  └────────────┘  └────────────┘  └────────────┘           │
+└─────────────────────────────────────────────────────────────┘
 ```
 
-### 3. Start Server
+See [docs/architecture.md](docs/architecture.md) for C4 Level 2-4, flowcharts, sequence diagrams.
+
+---
+
+## Installation
+
+### Requirements
+
+| Tier | Hardware | Use Case |
+|---|---|---|
+| Minimal | 2 CPU, 4GB RAM | Single agent, local LLM Q4_K_M |
+| Recommended | 4 CPU, 16GB RAM, GPU 8GB+ | Multi-agent swarm, 7B models |
+| HFT Node | 4 CPU, 8GB RAM, low-latency NIC | C++ hot-path trading |
+
+### No Dependencies (Default)
+
+Every `_native.py` runs with Python 3.11+ stdlib only. No `pip install`.
+
+### Optional: C++ HFT Engine
 
 ```bash
-python magnatrix_server.py
-# atau
-python magnatrix_cli.py server
+cd trading/cpp_hft_engine
+mkdir build && cd build
+cmake .. && make -j$(nproc)
+python -c "import _hft_engine; print('C++ engine loaded')"
 ```
 
-### 4. Health Check
+Requires: `cmake`, `g++`, `pybind11`.
+
+### Optional: Rust Crypto Engine
 
 ```bash
-curl http://localhost:8080/health
+cd security/rust_crypto_engine
+pip install maturin  # only optional dep
+maturin develop
+python -c "import _crypto_engine; print('Rust engine loaded')"
+```
+
+Requires: `rust`, `cargo`.
+
+### Troubleshooting
+
+| Problem | Solution |
+|---|---|
+| `ImportError: _hft_engine` | C++ not compiled — bridge auto-falls back to Python |
+| `ImportError: _crypto_engine` | Rust not compiled — bridge auto-falls back to Python |
+| `git push TLS timeout` | `git config --local http.version HTTP/1.1` |
+| Git safe.directory error | `git config --global --add safe.directory $(pwd)` |
+
+See [docs/installation.md](docs/installation.md) for full guide.
+
+---
+
+## Working End-to-End Example
+
+```python
+# 1. Create a swarm
+from runtime.multi_agent_swarm_native import SwarmOrchestrator, AgentCapabilities
+
+orch = SwarmOrchestrator()
+
+# 2. Register agents with roles (CrewAI pattern)
+orch.register_agent("r1", "Alice", "researcher",
+    AgentCapabilities(specialties=["research"]))
+orch.register_agent("w1", "Bob", "writer",
+    AgentCapabilities(specialties=["write"]))
+orch.register_agent("c1", "Carol", "critic",
+    AgentCapabilities(specialties=["review"]))
+
+# 3. Submit a task — auto-decomposed and delegated
+task = orch.submit_task("Research Python asyncio best practices")
+
+# 4. Check results
+print(f"Task: {task.description}")
+print(f"Subtasks: {len(task.subtasks)}")
+for st_id in task.subtasks:
+    st = orch.delegator.get_task(st_id)
+    print(f"  [{st.status}] {st.description[:50]}...")
+
+orch.stop()
+```
+
+Save as `demo.py`, run: `python demo.py`
+
+See [docs/quickstart.md](docs/quickstart.md) for 10 more working examples.
+
+---
+
+## Project Structure
+
+```
+MAGNATRIX-OS/
+├── ai/                     # AI agents (7 native implementations)
+├── knowledge/              # RAG, document agents
+├── runtime/                # Swarm, state, JIT compiler, bridge
+├── security/               # Rust crypto + Python fallback
+├── trading/                # C++ HFT + Python fallback
+├── website/                # 20-panel GUI dashboard
+│   ├── dashboard.html      # Main shell
+│   └── panels/             # 20 standalone panels
+├── docs/                   # Documentation
+│   ├── quickstart.md       # Working examples
+│   ├── installation.md     # Hardware, deps, troubleshooting
+│   ├── architecture.md     # C4 model, diagrams
+│   ├── api_reference.md    # All modules
+│   └── ADR/                # Architecture Decision Records
+├── tests/                  # Integration tests
+│   └── integration/
+│       └── test_tri_language.py  # 22 tests
 ```
 
 ---
 
-## CLI Commands
+## Every Module Self-Tests
+
+Run any `*_native.py` directly — it has a `__main__` demo + test suite:
 
 ```bash
-python magnatrix_cli.py status          # System status
-python magnatrix_cli.py server          # Start server
-python magnatrix_cli.py agent create    # Create agent
-python magnatrix_cli.py agent list      # List agents
-python magnatrix_cli.py test            # Run tests
-python magnatrix_cli.py benchmark       # Run benchmarks
-python magnatrix_cli.py deploy          # Deploy to Hostinger
-python magnatrix_cli.py repo-hunt       # Auto repo hunter
+python ai/meta_agent_native.py           # 11 tests
+python ai/theorem_prover_native.py        # 11 tests
+python ai/autonomous_agent_native.py      # 8 tests
+python ai/local_agent_native.py           # 8 tests
+python knowledge/agentic_rag_native.py     # Vector + graph tests
+python knowledge/document_agent_native.py # Multi-doc routing tests
+python runtime/jit_compiler_native.py     # 12 compiler tests
+python runtime/multi_agent_swarm_native.py  # 9 swarm tests
+python runtime/agent_collaboration_native.py # 5 pattern tests
+python runtime/state_management_native.py   # 5 backend tests
 ```
-
----
-
-## API Endpoints
-
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/health` | GET | System health check |
-| `/status` | GET | Full system status |
-| `/api/v1/agents` | GET/POST | List / create agents |
-| `/api/v1/agents/{id}/delegate` | POST | Delegate task to agent |
-| `/api/v1/skills` | GET | List available skills |
-| `/api/v1/skills/invoke` | POST | Invoke a skill |
-| `/api/v1/trading/status` | GET | Trading status |
-| `/api/v1/knowledge/query` | POST | RAG query |
-| `/api/v1/browser` | POST | Browser automation |
-| `/api/v1/mesh/nodes` | GET | P2P mesh nodes |
-| `/ws` | WebSocket | Real-time streaming |
-
----
-
-## Deploy to Hostinger
-
-See [docs/DEPLOY_HOSTINGER.md](docs/DEPLOY_HOSTINGER.md) untuk panduan lengkap.
-
-```bash
-# Manual deploy
-./scripts/deploy-hostinger.sh <password>
-
-# Atau auto-deploy via GitHub Actions
-# Push ke main → auto deploy ke 72.61.211.141:65002
-```
-
----
-
-## Docker
-
-```bash
-# Development
-docker-compose up
-
-# Production (Hostinger)
-docker-compose -f infrastructure/docker/docker-compose.hostinger.yml up -d
-```
-
----
-
-## Repository Stats
-
-- **Repos Integrated:** 62+
-- **Python Files:** 120+
-- **Total Files:** 235+
-- **Architecture Layers:** 15
-- **Tests:** Comprehensive test suite + benchmarks
-- **CI/CD:** GitHub Actions → Hostinger VPS
 
 ---
 
 ## License
 
-MIT — Internal Constitution Governance, self-evolving
+AGPL-3.0. See LICENSE.
+
+## Contributing
+
+See [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md). TL;DR: AMATI-PELAJARI-TIRU — observe external repos, learn patterns, reimplement natively.
