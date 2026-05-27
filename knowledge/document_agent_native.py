@@ -300,59 +300,14 @@ class QueryEngine:
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Section 3 — Features
-# MockLLM · DocumentAgent · MetaAgent
+# DocumentAgent · MetaAgent (MockLLM deprecated, use MockToUnifiedBridge)
 # ═══════════════════════════════════════════════════════════════════════════════
 
+from ai.mock_to_unified_bridge import MockToUnifiedBridge
 
-class MockLLM:
-    """
-    Deterministic mock LLM for response generation.
-    Swappable with real LLM later.
-    """
+# MockLLM alias for backward compatibility
+MockLLM = MockToUnifiedBridge
 
-    def generate(self, prompt: str, context: List[str], max_tokens: int = 200) -> str:
-        """Generate a mock answer from context snippets."""
-        if not context:
-            return "I don't have enough information to answer that."
-
-        # Extract sentences that seem relevant to the prompt
-        query_terms = set(self._tokenize(prompt))
-        scored: List[Tuple[str, float]] = []
-        for snippet in context:
-            sentences = re.split(r"(?<=[.!?])\s+", snippet)
-            for sent in sentences:
-                sent_terms = set(self._tokenize(sent))
-                overlap = len(query_terms & sent_terms)
-                scored.append((sent, overlap))
-
-        scored.sort(key=lambda x: x[1], reverse=True)
-        top = [s for s, _ in scored[:5] if len(s) > 20]
-
-        if not top:
-            top = context[:2]
-
-        answer = "Based on the documents:\n\n" + " ".join(top)
-        if len(answer) > max_tokens:
-            answer = answer[: max_tokens - 3] + "..."
-        return answer
-
-    def summarize(self, text: str, max_lines: int = 3) -> str:
-        """Extract key sentences as a summary."""
-        sentences = re.split(r"(?<=[.!?])\s+", text)
-        # Score by position + keyword density
-        scored = []
-        for i, sent in enumerate(sentences):
-            words = self._tokenize(sent)
-            score = (1.0 / (i + 1)) * math.log(len(words) + 2)
-            scored.append((sent, score))
-        scored.sort(key=lambda x: x[1], reverse=True)
-        best = [s for s, _ in scored[:max_lines]]
-        return " ".join(best)
-
-    def _tokenize(self, text: str) -> List[str]:
-        lowered = text.lower()
-        cleaned = re.sub(r"[^a-z0-9\s]", " ", lowered)
-        return [t for t in cleaned.split() if len(t) > 2]
 
 
 class DocumentAgent:
