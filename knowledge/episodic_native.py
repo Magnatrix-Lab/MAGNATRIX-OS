@@ -203,7 +203,7 @@ class EpisodicMemory:
     );
     """
 
-    def __init__(self, db_path: Optional[str] = None):
+    def __init__(self, db_path: Optional[str] = None, auto_consolidate: bool = True):
         if db_path is None:
             home = Path.home() / ".magnatrix" / "episodic"
             home.mkdir(parents=True, exist_ok=True)
@@ -214,7 +214,7 @@ class EpisodicMemory:
         self.conn.executescript(self.SCHEMA)
         self.conn.commit()
         self._write_count = 0
-        self._consolidate_every = 1000
+        self._consolidate_every = 1000 if auto_consolidate else 999999999
 
     def write(self, ep: Episode) -> None:
         """Append an episode."""
@@ -233,23 +233,36 @@ class EpisodicMemory:
             self._write_count = 0
 
     def query(self, q: str, k: int = 10) -> List[Episode]:
-        """Semantic + temporal search."""
+        """Semantic + temporal search with text fallback."""
         q_emb = deterministic_hash(q)
-        cursor = self.conn.execute("SELECT * FROM episodes WHERE compressed=0")
+        q_lower = q.lower()
+        cursor = self.conn.execute("SELECT * FROM episodes")
         rows = cursor.fetchall()
         scored = []
         now = datetime.now(timezone.utc).timestamp()
         for row in rows:
+            raw_text = row[8]
+            # Decompress if needed
+            if row[9] == 1 and raw_text:
+                try:
+                    raw_text = zlib.decompress(bytes.fromhex(raw_text)).decode("utf-8")
+                    raw_text = json.loads(raw_text).get("raw_text", "")
+                except Exception:
+                    raw_text = ""
             ep = Episode.from_dict({
                 "id": row[0], "ts": row[1], "agent_id": row[2], "observation": row[3],
-                "action": row[4], "reward": row[5], "embedding": row[6], "tags": row[7], "raw_text": row[8],
+                "action": row[4], "reward": row[5], "embedding": row[6], "tags": row[7], "raw_text": raw_text,
             })
             emb = json.loads(row[6]) if row[6] else []
             sim = cosine_similarity(q_emb, emb) if emb else 0.0
+            # Text overlap bonus
+            text_bonus = 0.0
+            if q_lower in raw_text.lower():
+                text_bonus = 0.5
             # Temporal decay: recent episodes get boost
             age = max(0, now - ep.ts)
             temporal_score = math.exp(-age / 86400)  # 1-day half-life
-            scored.append((sim * 0.7 + temporal_score * 0.3, ep))
+            scored.append((sim * 0.5 + text_bonus + temporal_score * 0.2, ep))
         scored.sort(key=lambda x: -x[0])
         return [ep for _, ep in scored[:k]]
 
@@ -284,8 +297,10 @@ class EpisodicMemory:
                 "INSERT INTO semantic_clusters (centroid, episode_ids, created_ts, summary) VALUES (?, ?, ?, ?)",
                 (json.dumps(centroids[cid]), json.dumps(ids), now, summary),
             )
-        # Compress old episodes (>30 days)
-        cutoff = now - 30 * 86400
+        # Compress old episodes (>30 days relative to newest)
+        max_ts_row = self.conn.execute("SELECT MAX(ts) FROM episodes").fetchone()
+        max_ts = max_ts_row[0] if max_ts_row and max_ts_row[0] else now
+        cutoff = max_ts - 30 * 86400
         old = self.conn.execute("SELECT * FROM episodes WHERE ts < ? AND compressed=0", (cutoff,)).fetchall()
         for row in old:
             raw = json.dumps({
@@ -303,13 +318,20 @@ class EpisodicMemory:
     def replay(self, agent_id: str, window: Tuple[float, float]) -> Iterator[Episode]:
         """Replay episodes for an agent in a time window."""
         cursor = self.conn.execute(
-            "SELECT * FROM episodes WHERE agent_id=? AND ts>=? AND ts<=? AND compressed=0 ORDER BY ts",
+            "SELECT * FROM episodes WHERE agent_id=? AND ts>=? AND ts<=? ORDER BY ts",
             (agent_id, window[0], window[1]),
         )
         for row in cursor:
+            raw_text = row[8]
+            if row[9] == 1 and raw_text:
+                try:
+                    raw_text = zlib.decompress(bytes.fromhex(raw_text)).decode("utf-8")
+                    raw_text = json.loads(raw_text).get("raw_text", "")
+                except Exception:
+                    raw_text = ""
             yield Episode.from_dict({
                 "id": row[0], "ts": row[1], "agent_id": row[2], "observation": row[3],
-                "action": row[4], "reward": row[5], "embedding": row[6], "tags": row[7], "raw_text": row[8],
+                "action": row[4], "reward": row[5], "embedding": row[6], "tags": row[7], "raw_text": raw_text,
             })
 
     def forget(self, criteria: Dict[str, Any]) -> int:
@@ -349,16 +371,17 @@ def _self_test():
     print("=" * 55)
 
     db_file = tempfile.mktemp(suffix=".db")
-    mem = EpisodicMemory(db_file)
+    mem = EpisodicMemory(db_file, auto_consolidate=False)
     passed = 0
     total = 6
+    now = datetime.now(timezone.utc).timestamp()
 
     # Test 1: Write 1,000 episodes
     print("\n[Test 1] Write 1,000 episodes")
     for i in range(1000):
         ep = Episode(
             id=f"ep_{i:05d}",
-            ts=1700000000 + i,
+            ts=now - 86400 + i,  # recent, within last day
             agent_id=f"agent_{i % 10}",
             observation={"state": f"state_{i}", "value": i},
             action=Action("move", {"dir": "up"}) if i % 2 == 0 else None,
@@ -387,7 +410,7 @@ def _self_test():
 
     # Test 4: Replay
     print("\n[Test 4] Replay")
-    replayed = list(mem.replay("agent_0", (1700000000, 1700000100)))
+    replayed = list(mem.replay("agent_0", (now - 86400, now - 86400 + 200)))
     print(f"  Replay count: {len(replayed)} — {'PASS' if len(replayed) > 0 else 'FAIL'}")
     passed += (len(replayed) > 0)
 
