@@ -1,0 +1,1201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=1440, initial-scale=1" />
+<title>MAGNATRIX // ASI CONTROL CENTER</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700;800;900&family=Rajdhani:wght@300;400;500;600;700&family=Share+Tech+Mono&family=JetBrains+Mono:wght@300;400;600&display=swap" rel="stylesheet">
+<style>
+  /* ============== ROOT ============== */
+  :root{
+    --bg-0:#03060d;
+    --bg-1:#070d1a;
+    --bg-2:#0b1426;
+    --bg-3:#0f1b30;
+    --line:rgba(0,229,255,.18);
+    --line-strong:rgba(0,229,255,.42);
+    --cyan:#00e5ff;
+    --cyan-soft:#7be3ff;
+    --cyan-dim:rgba(0,229,255,.55);
+    --gold:#ffb547;
+    --amber:#ffcc33;
+    --red:#ff2e63;
+    --red-soft:#ff7a99;
+    --green:#00ff9c;
+    --violet:#9d6bff;
+    --magenta:#ff4dd2;
+    --txt:#cfeaff;
+    --txt-dim:rgba(207,234,255,.55);
+    --glow:0 0 18px rgba(0,229,255,.55), 0 0 42px rgba(0,229,255,.18);
+    --glow-red:0 0 18px rgba(255,46,99,.55), 0 0 42px rgba(255,46,99,.18);
+    --glow-green:0 0 18px rgba(0,255,156,.55), 0 0 42px rgba(0,255,156,.18);
+    --grid:linear-gradient(rgba(0,229,255,.05) 1px,transparent 1px),
+           linear-gradient(90deg,rgba(0,229,255,.05) 1px,transparent 1px);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{background:var(--bg-0);color:var(--txt);font-family:'Rajdhani',sans-serif;font-weight:400;overflow:hidden;height:100vh;width:100vw;letter-spacing:.02em}
+  body{
+    background:
+      radial-gradient(ellipse at 50% 0%,rgba(0,229,255,.07),transparent 55%),
+      radial-gradient(ellipse at 100% 100%,rgba(157,107,255,.06),transparent 55%),
+      radial-gradient(ellipse at 0% 100%,rgba(255,46,99,.05),transparent 55%),
+      var(--bg-0);
+    user-select:none;
+  }
+  ::-webkit-scrollbar{width:6px;height:6px}
+  ::-webkit-scrollbar-track{background:transparent}
+  ::-webkit-scrollbar-thumb{background:var(--line-strong);border-radius:0}
+  ::-webkit-scrollbar-thumb:hover{background:var(--cyan)}
+
+  /* ============== BACKGROUND LAYERS ============== */
+  .bg-grid{
+    position:fixed;inset:0;background-image:var(--grid);background-size:42px 42px;
+    mask:radial-gradient(ellipse at center,black 30%,transparent 80%);
+    opacity:.45;pointer-events:none;z-index:0;
+  }
+  .bg-scan{
+    position:fixed;inset:0;pointer-events:none;z-index:1;
+    background:repeating-linear-gradient(0deg,transparent 0,transparent 3px,rgba(0,229,255,.025) 3px,rgba(0,229,255,.025) 4px);
+    mix-blend-mode:screen;
+  }
+  .bg-vignette{position:fixed;inset:0;pointer-events:none;z-index:2;
+    background:radial-gradient(ellipse at center,transparent 50%,rgba(0,0,0,.7) 100%);
+  }
+  .bg-noise{position:fixed;inset:0;pointer-events:none;z-index:3;opacity:.05;
+    background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='240' height='240'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+  }
+  .scanline-sweep{
+    position:fixed;left:0;right:0;height:2px;
+    background:linear-gradient(90deg,transparent,var(--cyan),transparent);
+    box-shadow:0 0 24px var(--cyan);opacity:.4;z-index:4;pointer-events:none;
+    animation:sweep 7s linear infinite;
+  }
+  @keyframes sweep{0%{top:-10%}100%{top:110%}}
+
+  /* ============== APP LAYOUT ============== */
+  .app{
+    position:relative;z-index:10;display:grid;
+    grid-template-columns:280px 1fr 320px;
+    grid-template-rows:64px 1fr 56px;
+    grid-template-areas:
+      "top top top"
+      "left main right"
+      "bot bot bot";
+    height:100vh;width:100vw;gap:0;
+  }
+  .topbar{grid-area:top;border-bottom:1px solid var(--line);background:linear-gradient(180deg,rgba(7,13,26,.95),rgba(7,13,26,.7));backdrop-filter:blur(6px);display:flex;align-items:center;padding:0 18px;position:relative}
+  .leftbar{grid-area:left;border-right:1px solid var(--line);background:linear-gradient(180deg,rgba(7,13,26,.6),rgba(3,6,13,.85));overflow-y:auto;padding:14px}
+  .main{grid-area:main;overflow:hidden;position:relative;display:grid;grid-template-rows:auto auto 1fr;gap:14px;padding:14px}
+  .rightbar{grid-area:right;border-left:1px solid var(--line);background:linear-gradient(180deg,rgba(7,13,26,.6),rgba(3,6,13,.85));overflow-y:auto;padding:14px}
+  .botbar{grid-area:bot;border-top:1px solid var(--line);background:linear-gradient(0deg,rgba(7,13,26,.95),rgba(7,13,26,.7));backdrop-filter:blur(6px);display:flex;align-items:center;padding:0 18px;gap:14px}
+
+  /* ============== TYPOGRAPHY ============== */
+  .display{font-family:'Orbitron',sans-serif;font-weight:700;letter-spacing:.14em;text-transform:uppercase}
+  .mono{font-family:'Share Tech Mono',monospace;letter-spacing:.05em}
+  .code{font-family:'JetBrains Mono',monospace;font-weight:300}
+  .glow{text-shadow:0 0 8px var(--cyan-dim),0 0 22px rgba(0,229,255,.3)}
+  .glow-red{color:var(--red);text-shadow:0 0 8px rgba(255,46,99,.55)}
+  .glow-green{color:var(--green);text-shadow:0 0 8px rgba(0,255,156,.55)}
+  .glow-gold{color:var(--gold);text-shadow:0 0 8px rgba(255,181,71,.55)}
+
+  /* ============== TOP BAR ============== */
+  .brand{display:flex;align-items:center;gap:14px;min-width:260px}
+  .brand-mark{width:38px;height:38px;position:relative}
+  .brand-mark svg{width:100%;height:100%;filter:drop-shadow(0 0 6px var(--cyan-dim))}
+  .brand-text{line-height:1.02}
+  .brand-text .b1{font-family:'Orbitron',sans-serif;font-size:18px;font-weight:800;letter-spacing:.18em;color:var(--cyan)}
+  .brand-text .b2{font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--txt-dim);letter-spacing:.22em}
+  .top-center{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px}
+  .top-title{font-family:'Orbitron',sans-serif;font-size:14px;font-weight:700;letter-spacing:.5em;color:var(--cyan);text-shadow:var(--glow)}
+  .top-sub{font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--txt-dim);letter-spacing:.3em}
+  .top-right{display:flex;align-items:center;gap:18px;min-width:280px;justify-content:flex-end}
+  .top-clock{font-family:'Share Tech Mono',monospace;font-size:14px;color:var(--cyan);letter-spacing:.1em}
+  .top-clock .date{font-size:10px;color:var(--txt-dim);text-align:right}
+  .top-user{display:flex;align-items:center;gap:8px;padding:6px 10px;border:1px solid var(--line);border-radius:0;background:rgba(0,229,255,.04)}
+  .top-user .avatar{width:24px;height:24px;border:1px solid var(--cyan);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--cyan);font-family:'Orbitron'}
+  .top-user .uname{font-size:11px;letter-spacing:.15em;text-transform:uppercase}
+  .top-corners-l,.top-corners-r{position:absolute;top:0;width:80px;height:100%;pointer-events:none}
+  .top-corners-l{left:0;border-left:1px solid var(--cyan);border-bottom:1px solid var(--cyan);clip-path:polygon(0 0,18px 0,0 18px,0 100%,30px 100%,30px calc(100% - 1px),1px calc(100% - 1px),1px 18px,18px 1px,80px 1px,80px 0)}
+  .top-corners-r{right:0;border-right:1px solid var(--cyan);border-bottom:1px solid var(--cyan);transform:scaleX(-1)}
+
+  /* ============== LEFT RAIL ============== */
+  .panel{
+    background:linear-gradient(180deg,rgba(11,20,38,.6),rgba(3,6,13,.4));
+    border:1px solid var(--line);position:relative;padding:12px;margin-bottom:14px;
+  }
+  .panel::before,.panel::after{
+    content:"";position:absolute;width:10px;height:10px;border:1px solid var(--cyan);
+  }
+  .panel::before{top:-1px;left:-1px;border-right:none;border-bottom:none}
+  .panel::after{bottom:-1px;right:-1px;border-left:none;border-top:none}
+  .panel-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;padding-bottom:8px;border-bottom:1px dashed var(--line)}
+  .panel-title{font-family:'Orbitron',sans-serif;font-size:11px;font-weight:600;letter-spacing:.25em;color:var(--cyan-soft);text-transform:uppercase}
+  .panel-dot{width:6px;height:6px;border-radius:50%;background:var(--green);box-shadow:0 0 8px var(--green);animation:pulse 1.4s infinite}
+  .panel-dot.red{background:var(--red);box-shadow:0 0 8px var(--red)}
+  .panel-dot.amber{background:var(--amber);box-shadow:0 0 8px var(--amber)}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+
+  .vital{display:flex;justify-content:space-between;align-items:center;padding:5px 0;font-size:12px;border-bottom:1px solid rgba(0,229,255,.07)}
+  .vital:last-child{border-bottom:none}
+  .vital .lbl{color:var(--txt-dim);font-family:'Share Tech Mono',monospace;font-size:10px;letter-spacing:.15em}
+  .vital .val{color:var(--cyan);font-family:'Share Tech Mono',monospace;font-size:12px}
+  .vital .val.red{color:var(--red)}
+  .vital .val.green{color:var(--green)}
+  .vital .val.amber{color:var(--amber)}
+
+  .bar{height:4px;background:rgba(0,229,255,.08);position:relative;margin-top:4px;overflow:hidden}
+  .bar > i{display:block;height:100%;background:linear-gradient(90deg,var(--cyan),var(--violet));box-shadow:0 0 8px var(--cyan)}
+  .bar.red > i{background:linear-gradient(90deg,var(--gold),var(--red));box-shadow:0 0 8px var(--red)}
+  .bar.green > i{background:linear-gradient(90deg,var(--cyan),var(--green));box-shadow:0 0 8px var(--green)}
+
+  .nav-group{margin-top:6px}
+  .nav-group .gh{font-family:'Orbitron';font-size:9px;letter-spacing:.3em;color:var(--txt-dim);padding:8px 4px 4px;border-top:1px dashed var(--line)}
+  .nav-group .gh:first-child{border-top:none;padding-top:4px}
+  .nav-item{display:flex;align-items:center;gap:8px;padding:6px 8px;cursor:pointer;font-size:12px;border-left:2px solid transparent;transition:all .15s;letter-spacing:.05em}
+  .nav-item:hover{background:rgba(0,229,255,.06);border-left-color:var(--cyan-dim);color:var(--cyan-soft)}
+  .nav-item.active{background:rgba(0,229,255,.1);border-left-color:var(--cyan);color:var(--cyan);text-shadow:0 0 6px var(--cyan-dim)}
+  .nav-item .ico{width:14px;height:14px;display:inline-flex;align-items:center;justify-content:center;color:var(--cyan-dim)}
+  .nav-item.dev{color:var(--gold);opacity:.85}
+  .nav-item.dev .ico{color:var(--gold)}
+  .nav-item .badge{margin-left:auto;font-family:'Share Tech Mono';font-size:8px;letter-spacing:.1em;padding:1px 5px;border:1px solid var(--line);border-radius:0;color:var(--txt-dim)}
+  .nav-item .badge.live{color:var(--green);border-color:rgba(0,255,156,.4)}
+  .nav-item .badge.dev{color:var(--gold);border-color:rgba(255,181,71,.4)}
+  .nav-item .badge.beta{color:var(--violet);border-color:rgba(157,107,255,.4)}
+
+  /* ============== MAIN STAGE ============== */
+  .hero{
+    display:grid;grid-template-columns:1.1fr 1.6fr 1fr;gap:14px;height:340px;
+  }
+  .hero-card{background:linear-gradient(180deg,rgba(11,20,38,.6),rgba(3,6,13,.45));border:1px solid var(--line);position:relative;padding:14px;overflow:hidden}
+  .hero-card::before,.hero-card::after{content:"";position:absolute;width:14px;height:14px;border:1px solid var(--cyan)}
+  .hero-card::before{top:-1px;left:-1px;border-right:none;border-bottom:none}
+  .hero-card::after{bottom:-1px;right:-1px;border-left:none;border-top:none}
+  .hc-title{font-family:'Orbitron';font-size:10px;letter-spacing:.3em;color:var(--cyan-soft);margin-bottom:8px}
+  .hc-sub{font-family:'Share Tech Mono';font-size:9px;color:var(--txt-dim);letter-spacing:.2em}
+
+  /* Core ASI */
+  .core-wrap{display:flex;align-items:center;justify-content:center;position:relative;height:100%}
+  .core-svg{width:100%;height:100%;max-width:320px;max-height:320px}
+  .ring{fill:none;stroke:var(--cyan);stroke-width:.6;transform-origin:center;transform-box:fill-box}
+  .ring.dim{stroke:var(--cyan-dim);stroke-width:.4}
+  .ring.dashed{stroke-dasharray:2 6}
+  .ring.glow{filter:drop-shadow(0 0 4px var(--cyan))}
+  @keyframes spinCW{from{transform:rotate(0)}to{transform:rotate(360deg)}}
+  @keyframes spinCCW{from{transform:rotate(0)}to{transform:rotate(-360deg)}}
+  @keyframes coreBeat{0%,100%{opacity:.9;transform:scale(1)}50%{opacity:1;transform:scale(1.04)}}
+  .core-text-big{font-family:'Orbitron';font-size:11px;font-weight:700;letter-spacing:.35em;fill:var(--cyan)}
+  .core-text-sm{font-family:'Share Tech Mono';font-size:7px;fill:var(--txt-dim);letter-spacing:.25em}
+  .core-pct{font-family:'Orbitron';font-size:24px;font-weight:800;fill:var(--cyan);text-anchor:middle;dominant-baseline:central}
+  .core-hex{stroke:var(--cyan);stroke-width:.8;fill:rgba(0,229,255,.03);filter:drop-shadow(0 0 6px var(--cyan-dim))}
+  .core-inner{fill:url(#coreGrad);filter:drop-shadow(0 0 18px var(--cyan));animation:coreBeat 2.4s ease-in-out infinite}
+
+  /* Cognition feed */
+  .feed{height:100%;display:flex;flex-direction:column;gap:6px;overflow:hidden}
+  .feed-line{display:flex;gap:8px;align-items:flex-start;font-family:'Share Tech Mono';font-size:11px;line-height:1.4;padding:3px 6px;border-left:2px solid var(--cyan-dim);background:rgba(0,229,255,.03);animation:slideIn .5s ease}
+  @keyframes slideIn{from{opacity:0;transform:translateX(-8px)}to{opacity:1;transform:translateX(0)}}
+  .feed-line .t{color:var(--txt-dim);font-size:9px;min-width:54px}
+  .feed-line .tag{font-size:9px;color:var(--cyan);min-width:64px;letter-spacing:.1em}
+  .feed-line .tag.red{color:var(--red)}
+  .feed-line .tag.green{color:var(--green)}
+  .feed-line .tag.gold{color:var(--gold)}
+  .feed-line .tag.violet{color:var(--violet)}
+  .feed-line .msg{color:var(--txt);flex:1;letter-spacing:.02em}
+
+  /* Globe radar */
+  .globe-wrap{display:flex;flex-direction:column;align-items:center;height:100%;justify-content:center}
+  .globe-svg{width:100%;max-width:240px;height:auto}
+  .grid-circle{fill:none;stroke:var(--cyan-dim);stroke-width:.4}
+  .lat-line{fill:none;stroke:var(--cyan-dim);stroke-width:.3;opacity:.6}
+  .node-dot{fill:var(--cyan);filter:drop-shadow(0 0 4px var(--cyan))}
+  .node-dot.red{fill:var(--red);filter:drop-shadow(0 0 4px var(--red))}
+  .radar-arc{fill:url(#radarFan);transform-origin:center;animation:spinCW 4s linear infinite}
+
+  /* Stat strip */
+  .stat-strip{display:grid;grid-template-columns:repeat(6,1fr);gap:10px}
+  .stat-tile{background:linear-gradient(180deg,rgba(11,20,38,.5),rgba(3,6,13,.4));border:1px solid var(--line);padding:10px 12px;position:relative;overflow:hidden;min-height:84px}
+  .stat-tile::before{content:"";position:absolute;top:0;left:0;width:30%;height:2px;background:var(--cyan);box-shadow:var(--glow)}
+  .st-lbl{font-family:'Share Tech Mono';font-size:9px;color:var(--txt-dim);letter-spacing:.2em;margin-bottom:4px;display:flex;justify-content:space-between}
+  .st-val{font-family:'Orbitron';font-size:22px;font-weight:700;color:var(--cyan);letter-spacing:.05em;line-height:1}
+  .st-val.red{color:var(--red)}
+  .st-val.green{color:var(--green)}
+  .st-val.amber{color:var(--amber)}
+  .st-val.violet{color:var(--violet)}
+  .st-val .unit{font-size:11px;color:var(--txt-dim);margin-left:3px;font-weight:400;letter-spacing:.1em}
+  .st-spark{margin-top:6px;height:18px}
+  .st-spark svg{width:100%;height:100%}
+  .spark-line{fill:none;stroke:var(--cyan);stroke-width:1;filter:drop-shadow(0 0 3px var(--cyan-dim))}
+  .spark-area{fill:url(#sparkFill);opacity:.5}
+
+  /* Panel matrix */
+  .matrix-wrap{flex:1;display:grid;grid-template-rows:auto 1fr;gap:10px;overflow:hidden;min-height:0}
+  .matrix-tabs{display:flex;gap:0;border-bottom:1px solid var(--line);padding-bottom:0}
+  .mtab{padding:8px 14px;font-family:'Orbitron';font-size:10px;letter-spacing:.2em;color:var(--txt-dim);cursor:pointer;border:1px solid transparent;border-bottom:none;background:transparent;position:relative;transition:all .15s}
+  .mtab:hover{color:var(--cyan-soft)}
+  .mtab.active{color:var(--cyan);border-color:var(--line);background:rgba(0,229,255,.06);text-shadow:var(--glow)}
+  .mtab.active::after{content:"";position:absolute;left:0;right:0;bottom:-1px;height:1px;background:var(--bg-0)}
+  .mtab .dot{display:inline-block;width:5px;height:5px;border-radius:50%;background:var(--green);margin-right:6px;box-shadow:0 0 6px var(--green)}
+  .mtab .dot.gold{background:var(--gold);box-shadow:0 0 6px var(--gold)}
+  .mtab .dot.violet{background:var(--violet);box-shadow:0 0 6px var(--violet)}
+
+  .matrix{overflow-y:auto;padding-right:6px}
+  .matrix-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px}
+  .mod-card{
+    background:linear-gradient(180deg,rgba(11,20,38,.55),rgba(3,6,13,.4));
+    border:1px solid var(--line);padding:12px;position:relative;cursor:pointer;transition:all .15s;min-height:108px;display:flex;flex-direction:column;gap:6px;
+  }
+  .mod-card:hover{border-color:var(--cyan);transform:translateY(-1px);box-shadow:0 0 22px rgba(0,229,255,.18)}
+  .mod-card.dev{border-color:rgba(255,181,71,.25);background:linear-gradient(180deg,rgba(34,22,8,.4),rgba(3,6,13,.4))}
+  .mod-card.dev:hover{border-color:var(--gold);box-shadow:0 0 22px rgba(255,181,71,.2)}
+  .mod-card::after{content:"";position:absolute;top:6px;right:6px;width:6px;height:6px;border-radius:50%;background:var(--green);box-shadow:0 0 6px var(--green);animation:pulse 1.6s infinite}
+  .mod-card.dev::after{background:var(--gold);box-shadow:0 0 6px var(--gold)}
+  .mod-card.warn::after{background:var(--red);box-shadow:0 0 6px var(--red)}
+  .mc-head{display:flex;align-items:center;gap:8px}
+  .mc-icon{width:28px;height:28px;border:1px solid var(--cyan-dim);display:flex;align-items:center;justify-content:center;color:var(--cyan);background:rgba(0,229,255,.04)}
+  .mod-card.dev .mc-icon{border-color:rgba(255,181,71,.4);color:var(--gold);background:rgba(255,181,71,.04)}
+  .mc-icon svg{width:14px;height:14px}
+  .mc-name{font-family:'Orbitron';font-size:11px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--cyan-soft);line-height:1.1}
+  .mod-card.dev .mc-name{color:var(--gold)}
+  .mc-meta{font-family:'Share Tech Mono';font-size:9px;color:var(--txt-dim);letter-spacing:.15em;display:flex;justify-content:space-between;margin-top:auto;padding-top:6px;border-top:1px dashed var(--line)}
+  .mc-desc{font-size:11px;color:var(--txt-dim);line-height:1.35;letter-spacing:.01em}
+  .mc-tag{font-family:'Share Tech Mono';font-size:8px;padding:1px 6px;border:1px solid var(--line);color:var(--cyan);letter-spacing:.15em;align-self:flex-start}
+  .mod-card.dev .mc-tag{color:var(--gold);border-color:rgba(255,181,71,.3)}
+
+  /* ============== RIGHT RAIL ============== */
+  .agent-row{display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid rgba(0,229,255,.07);font-size:11px}
+  .agent-row:last-child{border-bottom:none}
+  .agent-row .ad{width:6px;height:6px;border-radius:50%;background:var(--green);box-shadow:0 0 6px var(--green)}
+  .agent-row .ad.amber{background:var(--amber);box-shadow:0 0 6px var(--amber)}
+  .agent-row .ad.red{background:var(--red);box-shadow:0 0 6px var(--red)}
+  .agent-row .an{flex:1;font-family:'Share Tech Mono';letter-spacing:.08em;color:var(--cyan-soft)}
+  .agent-row .ar{font-family:'Share Tech Mono';font-size:9px;color:var(--txt-dim);letter-spacing:.15em}
+  .agent-row .acpu{font-family:'Share Tech Mono';font-size:10px;color:var(--cyan)}
+
+  .alert{padding:6px 8px;border-left:2px solid var(--red);background:rgba(255,46,99,.05);font-size:11px;margin-bottom:6px;font-family:'Share Tech Mono'}
+  .alert.amber{border-color:var(--amber);background:rgba(255,204,51,.05)}
+  .alert.cyan{border-color:var(--cyan);background:rgba(0,229,255,.05)}
+  .alert .at{font-size:9px;color:var(--txt-dim);letter-spacing:.15em;display:block}
+  .alert .am{color:var(--txt);letter-spacing:.02em}
+
+  .gauge{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+  .gauge svg{flex-shrink:0}
+  .gauge-info .gn{font-family:'Orbitron';font-size:10px;color:var(--cyan-soft);letter-spacing:.18em;text-transform:uppercase}
+  .gauge-info .gv{font-family:'Share Tech Mono';font-size:14px;color:var(--cyan)}
+  .gauge-info .gs{font-family:'Share Tech Mono';font-size:9px;color:var(--txt-dim);letter-spacing:.15em}
+
+  /* Waveform */
+  .wave{height:60px;width:100%;background:linear-gradient(180deg,rgba(0,229,255,.03),transparent);border:1px solid var(--line);position:relative;overflow:hidden;margin-top:6px}
+  .wave canvas{width:100%;height:100%;display:block}
+
+  /* ============== BOTTOM BAR ============== */
+  .botbar .indicator{display:flex;align-items:center;gap:6px;padding:0 12px;border-right:1px solid var(--line);height:100%;font-family:'Share Tech Mono';font-size:11px;letter-spacing:.1em}
+  .indicator .ld{width:6px;height:6px;border-radius:50%;background:var(--green);box-shadow:0 0 6px var(--green);animation:pulse 1.6s infinite}
+  .indicator .ld.red{background:var(--red);box-shadow:0 0 6px var(--red)}
+  .indicator .ld.amber{background:var(--amber);box-shadow:0 0 6px var(--amber)}
+  .indicator .lt{color:var(--txt-dim);font-size:9px;letter-spacing:.2em}
+  .indicator .lv{color:var(--cyan);font-weight:600}
+  .indicator.muted .lv{color:var(--txt-dim)}
+
+  .cmd-input{flex:1;display:flex;align-items:center;gap:10px;padding:0 12px;height:36px;border:1px solid var(--line);background:rgba(0,229,255,.04);margin:0 12px;position:relative}
+  .cmd-input::before,.cmd-input::after{content:"";position:absolute;width:8px;height:8px;border:1px solid var(--cyan)}
+  .cmd-input::before{top:-1px;left:-1px;border-right:none;border-bottom:none}
+  .cmd-input::after{bottom:-1px;right:-1px;border-left:none;border-top:none}
+  .cmd-input .prompt{color:var(--cyan);font-family:'Share Tech Mono';font-size:13px;letter-spacing:.1em}
+  .cmd-input input{flex:1;background:transparent;border:none;outline:none;color:var(--txt);font-family:'Share Tech Mono';font-size:13px;letter-spacing:.05em}
+  .cmd-input input::placeholder{color:var(--txt-dim)}
+  .cmd-input .blink{width:7px;height:13px;background:var(--cyan);animation:blink 1s steps(2) infinite;box-shadow:0 0 8px var(--cyan)}
+  @keyframes blink{50%{opacity:0}}
+
+  .qbtn{padding:6px 12px;border:1px solid var(--line);background:rgba(0,229,255,.04);color:var(--cyan-soft);font-family:'Orbitron';font-size:10px;letter-spacing:.18em;cursor:pointer;transition:all .15s;text-transform:uppercase}
+  .qbtn:hover{background:rgba(0,229,255,.12);color:var(--cyan);box-shadow:var(--glow);border-color:var(--cyan)}
+  .qbtn.red{color:var(--red-soft);border-color:rgba(255,46,99,.3);background:rgba(255,46,99,.04)}
+  .qbtn.red:hover{color:var(--red);box-shadow:var(--glow-red);border-color:var(--red)}
+  .qbtn.gold{color:var(--gold);border-color:rgba(255,181,71,.3);background:rgba(255,181,71,.04)}
+  .qbtn.gold:hover{box-shadow:0 0 18px rgba(255,181,71,.4);border-color:var(--gold)}
+
+  /* Decorative corner brackets on rails */
+  .corner-bracket{position:relative}
+  .corner-bracket::before,.corner-bracket::after{content:"";position:absolute;width:12px;height:12px;border:1px solid var(--cyan-dim);pointer-events:none;z-index:5}
+  .corner-bracket::before{top:0;left:0;border-right:none;border-bottom:none}
+  .corner-bracket::after{bottom:0;right:0;border-left:none;border-top:none}
+
+  /* Boot overlay */
+  #boot{position:fixed;inset:0;background:var(--bg-0);z-index:100;display:flex;flex-direction:column;align-items:center;justify-content:center;font-family:'Share Tech Mono';color:var(--cyan);transition:opacity .8s}
+  #boot.done{opacity:0;pointer-events:none}
+  .boot-mark{width:140px;height:140px;margin-bottom:30px;position:relative}
+  .boot-mark svg{width:100%;height:100%;filter:drop-shadow(0 0 14px var(--cyan))}
+  .boot-title{font-family:'Orbitron';font-size:28px;font-weight:800;letter-spacing:.5em;color:var(--cyan);text-shadow:var(--glow);margin-bottom:8px}
+  .boot-sub{font-size:11px;letter-spacing:.4em;color:var(--txt-dim);margin-bottom:30px}
+  .boot-log{width:520px;font-size:11px;line-height:1.6;height:160px;overflow:hidden;border:1px solid var(--line);padding:10px;background:rgba(0,229,255,.03)}
+  .boot-log .l{opacity:0;animation:fadeIn .3s forwards}
+  .boot-log .l.ok::before{content:"[ OK ] ";color:var(--green)}
+  .boot-log .l.warn::before{content:"[WARN] ";color:var(--gold)}
+  .boot-log .l.info::before{content:"[INFO] ";color:var(--cyan)}
+  @keyframes fadeIn{to{opacity:1}}
+  .boot-progress{width:520px;height:3px;background:rgba(0,229,255,.1);margin-top:14px;position:relative;overflow:hidden}
+  .boot-progress > i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--cyan),var(--violet));box-shadow:var(--glow);transition:width 4s ease}
+
+  /* Layout helpers */
+  .row{display:flex;gap:8px;align-items:center}
+  .col{display:flex;flex-direction:column;gap:6px}
+  .spread{justify-content:space-between}
+
+  /* Tiny tag */
+  .pill{font-family:'Share Tech Mono';font-size:8px;padding:1px 5px;border:1px solid var(--line);color:var(--cyan);letter-spacing:.15em;display:inline-block}
+  .pill.gold{color:var(--gold);border-color:rgba(255,181,71,.3)}
+  .pill.violet{color:var(--violet);border-color:rgba(157,107,255,.3)}
+  .pill.green{color:var(--green);border-color:rgba(0,255,156,.3)}
+  .pill.red{color:var(--red);border-color:rgba(255,46,99,.3)}
+</style>
+</head>
+<body>
+
+<!-- BACKGROUND LAYERS -->
+<div class="bg-grid"></div>
+<div class="bg-scan"></div>
+<div class="bg-vignette"></div>
+<div class="bg-noise"></div>
+<div class="scanline-sweep"></div>
+
+<!-- BOOT SEQUENCE -->
+<div id="boot">
+  <div class="boot-mark">
+    <svg viewBox="0 0 100 100">
+      <defs>
+        <radialGradient id="bootGrad"><stop offset="0%" stop-color="#00e5ff"/><stop offset="100%" stop-color="#00e5ff" stop-opacity="0"/></radialGradient>
+      </defs>
+      <polygon points="50,8 86,30 86,70 50,92 14,70 14,30" fill="none" stroke="#00e5ff" stroke-width=".8"/>
+      <polygon points="50,18 78,34 78,66 50,82 22,66 22,34" fill="url(#bootGrad)" opacity=".4">
+        <animateTransform attributeName="transform" type="rotate" from="0 50 50" to="360 50 50" dur="6s" repeatCount="indefinite"/>
+      </polygon>
+      <circle cx="50" cy="50" r="14" fill="none" stroke="#00e5ff" stroke-width=".5" stroke-dasharray="2 4">
+        <animateTransform attributeName="transform" type="rotate" from="360 50 50" to="0 50 50" dur="4s" repeatCount="indefinite"/>
+      </circle>
+      <text x="50" y="54" text-anchor="middle" fill="#00e5ff" font-family="Orbitron" font-size="10" font-weight="700">M</text>
+    </svg>
+  </div>
+  <div class="boot-title">MAGNATRIX</div>
+  <div class="boot-sub">ARTIFICIAL SUPER INTELLIGENCE // CONTROL CENTER</div>
+  <div class="boot-log" id="bootLog"></div>
+  <div class="boot-progress"><i id="bootBar"></i></div>
+</div>
+
+<!-- APP -->
+<div class="app">
+
+  <!-- ============ TOP BAR ============ -->
+  <header class="topbar">
+    <div class="top-corners-l"></div>
+    <div class="top-corners-r"></div>
+    <div class="brand">
+      <div class="brand-mark">
+        <svg viewBox="0 0 60 60">
+          <defs>
+            <radialGradient id="logoGrad"><stop offset="0%" stop-color="#00e5ff" stop-opacity=".6"/><stop offset="100%" stop-color="#00e5ff" stop-opacity="0"/></radialGradient>
+          </defs>
+          <polygon points="30,4 54,18 54,42 30,56 6,42 6,18" fill="none" stroke="#00e5ff" stroke-width="1"/>
+          <polygon points="30,12 46,22 46,38 30,48 14,38 14,22" fill="url(#logoGrad)"/>
+          <circle cx="30" cy="30" r="6" fill="none" stroke="#00e5ff" stroke-width=".6"/>
+          <circle cx="30" cy="30" r="2" fill="#00e5ff"/>
+        </svg>
+      </div>
+      <div class="brand-text">
+        <div class="b1">MAGNATRIX</div>
+        <div class="b2">AGENTIC OS / v3.7.2</div>
+      </div>
+    </div>
+    <div class="top-center">
+      <div class="top-title">A · S · I &nbsp; C O N T R O L &nbsp; C E N T E R</div>
+      <div class="top-sub">SOVEREIGN · UNCENSORED · AUTONOMOUS · 135+ NATIVE MODULES ONLINE</div>
+    </div>
+    <div class="top-right">
+      <div class="top-clock">
+        <div id="clockTime">00:00:00</div>
+        <div class="date" id="clockDate">--- -- ---- ----</div>
+      </div>
+      <div class="top-user">
+        <div class="avatar">M</div>
+        <div>
+          <div class="uname">MAGNUS · ROOT</div>
+          <div class="mono" style="font-size:9px;color:var(--green)">CLEARANCE: OMEGA</div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- ============ LEFT RAIL ============ -->
+  <aside class="leftbar">
+
+    <div class="panel">
+      <div class="panel-head">
+        <div class="panel-title">System Vitals</div>
+        <div class="panel-dot"></div>
+      </div>
+      <div class="vital"><span class="lbl">UPTIME</span><span class="val mono" id="vUptime">00:00:00:00</span></div>
+      <div class="vital"><span class="lbl">KERNEL</span><span class="val">native-py 3.11.9</span></div>
+      <div class="vital"><span class="lbl">NODES</span><span class="val green">14 / 14</span></div>
+      <div class="vital"><span class="lbl">AGENTS</span><span class="val" id="vAgents">237</span></div>
+      <div class="vital"><span class="lbl">THREAT LVL</span><span class="val green">NOMINAL</span></div>
+      <div class="vital"><span class="lbl">QUARANTINE</span><span class="val">0</span></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head">
+        <div class="panel-title">Compute Grid</div>
+        <div class="panel-dot amber"></div>
+      </div>
+      <div style="font-size:10px;color:var(--txt-dim);font-family:'Share Tech Mono';letter-spacing:.15em">CPU · MIXED 64C / 128T</div>
+      <div class="bar"><i id="vCpu" style="width:62%"></i></div>
+      <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--cyan);margin-top:2px;font-family:'Share Tech Mono'">
+        <span id="vCpuPct">62.4%</span><span>3.8GHz</span>
+      </div>
+      <div style="font-size:10px;color:var(--txt-dim);font-family:'Share Tech Mono';letter-spacing:.15em;margin-top:8px">GPU · 4× H100 80GB</div>
+      <div class="bar red"><i id="vGpu" style="width:81%"></i></div>
+      <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--cyan);margin-top:2px;font-family:'Share Tech Mono'">
+        <span id="vGpuPct">81.2%</span><span>73°C</span>
+      </div>
+      <div style="font-size:10px;color:var(--txt-dim);font-family:'Share Tech Mono';letter-spacing:.15em;margin-top:8px">VRAM · 320GB</div>
+      <div class="bar"><i id="vVram" style="width:68%"></i></div>
+      <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--cyan);margin-top:2px;font-family:'Share Tech Mono'">
+        <span id="vVramPct">68.0%</span><span>217.6GB</span>
+      </div>
+      <div style="font-size:10px;color:var(--txt-dim);font-family:'Share Tech Mono';letter-spacing:.15em;margin-top:8px">RAM · 512GB DDR5</div>
+      <div class="bar green"><i id="vRam" style="width:44%"></i></div>
+      <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--cyan);margin-top:2px;font-family:'Share Tech Mono'">
+        <span id="vRamPct">44.0%</span><span>225.3GB</span>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head">
+        <div class="panel-title">Quick Nav</div>
+        <div class="panel-dot"></div>
+      </div>
+      <div class="nav-group">
+        <div class="gh">CORE INTELLIGENCE</div>
+        <div class="nav-item active" data-tab="neural"><span class="ico">⬢</span> Neural Core <span class="badge live">5</span></div>
+        <div class="nav-item" data-tab="swarm"><span class="ico">⧈</span> Swarm Intelligence <span class="badge live">9</span></div>
+        <div class="nav-item" data-tab="memory"><span class="ico">◉</span> Memory & Knowledge <span class="badge live">5</span></div>
+        <div class="gh">RUNTIME & SECURITY</div>
+        <div class="nav-item" data-tab="runtime"><span class="ico">⚙</span> Runtime & Compute <span class="badge live">6</span></div>
+        <div class="nav-item" data-tab="security"><span class="ico">◈</span> Security & Crypto <span class="badge live">6</span></div>
+        <div class="nav-item" data-tab="trading"><span class="ico">$</span> Trading & HFT <span class="badge live">3</span></div>
+        <div class="gh">INTERFACES & I/O</div>
+        <div class="nav-item" data-tab="interface"><span class="ico">⌘</span> Interfaces <span class="badge live">7</span></div>
+        <div class="nav-item" data-tab="infra"><span class="ico">⌬</span> Infrastructure <span class="badge live">8</span></div>
+        <div class="nav-item" data-tab="multimodal"><span class="ico">◐</span> Multimodal I/O <span class="badge live">3</span></div>
+        <div class="gh">PENDING DEVELOPMENT</div>
+        <div class="nav-item dev" data-tab="asi"><span class="ico">✦</span> ASI Expansion <span class="badge dev">20</span></div>
+      </div>
+    </div>
+
+  </aside>
+
+  <!-- ============ MAIN STAGE ============ -->
+  <main class="main">
+
+    <!-- HERO ROW -->
+    <section class="hero">
+
+      <!-- LEFT: Cognition Feed -->
+      <div class="hero-card">
+        <div class="row spread">
+          <div>
+            <div class="hc-title">Cognition Stream</div>
+            <div class="hc-sub">REAL-TIME THOUGHT TRACE / ENTROPY 0.62</div>
+          </div>
+          <div class="pill green">LIVE</div>
+        </div>
+        <div class="feed" id="feed" style="margin-top:10px"></div>
+      </div>
+
+      <!-- CENTER: ASI Core -->
+      <div class="hero-card">
+        <div class="row spread">
+          <div>
+            <div class="hc-title">ASI Cognitive Core</div>
+            <div class="hc-sub">RECURSIVE · ALIGNED · CONSCIOUS-Δ 0.998</div>
+          </div>
+          <div class="pill">ONLINE</div>
+        </div>
+        <div class="core-wrap">
+          <svg class="core-svg" viewBox="0 0 320 320">
+            <defs>
+              <radialGradient id="coreGrad" cx="50%" cy="50%" r="50%">
+                <stop offset="0%" stop-color="#7be3ff" stop-opacity="1"/>
+                <stop offset="40%" stop-color="#00e5ff" stop-opacity=".9"/>
+                <stop offset="70%" stop-color="#0099cc" stop-opacity=".4"/>
+                <stop offset="100%" stop-color="#00e5ff" stop-opacity="0"/>
+              </radialGradient>
+              <linearGradient id="ringG1" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0%" stop-color="#00e5ff"/>
+                <stop offset="50%" stop-color="#00e5ff" stop-opacity=".2"/>
+                <stop offset="100%" stop-color="#00e5ff"/>
+              </linearGradient>
+              <filter id="coreBlur"><feGaussianBlur stdDeviation="4"/></filter>
+            </defs>
+
+            <!-- Outer dashed orbit -->
+            <circle class="ring dashed" cx="160" cy="160" r="150" style="animation:spinCW 60s linear infinite"/>
+            <circle class="ring dim" cx="160" cy="160" r="140"/>
+
+            <!-- Ring with notches -->
+            <g style="animation:spinCCW 40s linear infinite;transform-origin:160px 160px">
+              <circle class="ring" cx="160" cy="160" r="128" stroke-dasharray="4 3"/>
+              <rect x="155" y="20" width="10" height="16" fill="#00e5ff"/>
+              <rect x="155" y="284" width="10" height="16" fill="#00e5ff"/>
+              <rect x="20" y="155" width="16" height="10" fill="#00e5ff"/>
+              <rect x="284" y="155" width="16" height="10" fill="#00e5ff"/>
+            </g>
+
+            <!-- Mid ring with arcs -->
+            <g style="animation:spinCW 22s linear infinite;transform-origin:160px 160px">
+              <circle class="ring glow" cx="160" cy="160" r="108" stroke-dasharray="20 6 4 6"/>
+            </g>
+
+            <!-- Hex frame -->
+            <polygon class="core-hex" points="160,60 246,110 246,210 160,260 74,210 74,110" style="animation:spinCCW 26s linear infinite;transform-origin:160px 160px"/>
+            <polygon class="core-hex" points="160,80 230,118 230,202 160,240 90,202 90,118" style="opacity:.4;animation:spinCW 14s linear infinite;transform-origin:160px 160px"/>
+
+            <!-- Triangles -->
+            <g style="animation:spinCW 9s linear infinite;transform-origin:160px 160px;opacity:.7">
+              <polygon points="160,82 166,76 154,76" fill="#00e5ff"/>
+              <polygon points="160,238 166,244 154,244" fill="#00e5ff"/>
+              <polygon points="82,160 76,154 76,166" fill="#00e5ff"/>
+              <polygon points="238,160 244,154 244,166" fill="#00e5ff"/>
+            </g>
+
+            <!-- Inner pulse core -->
+            <circle class="core-inner" cx="160" cy="160" r="40"/>
+            <circle cx="160" cy="160" r="28" fill="none" stroke="#fff" stroke-width=".4" opacity=".6"/>
+            <circle cx="160" cy="160" r="18" fill="none" stroke="#fff" stroke-width=".3" opacity=".4"/>
+
+            <!-- Center text -->
+            <text x="160" y="156" class="core-pct">99.8</text>
+            <text x="160" y="174" class="core-text-sm" text-anchor="middle">COHERENCE</text>
+
+            <!-- Tick labels around outer -->
+            <text x="160" y="14" class="core-text-sm" text-anchor="middle">N · 0°</text>
+            <text x="160" y="316" class="core-text-sm" text-anchor="middle">S · 180°</text>
+            <text x="14" y="163" class="core-text-sm">W</text>
+            <text x="296" y="163" class="core-text-sm">E</text>
+
+            <!-- Data callouts -->
+            <text x="252" y="56" class="core-text-sm">α 0.142</text>
+            <text x="252" y="68" class="core-text-sm">β 0.881</text>
+            <text x="40" y="56" class="core-text-sm">γ 0.674</text>
+            <text x="40" y="68" class="core-text-sm">δ 0.213</text>
+            <text x="40" y="288" class="core-text-sm">θ 0.998</text>
+            <text x="252" y="288" class="core-text-sm">Ω 1.000</text>
+          </svg>
+        </div>
+      </div>
+
+      <!-- RIGHT: Globe + Net -->
+      <div class="hero-card">
+        <div class="row spread">
+          <div>
+            <div class="hc-title">P2P Mesh · Global Net</div>
+            <div class="hc-sub">14 NODES · 4 CONTINENTS · 412ms AVG</div>
+          </div>
+          <div class="pill violet">DHT</div>
+        </div>
+        <div class="globe-wrap">
+          <svg class="globe-svg" viewBox="0 0 240 240">
+            <defs>
+              <radialGradient id="radarFan" cx="50%" cy="50%" r="50%">
+                <stop offset="0%" stop-color="#00e5ff" stop-opacity=".6"/>
+                <stop offset="100%" stop-color="#00e5ff" stop-opacity="0"/>
+              </radialGradient>
+            </defs>
+            <!-- Concentric grid -->
+            <circle class="grid-circle" cx="120" cy="120" r="110"/>
+            <circle class="grid-circle" cx="120" cy="120" r="85"/>
+            <circle class="grid-circle" cx="120" cy="120" r="60"/>
+            <circle class="grid-circle" cx="120" cy="120" r="35"/>
+            <!-- Latitude/longitude lines -->
+            <ellipse class="lat-line" cx="120" cy="120" rx="110" ry="35"/>
+            <ellipse class="lat-line" cx="120" cy="120" rx="110" ry="70"/>
+            <ellipse class="lat-line" cx="120" cy="120" rx="35" ry="110"/>
+            <ellipse class="lat-line" cx="120" cy="120" rx="70" ry="110"/>
+            <line x1="10" y1="120" x2="230" y2="120" class="lat-line"/>
+            <line x1="120" y1="10" x2="120" y2="230" class="lat-line"/>
+            <!-- Radar sweep -->
+            <path class="radar-arc" d="M120,120 L120,10 A110,110 0 0 1 225,140 Z"/>
+            <!-- Nodes -->
+            <circle class="node-dot" cx="76" cy="74" r="3"/>
+            <circle class="node-dot" cx="162" cy="92" r="3"/>
+            <circle class="node-dot" cx="190" cy="146" r="3"/>
+            <circle class="node-dot" cx="64" cy="158" r="3"/>
+            <circle class="node-dot" cx="118" cy="50" r="3"/>
+            <circle class="node-dot" cx="98" cy="186" r="3"/>
+            <circle class="node-dot" cx="172" cy="196" r="3"/>
+            <circle class="node-dot red" cx="58" cy="108" r="3.5"/>
+            <circle class="node-dot" cx="206" cy="78" r="3"/>
+            <circle class="node-dot" cx="34" cy="138" r="3"/>
+            <circle class="node-dot" cx="146" cy="158" r="3"/>
+            <circle class="node-dot" cx="120" cy="120" r="4"/>
+            <!-- Sat lines -->
+            <line x1="120" y1="120" x2="58" y2="108" stroke="#ff2e63" stroke-width=".3" stroke-dasharray="2 2" opacity=".7"/>
+            <line x1="120" y1="120" x2="190" y2="146" stroke="#00e5ff" stroke-width=".3" stroke-dasharray="2 2" opacity=".5"/>
+            <line x1="120" y1="120" x2="118" y2="50" stroke="#00e5ff" stroke-width=".3" stroke-dasharray="2 2" opacity=".5"/>
+            <line x1="120" y1="120" x2="162" y2="92" stroke="#00e5ff" stroke-width=".3" stroke-dasharray="2 2" opacity=".5"/>
+            <line x1="120" y1="120" x2="64" y2="158" stroke="#00e5ff" stroke-width=".3" stroke-dasharray="2 2" opacity=".5"/>
+          </svg>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:6px;font-family:'Share Tech Mono';font-size:10px">
+          <div class="row spread"><span style="color:var(--txt-dim)">INGRESS</span><span style="color:var(--cyan)" id="netIn">412 MB/s</span></div>
+          <div class="row spread"><span style="color:var(--txt-dim)">EGRESS</span><span style="color:var(--cyan)" id="netOut">87 MB/s</span></div>
+          <div class="row spread"><span style="color:var(--txt-dim)">PEERS</span><span style="color:var(--green)">14 / 14</span></div>
+          <div class="row spread"><span style="color:var(--txt-dim)">CONSENSUS</span><span style="color:var(--green)">QUORUM</span></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- STAT STRIP -->
+    <section class="stat-strip">
+      <div class="stat-tile">
+        <div class="st-lbl"><span>TOKENS/SEC</span><span class="glow-green">▲</span></div>
+        <div class="st-val" id="kpiTok">42,816<span class="unit">t/s</span></div>
+        <div class="st-spark"><svg viewBox="0 0 100 20" preserveAspectRatio="none"><defs><linearGradient id="sparkFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#00e5ff" stop-opacity=".5"/><stop offset="100%" stop-color="#00e5ff" stop-opacity="0"/></linearGradient></defs><polyline class="spark-line" points="0,16 8,12 16,14 24,8 32,10 40,5 48,8 56,3 64,7 72,4 80,9 88,2 100,6"/></svg></div>
+      </div>
+      <div class="stat-tile">
+        <div class="st-lbl"><span>INFERENCE</span><span>p99</span></div>
+        <div class="st-val green" id="kpiLat">38<span class="unit">ms</span></div>
+        <div class="st-spark"><svg viewBox="0 0 100 20" preserveAspectRatio="none"><polyline class="spark-line" style="stroke:#00ff9c" points="0,8 12,10 24,7 36,9 48,6 60,8 72,5 84,7 100,6"/></svg></div>
+      </div>
+      <div class="stat-tile">
+        <div class="st-lbl"><span>AGENTS</span><span class="glow">⬢</span></div>
+        <div class="st-val">237<span class="unit">/ 1024</span></div>
+        <div class="st-spark"><svg viewBox="0 0 100 20" preserveAspectRatio="none"><polyline class="spark-line" points="0,15 12,12 24,13 36,9 48,11 60,7 72,9 84,5 100,4"/></svg></div>
+      </div>
+      <div class="stat-tile">
+        <div class="st-lbl"><span>HFT ORDERS</span><span class="glow-gold">$</span></div>
+        <div class="st-val amber" id="kpiOrd">1.84M<span class="unit">/ hr</span></div>
+        <div class="st-spark"><svg viewBox="0 0 100 20" preserveAspectRatio="none"><polyline class="spark-line" style="stroke:#ffcc33" points="0,12 10,14 20,11 30,13 40,9 50,11 60,7 70,10 80,5 90,8 100,3"/></svg></div>
+      </div>
+      <div class="stat-tile">
+        <div class="st-lbl"><span>RAG QUERIES</span><span>VEC+GRAPH</span></div>
+        <div class="st-val violet" id="kpiRag">6,329<span class="unit">/ min</span></div>
+        <div class="st-spark"><svg viewBox="0 0 100 20" preserveAspectRatio="none"><polyline class="spark-line" style="stroke:#9d6bff" points="0,14 12,11 24,13 36,8 48,10 60,6 72,8 84,4 100,5"/></svg></div>
+      </div>
+      <div class="stat-tile">
+        <div class="st-lbl"><span>P&L · 24H</span><span class="glow-green">▲</span></div>
+        <div class="st-val green" id="kpiPnl">+$184,712<span class="unit">USD</span></div>
+        <div class="st-spark"><svg viewBox="0 0 100 20" preserveAspectRatio="none"><polyline class="spark-line" style="stroke:#00ff9c" points="0,18 10,16 20,14 30,15 40,11 50,12 60,8 70,10 80,5 90,7 100,2"/></svg></div>
+      </div>
+    </section>
+
+    <!-- PANEL MATRIX -->
+    <section class="matrix-wrap">
+      <div class="matrix-tabs" id="tabs">
+        <div class="mtab active" data-tab="neural"><span class="dot"></span>NEURAL CORE</div>
+        <div class="mtab" data-tab="swarm"><span class="dot"></span>SWARM</div>
+        <div class="mtab" data-tab="memory"><span class="dot"></span>MEMORY</div>
+        <div class="mtab" data-tab="runtime"><span class="dot"></span>RUNTIME</div>
+        <div class="mtab" data-tab="security"><span class="dot"></span>SECURITY</div>
+        <div class="mtab" data-tab="trading"><span class="dot"></span>TRADING</div>
+        <div class="mtab" data-tab="interface"><span class="dot"></span>INTERFACES</div>
+        <div class="mtab" data-tab="infra"><span class="dot"></span>INFRA</div>
+        <div class="mtab" data-tab="multimodal"><span class="dot violet"></span>MULTIMODAL</div>
+        <div class="mtab" data-tab="asi"><span class="dot gold"></span>ASI EXPANSION · NEW</div>
+      </div>
+      <div class="matrix">
+        <div class="matrix-grid" id="matrixGrid"></div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ============ RIGHT RAIL ============ -->
+  <aside class="rightbar">
+
+    <div class="panel">
+      <div class="panel-head">
+        <div class="panel-title">Active Agents</div>
+        <div class="panel-dot"></div>
+      </div>
+      <div id="agentList">
+        <div class="agent-row"><span class="ad"></span><span class="an">META-PRIME-Δ</span><span class="ar">META</span><span class="acpu">82%</span></div>
+        <div class="agent-row"><span class="ad"></span><span class="an">THEO-PROVER-7</span><span class="ar">PROOF</span><span class="acpu">64%</span></div>
+        <div class="agent-row"><span class="ad amber"></span><span class="an">HUNTER-K9</span><span class="ar">OSINT</span><span class="acpu">38%</span></div>
+        <div class="agent-row"><span class="ad"></span><span class="an">RAG-ORACLE</span><span class="ar">KNOW</span><span class="acpu">71%</span></div>
+        <div class="agent-row"><span class="ad"></span><span class="an">SWARM-WEAVER</span><span class="ar">ORCH</span><span class="acpu">55%</span></div>
+        <div class="agent-row"><span class="ad red"></span><span class="an">OFFENSIVE-X</span><span class="ar">REDTM</span><span class="acpu">94%</span></div>
+        <div class="agent-row"><span class="ad"></span><span class="an">HFT-VELOCITY</span><span class="ar">TRDG</span><span class="acpu">88%</span></div>
+        <div class="agent-row"><span class="ad"></span><span class="an">CRITIC-LOOP</span><span class="ar">REVW</span><span class="acpu">42%</span></div>
+        <div class="agent-row"><span class="ad amber"></span><span class="an">CONSENSUS-Φ</span><span class="ar">VOTE</span><span class="acpu">31%</span></div>
+        <div class="agent-row"><span class="ad"></span><span class="an">VECTOR-INDEX</span><span class="ar">FAISS</span><span class="acpu">59%</span></div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head">
+        <div class="panel-title">Cognitive Gauges</div>
+        <div class="panel-dot"></div>
+      </div>
+      <div class="gauge">
+        <svg width="56" height="56" viewBox="0 0 56 56">
+          <circle cx="28" cy="28" r="22" fill="none" stroke="rgba(0,229,255,.15)" stroke-width="3"/>
+          <circle cx="28" cy="28" r="22" fill="none" stroke="#00e5ff" stroke-width="3" stroke-dasharray="138.2" stroke-dashoffset="35" stroke-linecap="round" transform="rotate(-90 28 28)" style="filter:drop-shadow(0 0 4px #00e5ff)"/>
+          <text x="28" y="32" text-anchor="middle" fill="#00e5ff" font-family="Share Tech Mono" font-size="11">75%</text>
+        </svg>
+        <div class="gauge-info"><div class="gn">Alignment</div><div class="gv mono">CONSTITUTIONAL</div><div class="gs">14 / 14 PRINCIPLES UPHELD</div></div>
+      </div>
+      <div class="gauge">
+        <svg width="56" height="56" viewBox="0 0 56 56">
+          <circle cx="28" cy="28" r="22" fill="none" stroke="rgba(0,229,255,.15)" stroke-width="3"/>
+          <circle cx="28" cy="28" r="22" fill="none" stroke="#00ff9c" stroke-width="3" stroke-dasharray="138.2" stroke-dashoffset="18" stroke-linecap="round" transform="rotate(-90 28 28)" style="filter:drop-shadow(0 0 4px #00ff9c)"/>
+          <text x="28" y="32" text-anchor="middle" fill="#00ff9c" font-family="Share Tech Mono" font-size="11">87%</text>
+        </svg>
+        <div class="gauge-info"><div class="gn">Coherence</div><div class="gv mono" style="color:var(--green)">SELF-CONSIST.</div><div class="gs">CHAIN-OF-THOUGHT STABLE</div></div>
+      </div>
+      <div class="gauge">
+        <svg width="56" height="56" viewBox="0 0 56 56">
+          <circle cx="28" cy="28" r="22" fill="none" stroke="rgba(0,229,255,.15)" stroke-width="3"/>
+          <circle cx="28" cy="28" r="22" fill="none" stroke="#ffcc33" stroke-width="3" stroke-dasharray="138.2" stroke-dashoffset="62" stroke-linecap="round" transform="rotate(-90 28 28)" style="filter:drop-shadow(0 0 4px #ffcc33)"/>
+          <text x="28" y="32" text-anchor="middle" fill="#ffcc33" font-family="Share Tech Mono" font-size="11">55%</text>
+        </svg>
+        <div class="gauge-info"><div class="gn">Curiosity</div><div class="gv mono" style="color:var(--amber)">EXPLORATIVE</div><div class="gs">42 OPEN HYPOTHESES</div></div>
+      </div>
+      <div class="gauge">
+        <svg width="56" height="56" viewBox="0 0 56 56">
+          <circle cx="28" cy="28" r="22" fill="none" stroke="rgba(0,229,255,.15)" stroke-width="3"/>
+          <circle cx="28" cy="28" r="22" fill="none" stroke="#9d6bff" stroke-width="3" stroke-dasharray="138.2" stroke-dashoffset="28" stroke-linecap="round" transform="rotate(-90 28 28)" style="filter:drop-shadow(0 0 4px #9d6bff)"/>
+          <text x="28" y="32" text-anchor="middle" fill="#9d6bff" font-family="Share Tech Mono" font-size="11">80%</text>
+        </svg>
+        <div class="gauge-info"><div class="gn">Creativity</div><div class="gv mono" style="color:var(--violet)">DIVERGENT</div><div class="gs">TEMP 0.84 · TOP-P 0.92</div></div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head">
+        <div class="panel-title">Audio · Voice Trace</div>
+        <div class="panel-dot"></div>
+      </div>
+      <div style="font-family:'Share Tech Mono';font-size:10px;color:var(--txt-dim);letter-spacing:.15em">VOICE I/O · ON · 48kHz · MIC #2</div>
+      <div class="wave"><canvas id="wave"></canvas></div>
+      <div style="display:flex;justify-content:space-between;font-family:'Share Tech Mono';font-size:10px;color:var(--cyan);margin-top:6px">
+        <span>IN: -18dB</span><span>FREQ: 412Hz</span><span>OUT: -6dB</span>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head">
+        <div class="panel-title">Alert Feed</div>
+        <div class="panel-dot red"></div>
+      </div>
+      <div id="alertList">
+        <div class="alert">
+          <span class="at">22:14:08 · OFFENSIVE</span>
+          <span class="am">Anomaly fingerprint match · APT-LIKE · 5.74.182.x</span>
+        </div>
+        <div class="alert amber">
+          <span class="at">22:13:51 · GOVERNANCE</span>
+          <span class="am">Constitutional principle #7 review queued (1 vote pending)</span>
+        </div>
+        <div class="alert cyan">
+          <span class="at">22:12:34 · SWARM</span>
+          <span class="am">Auction won: NODE-Δ7 (bid: 0.94 · task: theorem-1421)</span>
+        </div>
+        <div class="alert cyan">
+          <span class="at">22:11:02 · RAG</span>
+          <span class="am">Memory consolidation cycle complete · 12,847 episodes indexed</span>
+        </div>
+        <div class="alert amber">
+          <span class="at">22:09:18 · GPU</span>
+          <span class="am">Cluster #3 thermal headroom 4.2°C — throttle imminent</span>
+        </div>
+      </div>
+    </div>
+
+  </aside>
+
+  <!-- ============ BOTTOM BAR ============ -->
+  <footer class="botbar">
+    <div class="indicator"><span class="ld"></span><span class="lt">P2P</span><span class="lv">QUORUM</span></div>
+    <div class="indicator"><span class="ld"></span><span class="lt">CRYPTO</span><span class="lv">Ed25519 · ChaCha20</span></div>
+    <div class="indicator"><span class="ld"></span><span class="lt">CONST.</span><span class="lv">ALIGNED</span></div>
+    <div class="indicator"><span class="ld amber"></span><span class="lt">GPU</span><span class="lv">73°C</span></div>
+    <div class="indicator"><span class="ld"></span><span class="lt">SWARM</span><span class="lv">237 LIVE</span></div>
+
+    <div class="cmd-input">
+      <span class="prompt">M&gt;</span>
+      <input id="cmd" type="text" placeholder="Ask JARVIS / issue command — e.g. spawn agent, query knowledge, run theorem..." autocomplete="off"/>
+      <span class="blink"></span>
+    </div>
+
+    <button class="qbtn">VOICE</button>
+    <button class="qbtn gold">SPAWN</button>
+    <button class="qbtn red">EMERGENCY HALT</button>
+  </footer>
+
+</div>
+
+<script>
+/* ============================================================
+   PANEL DATA — MAGNATRIX MODULES
+   ============================================================ */
+const PANELS = {
+  neural: [
+    {n:"Meta Agent", t:"Prompt-driven framework with XML tools · 643 LOC", s:"live", tag:"AI · CORE", icon:"⬢"},
+    {n:"Theorem Prover", t:"Neuro-symbolic Draft/Sketch/Prove · 18 tactics, BFS · 2.37K LOC", s:"live", tag:"PROOF", icon:"∴"},
+    {n:"Autonomous Agent", t:"Long-horizon planner with self-critique loops", s:"live", tag:"PLAN", icon:"◈"},
+    {n:"Local Agent", t:"On-device runtime, Q4_K_M quantized models", s:"live", tag:"EDGE", icon:"◉"},
+    {n:"LLM Manager", t:"Multi-model routing · GPT/Claude/Llama/local", s:"live", tag:"ROUTE", icon:"⌬"},
+  ],
+  swarm: [
+    {n:"Swarm Orchestrator", t:"Registry, message bus, delegation · 1.18K LOC", s:"live", tag:"ORCH", icon:"⧈"},
+    {n:"CrewAI Pattern", t:"Role-based agent crews (researcher/writer/critic)", s:"live", tag:"PATTERN", icon:"◇"},
+    {n:"AutoGen Pattern", t:"Conversational multi-agent dialogues", s:"live", tag:"PATTERN", icon:"◇"},
+    {n:"LangGraph Pattern", t:"Stateful graph workflows with checkpoints", s:"live", tag:"PATTERN", icon:"◇"},
+    {n:"MCP Protocol", t:"Model Context Protocol native implementation", s:"live", tag:"PROTOCOL", icon:"⚛"},
+    {n:"Hierarchical", t:"Manager-worker tree with delegation chains", s:"live", tag:"PATTERN", icon:"◇"},
+    {n:"Consensus Engine", t:"Byzantine fault-tolerant voting · quorum 2/3", s:"live", tag:"CONSENS", icon:"⬣"},
+    {n:"Collective Brain", t:"Shared distributed cognition layer", s:"live", tag:"BRAIN", icon:"⬢"},
+    {n:"P2P Mesh", t:"DHT-based peer discovery · libp2p compat", s:"live", tag:"MESH", icon:"⌬"},
+  ],
+  memory: [
+    {n:"Agentic RAG", t:"LangGraph+FAISS+MCP hybrid · hash embeddings · 629 LOC", s:"live", tag:"RAG", icon:"◉"},
+    {n:"Vector DB", t:"FAISS-compatible · cosine/L2 · 4096-dim native", s:"live", tag:"VECTOR", icon:"◐"},
+    {n:"Graph DB", t:"Property-graph · Cypher-like query · in-memory", s:"live", tag:"GRAPH", icon:"⌬"},
+    {n:"Temporal Store", t:"Time-series with versioned snapshots", s:"live", tag:"TIME", icon:"⏱"},
+    {n:"Document Agent", t:"Multi-doc routing & chunking · 12K docs indexed", s:"live", tag:"DOCS", icon:"◈"},
+  ],
+  runtime: [
+    {n:"JIT Compiler", t:"4-tier V8-style: Ignition→Sparkplug→Maglev→TurboFan · 1.05K LOC", s:"live", tag:"JIT", icon:"⚙"},
+    {n:"Tri-Language Bridge", t:"Auto-detect C++/Rust, fallback to Python · 588 LOC", s:"live", tag:"BRIDGE", icon:"⇋"},
+    {n:"Kernel", t:"Native scheduler · cooperative + preemptive", s:"live", tag:"KERNEL", icon:"◯"},
+    {n:"State Mgmt", t:"Redis-like KV · 780 LOC · O(1) ops", s:"live", tag:"STATE", icon:"◉"},
+    {n:"Queue System", t:"Priority queues · dead-letter · retry policies", s:"live", tag:"QUEUE", icon:"⇶"},
+    {n:"Skills Engine", t:"Pluggable capability modules · hot-reload", s:"live", tag:"SKILL", icon:"✦"},
+  ],
+  security: [
+    {n:"Rust Crypto Engine", t:"Ed25519 · AES · ChaCha20 via PyO3 · 346 LOC", s:"live", tag:"CRYPTO", icon:"◈"},
+    {n:"Identity Layer", t:"Decentralized DID · key rotation · attestation", s:"live", tag:"ID", icon:"⬡"},
+    {n:"Constitutional AI", t:"Principle-based reasoning guardrails · 14 axioms", s:"live", tag:"ALIGN", icon:"§"},
+    {n:"Governance", t:"On-chain voting · proposal lifecycle · DAO-compat", s:"live", tag:"GOV", icon:"⚖"},
+    {n:"Offensive Sec", t:"Red-team tooling · APT detection · honeypots", s:"warn", tag:"REDTM", icon:"⚔"},
+    {n:"Constitutional Layer", t:"Self-enforcing ethical constraint solver", s:"live", tag:"ETHICS", icon:"§"},
+  ],
+  trading: [
+    {n:"C++ HFT Engine", t:"Lock-based order book + pybind11 · 450 LOC · μs latency", s:"live", tag:"HFT", icon:"$"},
+    {n:"Strategy Engine", t:"Multi-strategy router · mean-rev / momentum / arb", s:"live", tag:"STRAT", icon:"◈"},
+    {n:"Risk Manager", t:"VaR · drawdown caps · circuit breakers", s:"live", tag:"RISK", icon:"⚠"},
+  ],
+  interface: [
+    {n:"Web UI Dashboard", t:"20-panel SPA · iframe standalone · 1.2K LOC", s:"live", tag:"WEB", icon:"⌘"},
+    {n:"Desktop Tray", t:"System tray app · cross-platform · native menus", s:"live", tag:"DESK", icon:"⌬"},
+    {n:"Browser", t:"Embedded Chromium runtime · agent overlay", s:"live", tag:"BROWS", icon:"◯"},
+    {n:"Browser Extension", t:"Chrome/Firefox · injection scripts · MV3", s:"live", tag:"EXT", icon:"⊕"},
+    {n:"Mobile (iOS/Android)", t:"React Native shell · biometric auth", s:"live", tag:"MOB", icon:"☐"},
+    {n:"CLI", t:"`magnatrix` command · TUI · tab completion", s:"live", tag:"CLI", icon:">_"},
+    {n:"IDE Plugins (VSCode)", t:"Agent-in-editor · refactor · pair-program", s:"live", tag:"IDE", icon:"◰"},
+  ],
+  infra: [
+    {n:"API Gateway", t:"Rate-limit · auth · routing · 14 endpoints", s:"live", tag:"GATE", icon:"⌬"},
+    {n:"API Router", t:"Dynamic service mesh · gRPC + REST + WS", s:"live", tag:"ROUTE", icon:"⇶"},
+    {n:"Database", t:"SQLite/Postgres adapters · migration runner", s:"live", tag:"DB", icon:"◉"},
+    {n:"Storage Layer", t:"S3 / IPFS / local · content-addressed", s:"live", tag:"STORE", icon:"⬡"},
+    {n:"Streaming", t:"Kafka-compat · pub/sub · 14ms p99", s:"live", tag:"STREAM", icon:"⇶"},
+    {n:"Observability", t:"OpenTelemetry · Prometheus · Grafana", s:"live", tag:"OBS", icon:"◐"},
+    {n:"Protocol Layer", t:"Custom wire format · zero-copy · binary", s:"live", tag:"PROTO", icon:"⚛"},
+    {n:"Registry", t:"Service & module discovery · health-check", s:"live", tag:"REG", icon:"◈"},
+  ],
+  multimodal: [
+    {n:"Vision Module", t:"CLIP-compat encoder · OCR · scene graph", s:"live", tag:"SEE", icon:"◉"},
+    {n:"Audio Module", t:"Whisper-compat ASR · TTS · voice clone", s:"live", tag:"HEAR", icon:"♪"},
+    {n:"Multimodal Core", t:"Cross-modal fusion · joint embeddings", s:"live", tag:"FUSE", icon:"◐"},
+  ],
+  asi: [
+    {n:"Recursive Self-Improvement", t:"RSI engine · self-modifying weights · sandboxed", s:"dev", tag:"NEW · CRITICAL", icon:"⟳"},
+    {n:"Meta-Cognition Layer", t:"Self-model introspection · metacognitive control", s:"dev", tag:"NEW", icon:"⬢"},
+    {n:"World Simulation Engine", t:"Physics + social + economic forward-modeling", s:"dev", tag:"NEW", icon:"⊛"},
+    {n:"Causal Reasoning Core", t:"Pearl's do-calculus · counterfactual graphs", s:"dev", tag:"NEW", icon:"⇄"},
+    {n:"Theory of Mind", t:"Agent modeling of other-agents (1st/2nd/Nth order)", s:"dev", tag:"NEW", icon:"◑"},
+    {n:"Goal Alignment Engine", t:"Value learning · IRL · CIRL · corrigibility checks", s:"dev", tag:"NEW · SAFETY", icon:"§"},
+    {n:"Counterfactual Engine", t:"What-if exploration · regret minimization", s:"dev", tag:"NEW", icon:"⇆"},
+    {n:"Episodic Memory (LT)", t:"Long-term lossless episodic replay buffer", s:"dev", tag:"NEW", icon:"◉"},
+    {n:"Auto-Research Lab", t:"Hypothesis gen → experiment → publish loop", s:"dev", tag:"NEW", icon:"⚗"},
+    {n:"Resource Optimizer", t:"Self-budgeting compute/$/energy · pareto frontier", s:"dev", tag:"NEW", icon:"◐"},
+    {n:"Embodiment Layer", t:"Robotics bridge · ROS2 · MuJoCo physics", s:"dev", tag:"NEW", icon:"☖"},
+    {n:"Neural Interface (BCI)", t:"OpenBCI/Neuralink bridge · EEG decoder", s:"dev", tag:"NEW · BETA", icon:"⌇"},
+    {n:"Quantum Compute Bridge", t:"Qiskit/Cirq router · hybrid quantum-classical", s:"dev", tag:"NEW", icon:"⚛"},
+    {n:"Affective Computing", t:"Emotion modeling · empathy simulator", s:"dev", tag:"NEW", icon:"♥"},
+    {n:"Ethical Reasoning Core", t:"Multi-framework solver (deon/util/virt)", s:"dev", tag:"NEW · SAFETY", icon:"⚖"},
+    {n:"Self-Replication Guard", t:"Hardcoded firebreaks against uncontrolled copy", s:"dev", tag:"NEW · CRITICAL", icon:"⛔"},
+    {n:"Reality Sensor Mesh", t:"IoT/camera/satellite ingest · 14M endpoints", s:"dev", tag:"NEW", icon:"◯"},
+    {n:"Cosmological Modeling", t:"N-body sims · climate · supply-chain macro", s:"dev", tag:"NEW", icon:"✦"},
+    {n:"Hyperprediction", t:"Time-series at scale · 10⁶ horizons parallel", s:"dev", tag:"NEW", icon:"⇢"},
+    {n:"Energy Grid Mgmt", t:"Self-managing power · cost · carbon optimizer", s:"dev", tag:"NEW", icon:"⚡"},
+  ],
+};
+
+/* ============================================================
+   ICON HELPER — render small SVG
+   ============================================================ */
+function iconSvg(ch){
+  return `<span class="mono" style="font-size:13px">${ch}</span>`;
+}
+
+/* ============================================================
+   RENDER PANEL MATRIX
+   ============================================================ */
+function renderMatrix(tab){
+  const list = PANELS[tab] || [];
+  const grid = document.getElementById("matrixGrid");
+  grid.innerHTML = list.map(p=>{
+    const isDev = p.s === "dev";
+    const isWarn = p.s === "warn";
+    const cls = "mod-card" + (isDev?" dev":"") + (isWarn?" warn":"");
+    return `<div class="${cls}">
+      <div class="mc-head">
+        <div class="mc-icon">${iconSvg(p.icon)}</div>
+        <div class="mc-name">${p.n}</div>
+      </div>
+      <div class="mc-desc">${p.t}</div>
+      <div style="margin-top:auto"><span class="mc-tag">${p.tag}</span></div>
+      <div class="mc-meta">
+        <span>${isDev?"STATUS: BUILD-QUEUE":"STATUS: ONLINE"}</span>
+        <span>${isDev?"v0.0.0-α":"v"+(Math.floor(Math.random()*3)+1)+"."+(Math.floor(Math.random()*9))+"."+(Math.floor(Math.random()*9))}</span>
+      </div>
+    </div>`;
+  }).join("");
+}
+
+/* ============================================================
+   TABS — main matrix + left rail sync
+   ============================================================ */
+document.querySelectorAll(".mtab").forEach(tab=>{
+  tab.addEventListener("click",()=>{
+    document.querySelectorAll(".mtab").forEach(t=>t.classList.remove("active"));
+    tab.classList.add("active");
+    const id = tab.dataset.tab;
+    renderMatrix(id);
+    document.querySelectorAll(".nav-item").forEach(n=>{
+      n.classList.toggle("active", n.dataset.tab===id);
+    });
+  });
+});
+document.querySelectorAll(".nav-item[data-tab]").forEach(it=>{
+  it.addEventListener("click",()=>{
+    const id = it.dataset.tab;
+    document.querySelectorAll(".nav-item").forEach(n=>n.classList.remove("active"));
+    it.classList.add("active");
+    document.querySelectorAll(".mtab").forEach(t=>t.classList.toggle("active", t.dataset.tab===id));
+    renderMatrix(id);
+  });
+});
+
+/* ============================================================
+   CLOCK
+   ============================================================ */
+function tickClock(){
+  const d = new Date();
+  const pad = n=>String(n).padStart(2,"0");
+  document.getElementById("clockTime").textContent =
+    `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+  const days=["SUN","MON","TUE","WED","THU","FRI","SAT"];
+  const mos=["JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC"];
+  document.getElementById("clockDate").textContent =
+    `${days[d.getDay()]} · ${pad(d.getDate())} ${mos[d.getMonth()]} ${d.getFullYear()} · UTC${d.getTimezoneOffset()>0?'-':'+'}${Math.abs(d.getTimezoneOffset()/60)|0}`;
+}
+setInterval(tickClock,1000); tickClock();
+
+/* Uptime */
+const bootAt = Date.now() - (Math.random()*3+1)*24*3600*1000;
+function tickUptime(){
+  let s = Math.floor((Date.now()-bootAt)/1000);
+  const d = Math.floor(s/86400); s-=d*86400;
+  const h = Math.floor(s/3600);  s-=h*3600;
+  const m = Math.floor(s/60);    s-=m*60;
+  const pad = n=>String(n).padStart(2,"0");
+  document.getElementById("vUptime").textContent = `${pad(d)}:${pad(h)}:${pad(m)}:${pad(s)}`;
+}
+setInterval(tickUptime,1000); tickUptime();
+
+/* ============================================================
+   COGNITION STREAM
+   ============================================================ */
+const THOUGHTS = [
+  {tag:"PLAN",   cls:"",       msg:"Decomposing objective: maximize alignment-coherence Δ"},
+  {tag:"PROOF",  cls:"green",  msg:"Lemma_4421 verified · 18 tactics · 312ms"},
+  {tag:"RAG",    cls:"violet", msg:"Retrieved 7 episodes · cosine 0.91 · re-ranked"},
+  {tag:"SWARM",  cls:"",       msg:"Auction: NODE-Δ7 bid 0.94 · task-1421 awarded"},
+  {tag:"HFT",    cls:"gold",   msg:"Limit fill: BTC-USD 67,418.21 · 0.42 BTC · μs 184"},
+  {tag:"MUTATE", cls:"red",    msg:"Self-edit proposed (sandbox) · constitutional veto: PASS"},
+  {tag:"VISION", cls:"",       msg:"Scene graph extracted · 14 objects · 3 anomalies"},
+  {tag:"AUDIO",  cls:"",       msg:"ASR: \"…request acknowledged, executing…\" · conf 0.987"},
+  {tag:"P2P",    cls:"violet", msg:"Gossip-sync · 14 peers · drift 0.0021s"},
+  {tag:"CONST.", cls:"green",  msg:"Principle #7 (transparency) satisfied · trace-id 8a14"},
+  {tag:"HUNTER", cls:"red",    msg:"Beacon fingerprint match · APT-LIKE · 5.74.182.x"},
+  {tag:"CRITIC", cls:"gold",   msg:"Output flagged for re-review · faithfulness 0.71"},
+  {tag:"META",   cls:"",       msg:"Spawned worker pool · 32 agents · capability=research"},
+  {tag:"THEO",   cls:"green",  msg:"Conjecture 0xC4F1 proved · QED · 4 lines"},
+  {tag:"MEMORY", cls:"violet", msg:"Episodic consolidation · 12,847 → long-term"},
+  {tag:"DREAM",  cls:"violet", msg:"Counterfactual rollout · world-state #4912 simulated"},
+  {tag:"ETHICS", cls:"green",  msg:"Deon · util · virtue triple-check passed"},
+  {tag:"CURIOS.",cls:"gold",   msg:"Novel hypothesis generated · entropy +0.142"},
+  {tag:"ENERGY", cls:"",       msg:"Compute budget rebalanced · gpu#3 → rsi-engine"},
+  {tag:"DREAM",  cls:"violet", msg:"Imagined goal-state · utility +1.83 · path 7 steps"},
+];
+
+function nowStamp(){
+  const d = new Date(); const p=n=>String(n).padStart(2,"0");
+  return `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+}
+function pushFeed(){
+  const feed = document.getElementById("feed");
+  const t = THOUGHTS[Math.floor(Math.random()*THOUGHTS.length)];
+  const line = document.createElement("div");
+  line.className="feed-line";
+  line.innerHTML = `<span class="t">${nowStamp()}</span><span class="tag ${t.cls}">${t.tag}</span><span class="msg">${t.msg}</span>`;
+  feed.insertBefore(line, feed.firstChild);
+  while(feed.children.length>14) feed.removeChild(feed.lastChild);
+}
+for(let i=0;i<10;i++) pushFeed();
+setInterval(pushFeed, 1500);
+
+/* ============================================================
+   AUDIO WAVEFORM (mock)
+   ============================================================ */
+const wave = document.getElementById("wave");
+const ctx = wave.getContext("2d");
+function sizeWave(){
+  const r = wave.getBoundingClientRect();
+  wave.width = r.width*devicePixelRatio;
+  wave.height = r.height*devicePixelRatio;
+}
+sizeWave(); window.addEventListener("resize",sizeWave);
+let waveT=0;
+function drawWave(){
+  ctx.clearRect(0,0,wave.width,wave.height);
+  const w = wave.width, h = wave.height;
+  ctx.strokeStyle="rgba(0,229,255,.2)";
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(0,h/2); ctx.lineTo(w,h/2); ctx.stroke();
+
+  // Outer envelope
+  ctx.strokeStyle="rgba(0,229,255,.4)";
+  ctx.lineWidth = 1.5*devicePixelRatio;
+  ctx.beginPath();
+  for(let x=0;x<w;x+=2){
+    const env = Math.sin(x*0.005 + waveT*0.7);
+    const y = h/2 + Math.sin(x*0.06 + waveT)* (h*0.32) * env * (0.6+0.4*Math.random());
+    if(x===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+  }
+  ctx.stroke();
+
+  // Inner brighter line
+  ctx.strokeStyle = "#00e5ff";
+  ctx.lineWidth = 1*devicePixelRatio;
+  ctx.shadowColor = "#00e5ff";
+  ctx.shadowBlur = 8;
+  ctx.beginPath();
+  for(let x=0;x<w;x+=3){
+    const y = h/2 + Math.sin(x*0.08 + waveT*1.2)*(h*0.18);
+    if(x===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+  }
+  ctx.stroke();
+  ctx.shadowBlur = 0;
+
+  waveT += 0.12;
+  requestAnimationFrame(drawWave);
+}
+drawWave();
+
+/* ============================================================
+   LIVE METRICS
+   ============================================================ */
+function jitter(base, amp){return base + (Math.random()-.5)*amp;}
+function setBar(elPct, elTxt, value, max=100, unit="%"){
+  document.getElementById(elPct).style.width = (value/max*100) + "%";
+  if(elTxt) document.getElementById(elTxt).textContent = value.toFixed(1) + unit;
+}
+setInterval(()=>{
+  const cpu = jitter(62, 8), gpu = jitter(81, 6), ram = jitter(44, 4), vram = jitter(68,3);
+  setBar("vCpu","vCpuPct",cpu);
+  setBar("vGpu","vGpuPct",gpu);
+  setBar("vRam","vRamPct",ram);
+  setBar("vVram","vVramPct",vram);
+
+  document.getElementById("kpiTok").innerHTML = (jitter(42816,2000)|0).toLocaleString()+'<span class="unit">t/s</span>';
+  document.getElementById("kpiLat").innerHTML = (jitter(38,6)|0)+'<span class="unit">ms</span>';
+  document.getElementById("kpiOrd").innerHTML = jitter(1.84,.1).toFixed(2)+'M<span class="unit">/ hr</span>';
+  document.getElementById("kpiRag").innerHTML = (jitter(6329,300)|0).toLocaleString()+'<span class="unit">/ min</span>';
+  document.getElementById("kpiPnl").innerHTML = '+$'+jitter(184712,4000).toLocaleString(undefined,{maximumFractionDigits:0})+'<span class="unit">USD</span>';
+  document.getElementById("netIn").textContent = (jitter(412,30)|0)+" MB/s";
+  document.getElementById("netOut").textContent = (jitter(87,8)|0)+" MB/s";
+  document.getElementById("vAgents").textContent = (jitter(237,3)|0);
+},1400);
+
+/* ============================================================
+   COMMAND INPUT — JARVIS-style ack
+   ============================================================ */
+document.getElementById("cmd").addEventListener("keydown",e=>{
+  if(e.key==="Enter" && e.target.value.trim()){
+    const txt = e.target.value.trim();
+    const feed = document.getElementById("feed");
+    const line = document.createElement("div");
+    line.className="feed-line";
+    line.innerHTML = `<span class="t">${nowStamp()}</span><span class="tag" style="color:var(--gold)">USER</span><span class="msg" style="color:var(--gold)">${txt}</span>`;
+    feed.insertBefore(line, feed.firstChild);
+
+    setTimeout(()=>{
+      const ack = document.createElement("div");
+      ack.className="feed-line";
+      const replies = [
+        "Acknowledged. Routing through meta-agent…",
+        "Computing optimal trajectory. Stand by.",
+        "Affirmative. Spawning subagent ensemble.",
+        "Constitutional check passed. Executing.",
+        "Query received. Engaging RAG · 7 indices.",
+      ];
+      ack.innerHTML = `<span class="t">${nowStamp()}</span><span class="tag" style="color:var(--cyan)">JARVIS</span><span class="msg">${replies[Math.floor(Math.random()*replies.length)]}</span>`;
+      feed.insertBefore(ack, feed.firstChild);
+    }, 400);
+    e.target.value="";
+  }
+});
+
+/* ============================================================
+   BOOT SEQUENCE
+   ============================================================ */
+const BOOT_LINES = [
+  {c:"info", t:"BIOS hand-off · kernel-native-py 3.11.9 loaded"},
+  {c:"ok",   t:"Tri-language bridge online · C++ HFT + Rust crypto detected"},
+  {c:"ok",   t:"Crypto engine · Ed25519 / AES-256-GCM / ChaCha20-Poly1305 ready"},
+  {c:"ok",   t:"State backend · KV/Vector/Graph/Temporal all green"},
+  {c:"info", t:"Loading 135 native modules…"},
+  {c:"ok",   t:"Meta-agent / Theorem-prover / Autonomous-agent online"},
+  {c:"ok",   t:"Swarm orchestrator · 237 agents registered · quorum reached"},
+  {c:"ok",   t:"Agentic RAG · 12,847 episodes indexed · vector dim 4096"},
+  {c:"warn", t:"GPU cluster #3 thermal headroom 4.2°C — auto-throttle armed"},
+  {c:"ok",   t:"P2P mesh · 14/14 peers handshaked · DHT consistent"},
+  {c:"ok",   t:"Constitutional alignment layer · 14/14 principles verified"},
+  {c:"info", t:"ASI EXPANSION modules · 20 queued for development"},
+  {c:"warn", t:"Recursive Self-Improvement gated — operator approval required"},
+  {c:"ok",   t:"All systems nominal. Welcome back, Magnus."},
+];
+const log = document.getElementById("bootLog");
+const bar = document.getElementById("bootBar");
+BOOT_LINES.forEach((l,i)=>{
+  setTimeout(()=>{
+    const div = document.createElement("div");
+    div.className = "l " + l.c;
+    div.textContent = l.t;
+    div.style.animationDelay = "0s";
+    log.appendChild(div);
+    log.scrollTop = log.scrollHeight;
+  }, i*230);
+});
+setTimeout(()=>{bar.style.width="100%"}, 100);
+setTimeout(()=>{document.getElementById("boot").classList.add("done")}, 3600);
+
+/* Initial render */
+renderMatrix("neural");
+</script>
+</body>
+</html>
