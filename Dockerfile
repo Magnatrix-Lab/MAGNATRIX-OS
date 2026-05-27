@@ -63,12 +63,12 @@ WORKDIR /app
 # Copy application code
 COPY --chown=magnatrix:magnatrix . /app/
 
-# Install magnatrix-os in editable mode (no build deps needed now)
+# Install magnatrix-os in editable mode (as root before switching user)
 RUN pip install --no-cache-dir -e "."
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD python -c "import magnatrix; print('OK')" || exit 1
+    CMD python -c "import sys; sys.path.insert(0, '/app'); import magnatrix; print('OK')" || exit 1
 
 # Ports exposed by various layers
 # 17000: Inter-layer Bridge Server

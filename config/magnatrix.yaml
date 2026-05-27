@@ -1,0 +1,62 @@
+# MAGNATRIX-OS Default Configuration
+# This file is loaded by the boot command
+
+system:
+  name: "MAGNATRIX-OS"
+  version: "0.9.5-alpha"
+  log_level: INFO
+  data_dir: /var/lib/magnatrix
+
+layers:
+  kernel:
+    enabled: true
+    timeout: 30.0
+  protocol:
+    enabled: true
+    port: 17000
+  api_router:
+    enabled: true
+    port: 18080
+  identity:
+    enabled: true
+  runtime:
+    enabled: true
+  p2p_mesh:
+    enabled: true
+    rendezvous_port: 17171
+    transport_port: 17777
+  knowledge:
+    enabled: true
+  skills:
+    enabled: true
+  browser:
+    enabled: true
+  trading:
+    enabled: true
+  security:
+    enabled: true
+  ai:
+    enabled: true
+  governance:
+    enabled: true
+  ide:
+    enabled: true
+  offensive:
+    enabled: false
+
+llm:
+  default_backend: ollama
+  fallback_chain:
+    - ollama
+    - groq
+    - together
+    - huggingface
+
+hft:
+  paper_trading: true
+  max_position: 1000
+  stop_loss_pct: 2.0
+
+security:
+  vault_dir: /var/lib/magnatrix/vault
+  encryption: chacha20poly1305

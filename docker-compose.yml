@@ -21,7 +21,7 @@ services:
     hostname: magnatrix-core
     restart: unless-stopped
 
-    command: ["boot", "--config", "/var/lib/magnatrix/config/magnatrix.yaml"]
+    command: ["python", "magnatrix.py", "boot", "--config", "/var/lib/magnatrix/config/magnatrix.yaml", "--verbose"]
 
     environment:
       - MAGNATRIX_HOME=/var/lib/magnatrix
@@ -45,10 +45,9 @@ services:
       - magnatrix-models:/var/lib/magnatrix/models
       - magnatrix-knowledge:/var/lib/magnatrix/knowledge
       - magnatrix-logs:/var/lib/magnatrix/logs
-      - magnatrix-config:/var/lib/magnatrix/config
       - magnatrix-repos:/var/lib/magnatrix/repos
-      # Mount local config (optional override)
-      - ./config:/app/config:ro
+      # Config from host (read-only)
+      - ./config:/var/lib/magnatrix/config:ro
 
     networks:
       - magnatrix-net
@@ -185,8 +184,6 @@ volumes:
   magnatrix-knowledge:
     driver: local
   magnatrix-logs:
-    driver: local
-  magnatrix-config:
     driver: local
   magnatrix-repos:
     driver: local
