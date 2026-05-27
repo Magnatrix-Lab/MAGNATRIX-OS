@@ -196,8 +196,8 @@ class MemoryManager:
 class GoalDecomposer:
     """Breaks a goal into subtasks."""
 
-    def __init__(self, llm: Optional[MockLLM] = None) -> None:
-        self.llm = llm or MockLLM()
+    def __init__(self, llm: Optional[MockToUnifiedBridge] = None) -> None:
+        self.llm = llm or MockToUnifiedBridge()
 
     def decompose(self, goal: str) -> List[Task]:
         """Break goal into tasks."""
@@ -290,27 +290,7 @@ class SelfCritique:
 # 7.  MOCK LLM
 # ---------------------------------------------------------------------------
 
-class MockLLM:
-    """Mock LLM untuk task generation dan synthesis."""
-
-    def __init__(self, model: str = "mock-autonomous") -> None:
-        self.model = model
-        self.calls = 0
-
-    def generate_tasks(self, goal: str) -> List[str]:
-        self.calls += 1
-        return [
-            f"Research: {goal[:40]}",
-            f"Analyze findings for: {goal[:40]}",
-            f"Produce final output for: {goal[:40]}",
-        ]
-
-    def synthesize(self, task_results: List[str], goal: str) -> str:
-        self.calls += 1
-        return f"[SYNTHESIS] Based on {len(task_results)} subtask results, here is the answer for: {goal[:60]}..."
-
-    def get_stats(self) -> Dict[str, Any]:
-        return {"model": self.model, "calls": self.calls}
+from ai.mock_to_unified_bridge import MockToUnifiedBridge
 
 
 # ---------------------------------------------------------------------------

@@ -990,19 +990,24 @@ class ChatAdapter(ABC):
         return f"{self.__class__.__name__}(abstract)"
 
 
-class MockLLMAdapter(ChatAdapter):
-    """Demo LLM adapter that echoes user input with slight elaboration.
-
-    Simulates streaming by yielding word-by-word deltas.
-    Supports tool calls by injecting a fake tool_calls block when the user
-    message contains the word "weather".
-    """
+class UnifiedLLMAdapter(ChatAdapter):
+    """Real LLM adapter using UnifiedLLMNative."""
 
     def __init__(self, latency_ms: float = 15.0) -> None:
         self.latency_ms = latency_ms
+        self._bridge = None
+
+    def _get_bridge(self):
+        if self._bridge is None:
+            import sys
+            from pathlib import Path
+            sys.path.insert(0, str(Path(__file__).parent.parent))
+            from ai.unified_llm_backend import UnifiedLLMNative
+            self._bridge = UnifiedLLMNative()
+        return self._bridge
 
     def __repr__(self) -> str:
-        return f"MockLLMAdapter(latency={self.latency_ms}ms)"
+        return f"UnifiedLLMAdapter(latency={self.latency_ms}ms)"
 
     async def chat_stream(
         self,
@@ -1011,11 +1016,15 @@ class MockLLMAdapter(ChatAdapter):
     ) -> AsyncIterator[str]:
         last_user = context.last_user_message()
         user_text = last_user.content if last_user else "Hello"
-        # Simulated response
-        if "weather" in user_text.lower():
-            reply = "Let me check the weather for you using the get_weather tool."
-        else:
-            reply = f"Echo: I received your message — '{user_text}'. This is a simulated LLM response for testing the native Python pipeline."
+        try:
+            bridge = self._get_bridge()
+            reply = bridge.generate(user_text)
+        except Exception:
+            # Fallback if no LLM backend available
+            if "weather" in user_text.lower():
+                reply = "Let me check the weather for you using the get_weather tool."
+            else:
+                reply = f"Echo: I received your message — '{user_text}'. (LLM backend unavailable — fallback mode.)"
         words = reply.split()
         for w in words:
             await asyncio.sleep(self.latency_ms / 1000.0)
@@ -1760,7 +1769,7 @@ class AgentConfig:
     name: str = "native-agent"
     system_prompt: str = "You are a helpful real-time voice assistant."
     stt_adapter_class: str = "MockSTTAdapter"
-    llm_adapter_class: str = "MockLLMAdapter"
+    llm_adapter_class: str = "UnifiedLLMAdapter"
     tts_adapter_class: str = "MockTTSAdapter"
     vad_energy_threshold: float = 500.0
     vad_hangover_frames: int = 20
@@ -1973,7 +1982,7 @@ async def main() -> None:
 
     # Instantiate adapters
     stt_adapter = MockSTTAdapter()
-    llm_adapter = MockLLMAdapter(latency_ms=20.0)
+    llm_adapter = UnifiedLLMAdapter(latency_ms=20.0)
     tts_adapter = MockTTSAdapter(sample_rate=16000, tone_hz=880)
     print(f"Adapters: STT={stt_adapter}, LLM={llm_adapter}, TTS={tts_adapter}")
 

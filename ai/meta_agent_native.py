@@ -29,6 +29,9 @@ import traceback
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Optional, Tuple, Type, Union
 
+# LLM bridge for real backend integration
+from ai.mock_to_unified_bridge import MockToUnifiedBridge
+
 
 # ---------------------------------------------------------------------------
 # 1.  STREAMING LOGGER — real-time tee stdout + file
@@ -623,11 +626,16 @@ def _demo() -> None:
         "All tasks complete. <TASK_COMPLETED>",
     ]
     idx = [0]
-    def _mock_llm(p: str) -> str:
-        r = responses[idx[0] % len(responses)]
-        idx[0] += 1
-        return r
-    agent.llm_call = _mock_llm
+    bridge = MockToUnifiedBridge()
+    def _real_llm(p: str) -> str:
+        try:
+            return bridge.generate(p)
+        except Exception:
+            # Fallback to mock responses for demo
+            r = responses[idx[0] % len(responses)]
+            idx[0] += 1
+            return r
+    agent.llm_call = _real_llm
 
     result = agent.run("Research MAGNATRIX-OS")
     print(f"Steps: {agent.step_count}")
