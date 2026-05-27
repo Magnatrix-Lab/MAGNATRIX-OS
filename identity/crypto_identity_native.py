@@ -697,8 +697,6 @@ class IdentityRegistry:
         enc_key = hashlib.scrypt(
             password.encode(), salt=salt, n=2**16, r=8, p=1, dklen=32
         )
-            key_material = hashlib.sha512(key_material).digest()
-        enc_key = key_material[:32]
         cipher = AES256GCM(enc_key)
         plaintext = cipher.decrypt(ct, iv, tag)
         if plaintext is None:

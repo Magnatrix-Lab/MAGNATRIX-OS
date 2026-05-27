@@ -163,8 +163,8 @@ class ReconScanner:
 
     def __init__(self):
         self._patterns = {
-            "endpoints": re.compile(r'(?:GET|POST|PUT|DELETE|PATCH)\s+["']?(/[^"'\s]+)'),
-            "api_keys": re.compile(r'(?:api[_-]?key|token|secret)\s*[:=]\s*["']?([a-zA-Z0-9_-]{16,})'),
+            "endpoints": re.compile(r"(?:GET|POST|PUT|DELETE|PATCH)\s+[\"']?(/[^\"'\s]+)"),
+            "api_keys": re.compile(r"(?:api[_-]?key|token|secret)\s*[:=]\s*[\"']?([a-zA-Z0-9_-]{16,})"),
             "urls": re.compile(r'https?://[^\s"'']+'),
             "dependencies": re.compile(r'(?:from|import)\s+([a-zA-Z_][a-zA-Z0-9_]*)'),
         }

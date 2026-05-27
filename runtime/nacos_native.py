@@ -542,8 +542,6 @@ Nacos native reimplementation (alibaba/nacos). Pure Python, no external deps.
 Section: Config Store, Config Listener, Gray Release, Config History, Namespace isolation.
 """
 
-from __future__ import annotations
-
 import json
 import hashlib
 import threading
@@ -1240,8 +1238,6 @@ nacos_native_part3.py — Part 3: Service Governance, Cluster, Load Balancer & K
 Nacos native reimplementation (alibaba/nacos). Pure Python, no external deps.
 Sections: Load Balancer, Service Governance, Raft Consensus, Cluster Manager, NacosKernel, CLI + demo.
 """
-
-from __future__ import annotations
 
 import json
 import math

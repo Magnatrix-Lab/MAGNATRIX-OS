@@ -19,6 +19,7 @@ class FieldSpec:
     type: Type
     required: bool = True
     default: Any = None
+    default_factory: Any = None
     min: Optional[Union[int, float]] = None
     max: Optional[Union[int, float]] = None
     allowed: Optional[List[Any]] = None

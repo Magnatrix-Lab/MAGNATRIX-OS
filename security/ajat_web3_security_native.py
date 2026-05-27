@@ -841,8 +841,7 @@ class AuditAgent:
             "title": "Unchecked Call Return Value",
             "cwe": "CWE-252",
             "severity": RiskLevel.MEDIUM,
-            "regex": r"(\.call|\.delegatecall|\.staticcall)\s*\([^)]*\)\s*;(?![\s\S]*require\s*\(|[^\n]*if\s*\()
-",
+            "regex": r"(\.call|\.delegatecall|\.staticcall)\s*\([^)]*\)\s*;(?![\s\S]*require\s*\(|[^\n]*if\s*\()",
             "remediation": "Always check return values of low-level calls with require() or if statement.",
         },
         {

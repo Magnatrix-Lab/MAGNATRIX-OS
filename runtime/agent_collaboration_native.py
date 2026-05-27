@@ -29,7 +29,7 @@ from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 # Import swarm engine
-from multi_agent_swarm_native import (
+from runtime.multi_agent_swarm_native import (
     AgentCapabilities, AgentRegistration, AgentRegistry,
     AgentMessage, CollaborativeAgent, ConsensusEngine,
     MCPToolProtocol, MessageBus, SharedMemory, SwarmOrchestrator,
