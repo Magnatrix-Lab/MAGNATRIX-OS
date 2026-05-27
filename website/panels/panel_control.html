@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MAGNATRIX-OS :: Control Center</title>
+<style>
+:root{--bg0:#0b0c15;--bg1:#121420;--bg2:#1a1d2e;--bg3:#222540;--glass:rgba(20,22,40,.8);--cyan:#00f0ff;--purple:#b829dd;--green:#00e676;--red:#ff5252;--amber:#ffb300;--blue:#4488ff;--text:#c8cee0;--muted:#6b7280;--border:rgba(0,240,255,.12);--radius:10px}
+*{box-sizing:border-box;margin:0;padding:0;font-family:'Segoe UI',system-ui,sans-serif}
+body{background:var(--bg0);color:var(--text);height:100vh;overflow:hidden;display:flex;flex-direction:column}
+/* Header */
+.header{height:48px;background:var(--glass);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 20px;justify-content:space-between;backdrop-filter:blur(12px);position:sticky;top:0;z-index:10}
+.header h1{font-size:14px;letter-spacing:2px;text-transform:uppercase;color:var(--cyan);display:flex;align-items:center;gap:10px}
+.header h1::before{content:"";width:10px;height:10px;border-radius:50%;background:var(--green);box-shadow:0 0 10px var(--green);animation:pulse 2s infinite}
+.header .subtitle{font-size:11px;color:var(--muted)}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+/* Layout */
+.main{flex:1;display:flex;overflow:hidden}
+/* Left: Panel Grid */
+.left{flex:1;display:flex;flex-direction:column;overflow:hidden}
+.toolbar{height:44px;background:var(--bg1);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 16px;gap:10px}
+.toolbar input{background:var(--bg2);border:1px solid var(--border);border-radius:6px;padding:6px 12px;color:var(--text);font-size:12px;outline:none;min-width:200px}
+.toolbar input::placeholder{color:var(--muted)}
+.toolbar button{padding:6px 14px;border:1px solid var(--border);border-radius:6px;background:var(--bg2);color:var(--text);font-size:11px;cursor:pointer;transition:all .15s;display:flex;align-items:center;gap:6px}
+.toolbar button:hover{border-color:var(--cyan);color:var(--cyan)}
+.toolbar button.primary{background:linear-gradient(135deg,var(--cyan),var(--blue));color:var(--bg0);border:none;font-weight:600}
+.toolbar button.primary:hover{filter:brightness(1.2)}
+.toolbar .spacer{flex:1}
+.stats-bar{display:flex;gap:20px;padding:10px 16px;background:var(--bg1);border-bottom:1px solid var(--border);font-size:11px}
+.stat{display:flex;align-items:center;gap:6px}
+.stat .dot{width:8px;height:8px;border-radius:50%}
+.stat .dot.on{background:var(--green);box-shadow:0 0 6px var(--green)}
+.stat .dot.off{background:var(--red)}
+.stat .dot.warn{background:var(--amber)}
+/* Panel Grid */
+.panel-grid{flex:1;overflow:auto;padding:16px;display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;align-content:start}
+.panel-card{background:var(--bg1);border:1px solid var(--border);border-radius:var(--radius);padding:14px;display:flex;flex-direction:column;gap:8px;transition:all .2s;position:relative;overflow:hidden}
+.panel-card:hover{border-color:rgba(0,240,255,.3);transform:translateY(-2px);box-shadow:0 8px 24px rgba(0,0,0,.3)}
+.panel-card.disabled{opacity:.5;border-color:rgba(255,82,82,.2)}
+.panel-card.disabled .panel-name{color:var(--muted)}
+.panel-card::before{content:"";position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,var(--cyan),var(--purple));opacity:0;transition:opacity .2s}
+.panel-card.active::before{opacity:1}
+.panel-header{display:flex;align-items:center;justify-content:space-between}
+.panel-icon{font-size:20px;width:32px;height:32px;display:flex;align-items:center;justify-content:center;background:var(--bg2);border-radius:8px}
+.panel-name{font-size:13px;font-weight:600}
+.panel-desc{font-size:11px;color:var(--muted);line-height:1.4}
+.panel-meta{display:flex;gap:12px;font-size:10px;color:var(--muted);margin-top:4px}
+.panel-actions{display:flex;gap:6px;margin-top:6px}
+.panel-actions button{flex:1;padding:6px;border-radius:6px;border:1px solid var(--border);background:var(--bg2);color:var(--text);font-size:11px;cursor:pointer;transition:all .15s}
+.panel-actions button:hover{border-color:var(--cyan)}
+.panel-actions button.danger:hover{border-color:var(--red);color:var(--red)}
+/* Toggle Switch */
+.switch{position:relative;width:36px;height:20px;background:var(--bg3);border-radius:10px;cursor:pointer;transition:background .2s;flex-shrink:0}
+.switch.on{background:var(--green)}
+.switch::after{content:"";position:absolute;top:2px;left:2px;width:16px;height:16px;background:#fff;border-radius:50%;transition:left .2s;box-shadow:0 1px 3px rgba(0,0,0,.3)}
+.switch.on::after{left:18px}
+/* Right: Monitor */
+.right{width:300px;background:var(--bg1);border-left:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden}
+.right-title{padding:14px 16px;font-size:11px;text-transform:uppercase;letter-spacing:1.5px;color:var(--cyan);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+.right-title .refresh{cursor:pointer;font-size:14px;transition:transform .3s}
+.right-title .refresh:hover{transform:rotate(180deg)}
+.monitor-section{padding:12px 16px;border-bottom:1px solid var(--border)}
+.monitor-section-title{font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-bottom:10px}
+.gauge{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+.gauge-label{font-size:11px;min-width:60px}
+.gauge-bar{flex:1;height:6px;background:var(--bg3);border-radius:3px;overflow:hidden}
+.gauge-fill{height:100%;border-radius:3px;transition:width .5s ease}
+.gauge-val{font-size:11px;min-width:30px;text-align:right}
+.gauge-fill.cpu{background:linear-gradient(90deg,var(--cyan),var(--blue))}
+.gauge-fill.mem{background:linear-gradient(90deg,var(--purple),var(--cyan))}
+.gauge-fill.disk{background:linear-gradient(90deg,var(--amber),var(--red))}
+/* Log */
+.log-container{flex:1;overflow:auto;padding:12px 16px;font-family:'Consolas',monospace;font-size:11px;line-height:18px}
+.log-entry{display:flex;gap:8px;margin-bottom:2px}
+.log-time{color:var(--muted);white-space:nowrap}
+.log-tag{padding:0 6px;border-radius:3px;font-size:9px;text-transform:uppercase}
+.log-tag.info{background:rgba(0,240,255,.1);color:var(--cyan)}
+.log-tag.warn{background:rgba(255,179,0,.1);color:var(--amber)}
+.log-tag.error{background:rgba(255,82,82,.1);color:var(--red)}
+.log-tag.ok{background:rgba(0,230,118,.1);color:var(--green)}
+.log-msg{flex:1}
+/* Buttons row */
+.quick-actions{display:flex;gap:8px;padding:12px 16px;border-top:1px solid var(--border);background:var(--bg1)}
+.quick-actions button{flex:1;padding:8px;border-radius:6px;border:1px solid var(--border);background:var(--bg2);color:var(--text);font-size:10px;cursor:pointer;transition:all .15s}
+.quick-actions button:hover{border-color:var(--cyan);color:var(--cyan)}
+/* Scrollbar */
+::-webkit-scrollbar{width:6px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--bg3);border-radius:3px}
+::-webkit-scrollbar-thumb:hover{background:var(--muted)}
+</style>
+</head>
+<body>
+<div class="header">
+  <h1>Control Center</h1>
+  <span class="subtitle">Panel Manager &mdash; MAGNATRIX-OS Dashboard</span>
+</div>
+<div class="main">
+  <!-- Left: Panel Grid -->
+  <div class="left">
+    <div class="toolbar">
+      <input type="text" id="searchPanels" placeholder="Search panels..." oninput="filterPanels()">
+      <button onclick="enableAll()">&#10003; Enable All</button>
+      <button onclick="disableAll()">&#10007; Disable All</button>
+      <div class="spacer"></div>
+      <button class="primary" onclick="saveConfig()">&#128190; Save Config</button>
+      <button onclick="resetDefaults()">&#8634; Reset</button>
+    </div>
+    <div class="stats-bar">
+      <div class="stat"><span class="dot on"></span> Active: <b id="statActive">0</b></div>
+      <div class="stat"><span class="dot off"></span> Disabled: <b id="statDisabled">0</b></div>
+      <div class="stat"><span class="dot warn"></span> Total: <b id="statTotal">0</b></div>
+      <div class="stat" style="margin-left:auto"><span style="color:var(--cyan)">&#9679;</span> System: <b id="systemHealth">Healthy</b></div>
+    </div>
+    <div class="panel-grid" id="panelGrid"></div>
+  </div>
+
+  <!-- Right: Monitor -->
+  <div class="right">
+    <div class="right-title">
+      System Monitor
+      <span class="refresh" onclick="refreshStats()">&#8635;</span>
+    </div>
+    <div class="monitor-section">
+      <div class="monitor-section-title">Resource Usage</div>
+      <div class="gauge"><span class="gauge-label">CPU</span><div class="gauge-bar"><div class="gauge-fill cpu" id="cpuBar" style="width:34%"></div></div><span class="gauge-val" id="cpuVal">34%</span></div>
+      <div class="gauge"><span class="gauge-label">Memory</span><div class="gauge-bar"><div class="gauge-fill mem" id="memBar" style="width:52%"></div></div><span class="gauge-val" id="memVal">52%</span></div>
+      <div class="gauge"><span class="gauge-label">Disk</span><div class="gauge-bar"><div class="gauge-fill disk" id="diskBar" style="width:71%"></div></div><span class="gauge-val" id="diskVal">71%</span></div>
+    </div>
+    <div class="monitor-section">
+      <div class="monitor-section-title">Panel Load</div>
+      <div class="gauge"><span class="gauge-label">Active</span><div class="gauge-bar"><div class="gauge-fill cpu" id="loadBar" style="width:60%"></div></div><span class="gauge-val" id="loadVal">12/20</span></div>
+    </div>
+    <div class="monitor-section" style="flex:1;display:flex;flex-direction:column;padding:0;border:none">
+      <div class="monitor-section-title" style="padding:12px 16px 0">Event Log</div>
+      <div class="log-container" id="logContainer"></div>
+    </div>
+    <div class="quick-actions">
+      <button onclick="clearLog()">Clear Log</button>
+      <button onclick="exportLog()">Export</button>
+      <button onclick="pauseLog()" id="pauseBtn">Pause</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── Panel Registry ──
+const ALL_PANELS=[
+  {id:"dashboard",name:"Dashboard",icon:"&#9672;",desc:"Main overview with system metrics, uptime, and live charts",cat:"Core",active:true},
+  {id:"chat",name:"AI Chat",icon:"&#128172;",desc:"Conversational interface with multi-model support",cat:"Core",active:true},
+  {id:"profile",name:"Profile",icon:"&#128100;",desc:"User identity, settings, and preferences",cat:"Core",active:true},
+  {id:"models",name:"LLM Models",icon:"&#129504;",desc:"Model catalog with GGUF loader and quantization",cat:"AI",active:true},
+  {id:"llm",name:"LLM Monitor",icon:"&#129302;",desc:"Real-time inference telemetry and token usage",cat:"AI",active:true},
+  {id:"providers",name:"Providers",icon:"&#128279;",desc:"Multi-provider backend management and health",cat:"AI",active:true},
+  {id:"skills",name:"Skills",icon:"&#9889;",desc:"Skill registry, execution, and version control",cat:"AI",active:true},
+  {id:"memory",name:"Memory",icon:"&#129516;",desc:"Vector store, context management, and recall",cat:"AI",active:true},
+  {id:"kanban",name:"Kanban",icon:"&#128203;",desc:"Task board with drag-and-drop columns",cat:"Productivity",active:true},
+  {id:"schedules",name:"Schedules",icon:"&#128197;",desc:"Cron jobs, timers, and event scheduling",cat:"Productivity",active:true},
+  {id:"obsidian",name:"Obsidian",icon:"&#128221;",desc:"Knowledge vault with Markdown and graph view",cat:"Productivity",active:true},
+  {id:"sessions",name:"Sessions",icon:"&#128187;",desc:"Active session management and terminal multiplexer",cat:"Productivity",active:true},
+  {id:"workspace",name:"Workspace",icon:"&#128187;",desc:"IDE integration with file tree and code editor",cat:"Productivity",active:true},
+  {id:"trading",name:"Trading",icon:"&#128200;",desc:"HFT engine, arbitrage detector, and order book",cat:"Finance",active:true},
+  {id:"security",name:"Security",icon:"&#128737;",desc:"Crypto engine, identity, and threat detection",cat:"Security",active:true},
+  {id:"p2p",name:"P2P Mesh",icon:"&#127760;",desc:"Kademlia DHT, gossip, and peer discovery",cat:"Network",active:true},
+  {id:"gateway",name:"Gateway",icon:"&#128682;",desc:"API router, rate limiting, and auth",cat:"Network",active:true},
+  {id:"router",name:"LLM Router",icon:"&#127758;",desc:"3-tier routing, RTK token saver, provider pool",cat:"AI",active:true},
+  {id:"ccswitch",name:"CC Switch",icon:"&#128256;",desc:"Multi-tool session manager and provider switcher",cat:"AI",active:true},
+  {id:"tools",name:"Tools",icon:"&#128295;",desc:"Utility tools and system diagnostics",cat:"System",active:true},
+  {id:"plugins",name:"Plugins",icon:"&#128268;",desc:"Plugin marketplace and installation manager",cat:"System",active:true},
+  {id:"settings",name:"Settings",icon:"&#9881;",desc:"Global configuration, themes, and preferences",cat:"System",active:true},
+];
+
+let panels=[...ALL_PANELS];
+let logPaused=false;
+let logEntries=[];
+
+// ── Render ──
+function renderGrid(){
+  const grid=document.getElementById("panelGrid");
+  grid.innerHTML="";
+  let active=0,disabled=0;
+  panels.forEach(p=>{
+    if(p.active)active++;else disabled++;
+    const card=document.createElement("div");
+    card.className=`panel-card ${p.active?"active":"disabled"}`;
+    card.dataset.id=p.id;
+    card.innerHTML=`
+      <div class="panel-header">
+        <div style="display:flex;align-items:center;gap:10px">
+          <div class="panel-icon">${p.icon}</div>
+          <div>
+            <div class="panel-name">${p.name}</div>
+            <div style="font-size:10px;color:var(--muted)">${p.cat}</div>
+          </div>
+        </div>
+        <div class="switch ${p.active?"on":""}" onclick="togglePanel('${p.id}',event)"></div>
+      </div>
+      <div class="panel-desc">${p.desc}</div>
+      <div class="panel-meta">
+        <span>ID: ${p.id}</span>
+        <span>Status: <span style="color:${p.active?"var(--green)":"var(--red)"}">${p.active?"Running":"Stopped"}</span></span>
+      </div>
+      <div class="panel-actions">
+        <button onclick="restartPanel('${p.id}')">&#8635; Restart</button>
+        <button class="danger" onclick="killPanel('${p.id}')">&#10007; Kill</button>
+      </div>
+    `;
+    grid.appendChild(card);
+  });
+  document.getElementById("statActive").textContent=active;
+  document.getElementById("statDisabled").textContent=disabled;
+  document.getElementById("statTotal").textContent=panels.length;
+  document.getElementById("loadBar").style.width=(active/panels.length*100)+"%";
+  document.getElementById("loadVal").textContent=active+"/"+panels.length;
+}
+
+function togglePanel(id,ev){
+  if(ev)ev.stopPropagation();
+  const p=panels.find(x=>x.id===id);
+  if(p){p.active=!p.active;renderGrid();logEvent(p.active?"ok":"warn",`Panel '${p.name}' ${p.active?"enabled":"disabled"}`);}
+}
+function enableAll(){panels.forEach(p=>p.active=true);renderGrid();logEvent("ok","All panels enabled");}
+function disableAll(){panels.forEach(p=>p.active=false);renderGrid();logEvent("warn","All panels disabled");}
+function restartPanel(id){const p=panels.find(x=>x.id===id);if(p){logEvent("info",`Restarting '${p.name}'...`);setTimeout(()=>logEvent("ok",`'${p.name}' restarted`),600);}}
+function killPanel(id){const p=panels.find(x=>x.id===id);if(p){p.active=false;renderGrid();logEvent("error",`'${p.name}' killed`);}}
+
+function filterPanels(){
+  const q=document.getElementById("searchPanels").value.toLowerCase();
+  document.querySelectorAll(".panel-card").forEach(card=>{
+    const name=card.querySelector(".panel-name").textContent.toLowerCase();
+    const desc=card.querySelector(".panel-desc").textContent.toLowerCase();
+    card.style.display=(name.includes(q)||desc.includes(q))?"flex":"none";
+  });
+}
+
+function saveConfig(){logEvent("ok","Panel configuration saved to localStorage");}
+function resetDefaults(){panels=[...ALL_PANELS];renderGrid();logEvent("info","Panel configuration reset to defaults");}
+
+// ── Log ──
+function logEvent(tag,msg){
+  if(logPaused)return;
+  const time=new Date().toLocaleTimeString();
+  logEntries.push({time,tag,msg});
+  const container=document.getElementById("logContainer");
+  const entry=document.createElement("div");
+  entry.className="log-entry";
+  entry.innerHTML=`<span class="log-time">${time}</span><span class="log-tag ${tag}">${tag}</span><span class="log-msg">${msg}</span>`;
+  container.appendChild(entry);
+  container.scrollTop=container.scrollHeight;
+  if(logEntries.length>200){logEntries.shift();container.removeChild(container.firstChild);}
+}
+function clearLog(){document.getElementById("logContainer").innerHTML="";logEntries=[];}
+function exportLog(){
+  const blob=new Blob([JSON.stringify(logEntries,null,2)],{type:"application/json"});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement("a");a.href=url;a.download="magnatrix-panel-log.json";a.click();
+  logEvent("ok","Log exported to JSON");
+}
+function pauseLog(){logPaused=!logPaused;document.getElementById("pauseBtn").textContent=logPaused?"Resume":"Pause";logEvent("info",logPaused?"Log paused":"Log resumed");}
+
+// ── Monitor ──
+function refreshStats(){
+  const cpu=20+Math.floor(Math.random()*50);
+  const mem=30+Math.floor(Math.random()*40);
+  const disk=60+Math.floor(Math.random()*30);
+  document.getElementById("cpuBar").style.width=cpu+"%";
+  document.getElementById("cpuVal").textContent=cpu+"%";
+  document.getElementById("memBar").style.width=mem+"%";
+  document.getElementById("memVal").textContent=mem+"%";
+  document.getElementById("diskBar").style.width=disk+"%";
+  document.getElementById("diskVal").textContent=disk+"%";
+  logEvent("info","System stats refreshed");
+}
+
+// ── Init ──
+renderGrid();
+["Dashboard ready","22 panels loaded","System health: OK","Control Center initialized"].forEach((m,i)=>setTimeout(()=>logEvent("info",m),i*200));
+setInterval(()=>{if(!logPaused&&Math.random()>.7)logEvent("info",`Heartbeat: ${panels.filter(p=>p.active).length} active panels`);},8000);
+setInterval(refreshStats,15000);
+</script>
+</body>
+</html>
