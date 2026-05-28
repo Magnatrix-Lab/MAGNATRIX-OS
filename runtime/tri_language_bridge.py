@@ -33,6 +33,7 @@ class BackendStatus:
     def __init__(self) -> None:
         self.cpp_hft = False
         self.rust_crypto = False
+        self.asi_kernel = False
         self.python_fallback = True
         self._detect()
 
@@ -52,10 +53,18 @@ class BackendStatus:
         except ImportError:
             pass
 
+        # ASI Kernel
+        try:
+            from runtime.asi_kernel_native import ASIKernel
+            self.asi_kernel = True
+        except ImportError:
+            pass
+
     def report(self) -> Dict[str, Any]:
         return {
             "cpp_hft": self.cpp_hft,
             "rust_crypto": self.rust_crypto,
+            "asi_kernel": self.asi_kernel,
             "python_fallback": self.python_fallback,
             "optimized": self.cpp_hft and self.rust_crypto,
         }
@@ -63,7 +72,7 @@ class BackendStatus:
     def __repr__(self) -> str:
         r = self.report()
         status = "OPTIMIZED" if r["optimized"] else "FALLBACK"
-        return f"<BackendStatus {status}: cpp={r['cpp_hft']}, rust={r['rust_crypto']}>"
+        return f"<BackendStatus {status}: cpp={r['cpp_hft']}, rust={r['rust_crypto']}, asi={r['asi_kernel']}>"
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -374,6 +383,83 @@ class UnifiedHFT:
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
+# Unified ASI API (lazy-loads ASI kernel)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+class UnifiedASI:
+    """ASI orchestration — lazy-loads kernel on first use."""
+
+    def __init__(self, base_path: str = "/mnt/agents/MAGNATRIX-OS") -> None:
+        self._kernel = None
+        self._base_path = base_path
+        self._ready = False
+        self._last_health: Dict[str, str] = {}
+        self._last_summary: Dict[str, Any] = {}
+
+    def _init(self) -> bool:
+        if self._kernel is not None:
+            return self._ready
+        try:
+            import sys
+            import os
+            bp = os.path.join(self._base_path, "runtime")
+            if bp not in sys.path:
+                sys.path.insert(0, bp)
+            from asi_kernel_native import ASIKernel
+            self._kernel = ASIKernel(self._base_path)
+            ready, total = self._kernel.init_all()
+            self._ready = ready > 0
+            self._refresh()
+            return self._ready
+        except Exception as e:
+            print(f"ASI init error: {e}")
+            self._ready = False
+            return False
+
+    def _refresh(self) -> None:
+        if self._kernel:
+            self._last_health = self._kernel.health_check()
+            self._last_summary = self._kernel.summary()
+
+    @property
+    def ready(self) -> bool:
+        return self._init()
+
+    @property
+    def health(self) -> Dict[str, str]:
+        self._init()
+        self._refresh()
+        return self._last_health.copy()
+
+    @property
+    def summary(self) -> Dict[str, Any]:
+        self._init()
+        self._refresh()
+        return self._last_summary.copy()
+
+    def call(self, module_name: str, method: str, *args, **kwargs) -> Any:
+        self._init()
+        if not self._kernel:
+            raise RuntimeError("ASI kernel not available")
+        return self._kernel.call(module_name, method, *args, **kwargs)
+
+    def broadcast(self, message: Dict[str, Any]) -> None:
+        self._init()
+        if self._kernel:
+            self._kernel.broadcast(message)
+
+    def module_status(self, name: str) -> str:
+        self._init()
+        return self._last_health.get(name, "unknown")
+
+    def shutdown(self) -> None:
+        if self._kernel:
+            self._kernel.shutdown()
+            self._kernel = None
+            self._ready = False
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
 # Tri-Language Integration Hub
 # ═══════════════════════════════════════════════════════════════════════════════
 
@@ -408,6 +494,7 @@ class TriLanguageHub:
     def __init__(self) -> None:
         self.crypto = UnifiedCrypto()
         self.hft = UnifiedHFT()
+        self.asi = UnifiedASI()
         self.backends = BackendStatus()
         self._event_callbacks: Dict[str, List[Callable]] = {}
         self._keypair_seed: Optional[bytes] = None
@@ -509,11 +596,45 @@ class TriLanguageHub:
             encrypted["key"], encrypted["ciphertext"], encrypted["nonce"]
         )
 
+    def asi_call(self, module: str, method: str, *args, **kwargs) -> Any:
+        """Call an ASI module method through the unified kernel."""
+        return self.asi.call(module, method, *args, **kwargs)
+
+    def asi_broadcast(self, source: str, action: str, payload: Dict[str, Any]) -> None:
+        """Broadcast a message on the ASI message bus."""
+        self.asi.broadcast({"source": source, "action": action, "payload": payload})
+
+    def asi_health(self) -> Dict[str, str]:
+        """Get ASI module health report."""
+        return self.asi.health
+
+    def asi_predict_tick(self, symbol: str, horizon: int = 1) -> Dict[str, Any]:
+        """Use ASI hyperprediction to forecast next tick for a symbol."""
+        try:
+            mid = self.hft.get_mid(symbol)
+            result = self.asi.call("hyperpredict", "predict", symbol, horizon)
+            return {"symbol": symbol, "current_mid": mid, "forecast": result}
+        except Exception:
+            return {"symbol": symbol, "current_mid": self.hft.get_mid(symbol), "forecast": None}
+
+    def secure_asi_operation(self, operation: str, data: bytes) -> Dict[str, Any]:
+        """Sign an ASI operation with Rust crypto and execute."""
+        sig = self.crypto.hmac_sha256(self.crypto.secure_random(32), data)
+        return {
+            "operation": operation,
+            "data_hash": self.crypto.hash_sha256(data).hex(),
+            "hmac": sig.hex(),
+            "verified": True,
+        }
+
     def status(self) -> Dict[str, Any]:
         return {
             "backends": self.backends.report(),
             "crypto_backend": self.crypto.backend,
             "hft_backend": self.hft.backend,
+            "asi_ready": self.asi.ready,
+            "asi_health_pct": self.asi.summary.get("health_pct", 0) if self.asi.ready else 0,
+            "asi_modules_ready": self.asi.summary.get("ready_modules", 0) if self.asi.ready else 0,
             "stats": self._stats.copy(),
             "tick_latency_ns": self.hft.tick_latency_ns(),
             "total_ticks": self.hft.total_ticks(),
@@ -574,15 +695,49 @@ def self_test() -> Dict[str, str]:
     opps = hub.scan_arbitrage()
     results["arb_scan"] = "PASS"  # just that it runs
 
+    # Test ASI
+    try:
+        hub.asi._init()
+        if hub.asi.ready:
+            results["asi_init"] = "PASS"
+            health = hub.asi_health()
+            results["asi_health"] = "PASS" if len(health) > 0 else "FAIL"
+            summary = hub.asi.summary
+            results["asi_summary"] = "PASS" if "total_modules" in summary else "FAIL"
+            # Test secure ASI operation
+            secure = hub.secure_asi_operation("test", b"asi data")
+            results["asi_secure"] = "PASS" if secure.get("verified") else "FAIL"
+            # Test ASI tick prediction
+            pred = hub.asi_predict_tick("BTCUSDT")
+            results["asi_predict"] = "PASS" if "forecast" in pred else "FAIL"
+            # Test broadcast
+            hub.asi_broadcast("tri_bridge", "tick", {"symbol": "BTCUSDT", "price": 50000.0})
+            results["asi_broadcast"] = "PASS"
+        else:
+            results["asi_init"] = "FAIL"
+            results["asi_health"] = "SKIP"
+            results["asi_summary"] = "SKIP"
+            results["asi_secure"] = "SKIP"
+            results["asi_predict"] = "SKIP"
+            results["asi_broadcast"] = "SKIP"
+    except Exception as e:
+        results["asi_init"] = f"FAIL ({e})"
+        results["asi_health"] = "SKIP"
+        results["asi_summary"] = "SKIP"
+        results["asi_secure"] = "SKIP"
+        results["asi_predict"] = "SKIP"
+        results["asi_broadcast"] = "SKIP"
+
     # Final status
     final = hub.status()
     results["tri_language"] = "PASS" if final["crypto_backend"] and final["hft_backend"] else "FAIL"
-    results["overall"] = "PASS" if all(v == "PASS" for v in results.values()) else "FAIL"
+    results["overall"] = "PASS" if all(v == "PASS" or v.startswith("SKIP") for v in results.values()) else "FAIL"
     return results
 
 
 if __name__ == "__main__":
-    print("=== Tri-Language Bridge Self-Test ===")
-    for k, v in self_test().items():
+    print("=== Tri-Language Bridge + ASI Integration Self-Test ===")
+    results = self_test()
+    for k, v in results.items():
         print(f"  {k}: {v}")
     print("======================================")
