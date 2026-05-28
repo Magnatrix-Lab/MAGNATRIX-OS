@@ -1,0 +1,6 @@
+# Build requirements for MAGNATRIX-OS Windows executable
+# Install: pip install -r build/windows/requirements_build.txt
+pyinstaller>=6.0
+pillow>=10.0
+pystray>=0.19
+pywin32>=306; sys_platform == "win32"
