@@ -286,8 +286,7 @@ def _self_test():
     total = 4
 
     # Test 1: Hypothesis generation from correlated data
-    print("
-[Test 1] Hypothesis generation")
+    print("\n[Test 1] Hypothesis generation")
     data = []
     rng = random.Random(42)
     for i in range(200):
@@ -302,34 +301,29 @@ def _self_test():
     passed += ok
 
     # Test 2: Experiment design
-    print("
-[Test 2] Experiment design")
+    print("[Test 2] Experiment design")
     ok = len(lab.experiments) > 0 and lab.experiments[0].design == "ab_test"
     print(f"  A/B test designed — {'PASS' if ok else 'FAIL'}")
     passed += ok
 
     # Test 3: Analysis
-    print("
-[Test 3] Statistical analysis")
+    print("[Test 3] Statistical analysis")
     ok = len(lab.results) > 0 and lab.results[0].p_value < 1.0
     print(f"  P-value computed: {lab.results[0].p_value:.4f}, conclusion: {lab.results[0].conclusion} — {'PASS' if ok else 'FAIL'}")
     passed += ok
 
     # Test 4: Full cycle
-    print("
-[Test 4] Full cycle completes")
+    print("[Test 4] Full cycle completes")
     ok = pub.conclusion in ("support", "reject", "inconclusive") and pub.confidence >= 0
     print(f"  Publication ready: {pub.title[:40]}... — {'PASS' if ok else 'FAIL'}")
     passed += ok
 
     # Extra: Chi-square test
-    print("
-[Extra] Chi-square test")
+    print("[Extra] Chi-square test")
     chi2, p = StatisticalAnalyzer.chi_square([[50, 30], [20, 60]])
     print(f"  Chi2={chi2:.2f}, p≈{p:.4f}")
 
-    print("
-" + "=" * 55)
+    print("" + "=" * 55)
     print(f"PASS: {passed}/{total}")
     print("=" * 55)
     return 0 if passed == total else 1
