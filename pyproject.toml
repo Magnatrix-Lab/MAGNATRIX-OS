@@ -82,6 +82,7 @@ Changelog = "https://github.com/Magnatrix-Lab/MAGNATRIX-OS/blob/main/CHANGELOG.m
 
 [tool.setuptools]
 packages = [
+    "magnatrix",
     "kernel", "protocol", "api-router", "identity", "runtime",
     "p2p-mesh", "knowledge", "skills", "browser", "hft", "security",
     "ai", "governance", "ide", "trading", "uncensored", "llm",
@@ -91,7 +92,6 @@ packages = [
     "workflows", "observability", "constitutional", "consensus",
     "benchmarks", "bin", "scripts", "website", "mobile", "hunter"
 ]
-py-modules = ["magnatrix"]
 
 [tool.setuptools.package-data]
 "*" = ["*.md", "*.json", "*.yaml", "*.yml", "*.html", "*.css", "*.js"]

@@ -54,7 +54,12 @@ setup(
     install_requires=requirements,
     entry_points={
         "console_scripts": [
-            "magnatrix=magnatrix_cli:main",
+            "magnatrix=magnatrix:main",
+            "mx=magnatrix:main",
+            "mx-boot=magnatrix:magnatrix_boot",
+            "mx-status=magnatrix:magnatrix_status",
+            "mx-shutdown=magnatrix:magnatrix_shutdown",
+            "magnatrix-cli=magnatrix_cli:main",
             "magnatrix-server=magnatrix_server:main",
         ],
     },

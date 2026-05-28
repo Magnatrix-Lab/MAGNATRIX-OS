@@ -134,7 +134,7 @@ class MagnatrixService(win32serviceutil.ServiceFramework):
     def _start_app(self, no_tray: bool = True) -> None:
         try:
             from magnatrix_win import _setup_logging, DashboardServer
-            from kernel.kernel_native import NativeKernel, KernelConfig, BootMode
+            from kernel.kernel_native import KernelNative, KernelConfig, BootMode
             from desktop_tray.tray_native import TrayConfig, WindowsTray
         except Exception as e:
             servicemanager.LogInfoMsg(f"Import error: {e}")
@@ -146,7 +146,7 @@ class MagnatrixService(win32serviceutil.ServiceFramework):
 
         try:
             cfg = KernelConfig(workspace_dir=data_dir, boot_mode=BootMode.COLD, log_level="INFO")
-            self._kernel = NativeKernel(cfg)
+            self._kernel = KernelNative(cfg)
             self._kernel.boot()
         except Exception as e:
             servicemanager.LogInfoMsg(f"Kernel boot failed: {e}")

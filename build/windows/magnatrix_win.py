@@ -32,9 +32,9 @@ if str(_REPO_ROOT) not in sys.path:
 
 # ── Imports (with fallback messages) ──────────────────────────────────────
 try:
-    from kernel.kernel_native import NativeKernel, KernelConfig, BootMode
+    from kernel.kernel_native import KernelNative, KernelConfig, BootMode
 except Exception as _e:
-    NativeKernel = None
+    KernelNative = None
     print(f"[WARN] Kernel import failed: {_e}")
 
 try:
@@ -159,14 +159,14 @@ def main() -> int:
 
     # ── Boot kernel ──────────────────────────────────────────────────────
     kernel = None
-    if NativeKernel is not None:
+    if KernelNative is not None:
         try:
             cfg = KernelConfig(
                 workspace_dir=data_dir,
                 boot_mode=BootMode.COLD,
                 log_level="DEBUG" if args.debug else "INFO",
             )
-            kernel = NativeKernel(cfg)
+            kernel = KernelNative(cfg)
             kernel.boot()
             logger.info("Kernel booted successfully")
         except Exception as e:
