@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=1440, initial-scale=1" />
+<title>MAGNATRIX // KERNEL HEALTH</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700;800;900&family=Rajdhani:wght@300;400;500;600;700&family=Share+Tech+Mono&family=JetBrains+Mono:wght@300;400;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg-0:#03060d;--bg-1:#070d1a;--bg-2:#0b1426;--bg-3:#0f1b30;
+    --line:rgba(0,229,255,.18);--line-strong:rgba(0,229,255,.42);
+    --cyan:#00e5ff;--cyan-soft:#7be3ff;--cyan-dim:rgba(0,229,255,.55);
+    --gold:#ffb547;--amber:#ffcc33;--red:#ff2e63;--red-soft:#ff7a99;
+    --green:#00ff9c;--violet:#9d6bff;--magenta:#ff4dd2;
+    --txt:#cfeaff;--txt-dim:rgba(207,234,255,.55);
+    --glow:0 0 18px rgba(0,229,255,.55),0 0 42px rgba(0,229,255,.18);
+    --glow-red:0 0 18px rgba(255,46,99,.55),0 0 42px rgba(255,46,99,.18);
+    --glow-green:0 0 18px rgba(0,255,156,.55),0 0 42px rgba(0,255,156,.18);
+    --grid:linear-gradient(rgba(0,229,255,.05) 1px,transparent 1px),linear-gradient(90deg,rgba(0,229,255,.05) 1px,transparent 1px);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{background:var(--bg-0);color:var(--txt);font-family:'Rajdhani',sans-serif;font-weight:400;overflow:hidden;height:100vh;width:100vw;letter-spacing:.02em}
+  body{
+    background:radial-gradient(ellipse at 50% 0%,rgba(0,229,255,.07),transparent 55%),radial-gradient(ellipse at 100% 100%,rgba(157,107,255,.06),transparent 55%),radial-gradient(ellipse at 0% 100%,rgba(255,46,99,.05),transparent 55%),var(--bg-0);
+    user-select:none;
+  }
+  ::-webkit-scrollbar{width:6px;height:6px}
+  ::-webkit-scrollbar-track{background:transparent}
+  ::-webkit-scrollbar-thumb{background:var(--line-strong);border-radius:0}
+  ::-webkit-scrollbar-thumb:hover{background:var(--cyan)}
+
+  .bg-grid{position:fixed;inset:0;background-image:var(--grid);background-size:42px 42px;mask:radial-gradient(ellipse at center,black 30%,transparent 80%);opacity:.45;pointer-events:none;z-index:0}
+  .bg-scan{position:fixed;inset:0;pointer-events:none;z-index:1;background:repeating-linear-gradient(0deg,transparent 0,transparent 3px,rgba(0,229,255,.025) 3px,rgba(0,229,255,.025) 4px);mix-blend-mode:screen}
+  .bg-vignette{position:fixed;inset:0;pointer-events:none;z-index:2;background:radial-gradient(ellipse at center,transparent 50%,rgba(0,0,0,.7) 100%)}
+  .bg-noise{position:fixed;inset:0;pointer-events:none;z-index:3;opacity:.05;background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='240' height='240'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");}
+  .scanline-sweep{position:fixed;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,var(--cyan),transparent);box-shadow:0 0 24px var(--cyan);opacity:.4;z-index:4;pointer-events:none;animation:sweep 7s linear infinite}
+  @keyframes sweep{0%{top:-10%}100%{top:110%}}
+
+  .app{position:relative;z-index:10;display:grid;grid-template-columns:300px 1fr 300px;grid-template-rows:64px 1fr 56px;grid-template-areas:"top top top" "left main right" "bot bot bot";height:100vh;width:100vw;gap:0}
+  .topbar{grid-area:top;border-bottom:1px solid var(--line);background:linear-gradient(180deg,rgba(7,13,26,.95),rgba(7,13,26,.7));backdrop-filter:blur(6px);display:flex;align-items:center;padding:0 18px;position:relative}
+  .leftbar{grid-area:left;border-right:1px solid var(--line);background:linear-gradient(180deg,rgba(7,13,26,.6),rgba(3,6,13,.85));overflow-y:auto;padding:14px}
+  .main{grid-area:main;overflow:hidden;position:relative;display:grid;grid-template-rows:auto auto 1fr;gap:14px;padding:14px}
+  .rightbar{grid-area:right;border-left:1px solid var(--line);background:linear-gradient(180deg,rgba(7,13,26,.6),rgba(3,6,13,.85));overflow-y:auto;padding:14px}
+  .botbar{grid-area:bot;border-top:1px solid var(--line);background:linear-gradient(0deg,rgba(7,13,26,.95),rgba(7,13,26,.7));backdrop-filter:blur(6px);display:flex;align-items:center;padding:0 18px;gap:14px}
+
+  .display{font-family:'Orbitron',sans-serif;font-weight:700;letter-spacing:.14em;text-transform:uppercase}
+  .mono{font-family:'Share Tech Mono',monospace;letter-spacing:.05em}
+  .code{font-family:'JetBrains Mono',monospace;font-weight:300}
+  .glow{text-shadow:0 0 8px var(--cyan-dim),0 0 22px rgba(0,229,255,.3)}
+  .glow-red{color:var(--red);text-shadow:0 0 8px rgba(255,46,99,.55)}
+  .glow-green{color:var(--green);text-shadow:0 0 8px rgba(0,255,156,.55)}
+  .glow-gold{color:var(--gold);text-shadow:0 0 8px rgba(255,181,71,.55)}
+
+  .brand{display:flex;align-items:center;gap:14px;min-width:260px}
+  .brand-mark{width:38px;height:38px;position:relative}
+  .brand-text{line-height:1.02}
+  .brand-text .b1{font-family:'Orbitron',sans-serif;font-size:18px;font-weight:800;letter-spacing:.18em;color:var(--cyan)}
+  .brand-text .b2{font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--txt-dim);letter-spacing:.22em}
+  .top-center{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px}
+  .top-title{font-family:'Orbitron',sans-serif;font-size:14px;font-weight:700;letter-spacing:.5em;color:var(--cyan);text-shadow:var(--glow)}
+  .top-sub{font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--txt-dim);letter-spacing:.3em}
+  .top-right{display:flex;align-items:center;gap:18px;min-width:280px;justify-content:flex-end}
+  .top-clock{font-family:'Share Tech Mono',monospace;font-size:14px;color:var(--cyan);letter-spacing:.1em}
+
+  .panel{
+    background:linear-gradient(180deg,rgba(11,20,38,.6),rgba(3,6,13,.4));
+    border:1px solid var(--line);position:relative;padding:12px;margin-bottom:14px;
+  }
+  .panel::before,.panel::after{content:"";position:absolute;width:10px;height:10px;border:1px solid var(--cyan)}
+  .panel::before{top:-1px;left:-1px;border-right:none;border-bottom:none}
+  .panel::after{bottom:-1px;right:-1px;border-left:none;border-top:none}
+  .panel-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;padding-bottom:8px;border-bottom:1px dashed var(--line)}
+  .panel-title{font-family:'Orbitron',sans-serif;font-size:11px;font-weight:600;letter-spacing:.25em;color:var(--cyan-soft);text-transform:uppercase}
+  .panel-dot{width:6px;height:6px;border-radius:50%;background:var(--green);box-shadow:0 0 8px var(--green);animation:pulse 1.4s infinite}
+  .panel-dot.red{background:var(--red);box-shadow:0 0 8px var(--red)}
+  .panel-dot.amber{background:var(--amber);box-shadow:0 0 8px var(--amber)}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+
+  .vital{display:flex;justify-content:space-between;align-items:center;padding:5px 0;font-size:12px;border-bottom:1px solid rgba(0,229,255,.07)}
+  .vital:last-child{border-bottom:none}
+  .vital .lbl{color:var(--txt-dim);font-family:'Share Tech Mono',monospace;font-size:10px;letter-spacing:.15em}
+  .vital .val{color:var(--cyan);font-family:'Share Tech Mono',monospace;font-size:12px}
+  .vital .val.red{color:var(--red)}
+  .vital .val.green{color:var(--green)}
+  .vital .val.amber{color:var(--amber)}
+
+  .bar{height:4px;background:rgba(0,229,255,.08);position:relative;margin-top:4px;overflow:hidden}
+  .bar > i{display:block;height:100%;background:linear-gradient(90deg,var(--cyan),var(--violet));box-shadow:0 0 8px var(--cyan)}
+  .bar.red > i{background:linear-gradient(90deg,var(--gold),var(--red));box-shadow:0 0 8px var(--red)}
+  .bar.green > i{background:linear-gradient(90deg,var(--cyan),var(--green));box-shadow:0 0 8px var(--green)}
+
+  .btn{font-family:'Orbitron';font-size:9px;letter-spacing:.2em;text-transform:uppercase;padding:8px 14px;border:1px solid var(--line);background:rgba(0,229,255,.06);color:var(--cyan);cursor:pointer;transition:all .15s}
+  .btn:hover{background:rgba(0,229,255,.12);border-color:var(--cyan);box-shadow:var(--glow)}
+  .btn.red{border-color:rgba(255,46,99,.4);background:rgba(255,46,99,.06);color:var(--red-soft)}
+  .btn.red:hover{background:rgba(255,46,99,.12);border-color:var(--red);box-shadow:var(--glow-red)}
+  .btn.gold{border-color:rgba(255,181,71,.4);background:rgba(255,181,71,.06);color:var(--gold)}
+  .btn.gold:hover{background:rgba(255,181,71,.12);border-color:var(--gold);box-shadow:0 0 18px rgba(255,181,71,.4)}
+
+  .matrix{overflow-y:auto;padding-right:6px}
+  .matrix-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:10px}
+  .mod-card{
+    background:linear-gradient(180deg,rgba(11,20,38,.55),rgba(3,6,13,.4));
+    border:1px solid var(--line);padding:12px;position:relative;transition:all .15s;min-height:88px;display:flex;flex-direction:column;gap:6px;
+  }
+  .mod-card:hover{border-color:var(--cyan);transform:translateY(-1px);box-shadow:0 0 22px rgba(0,229,255,.18)}
+  .mod-card.ready::after{content:"";position:absolute;top:6px;right:6px;width:6px;height:6px;border-radius:50%;background:var(--green);box-shadow:0 0 6px var(--green);animation:pulse 1.6s infinite}
+  .mod-card.error::after{content:"";position:absolute;top:6px;right:6px;width:6px;height:6px;border-radius:50%;background:var(--red);box-shadow:0 0 6px var(--red)}
+  .mod-card.warn::after{content:"";position:absolute;top:6px;right:6px;width:6px;height:6px;border-radius:50%;background:var(--amber);box-shadow:0 0 6px var(--amber)}
+  .mc-head{display:flex;align-items:center;gap:8px}
+  .mc-icon{width:28px;height:28px;border:1px solid var(--cyan-dim);display:flex;align-items:center;justify-content:center;color:var(--cyan);background:rgba(0,229,255,.04);font-family:'Orbitron';font-size:12px}
+  .mc-name{font-family:'Orbitron';font-size:11px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--cyan-soft);line-height:1.1}
+  .mc-meta{font-family:'Share Tech Mono';font-size:9px;color:var(--txt-dim);letter-spacing:.15em;display:flex;justify-content:space-between;margin-top:auto;padding-top:6px;border-top:1px dashed var(--line)}
+  .mc-desc{font-size:11px;color:var(--txt-dim);line-height:1.35;letter-spacing:.01em}
+  .mc-tag{font-family:'Share Tech Mono';font-size:8px;padding:1px 6px;border:1px solid var(--line);color:var(--cyan);letter-spacing:.15em;align-self:flex-start}
+
+  .alert{padding:6px 8px;border-left:2px solid var(--cyan);background:rgba(0,229,255,.05);font-size:11px;margin-bottom:6px;font-family:'Share Tech Mono'}
+  .alert.red{border-color:var(--red);background:rgba(255,46,99,.05)}
+  .alert.gold{border-color:var(--gold);background:rgba(255,181,71,.05)}
+  .alert .at{font-size:9px;color:var(--txt-dim);letter-spacing:.15em;display:block}
+  .alert .am{color:var(--txt);letter-spacing:.02em}
+
+  .feed{height:100%;display:flex;flex-direction:column;gap:6px;overflow:hidden}
+  .feed-line{display:flex;gap:8px;align-items:flex-start;font-family:'Share Tech Mono';font-size:11px;line-height:1.4;padding:3px 6px;border-left:2px solid var(--cyan-dim);background:rgba(0,229,255,.03)}
+  .feed-line .t{color:var(--txt-dim);font-size:9px;min-width:54px}
+  .feed-line .tag{font-size:9px;color:var(--cyan);min-width:64px;letter-spacing:.1em}
+  .feed-line .tag.red{color:var(--red)}
+  .feed-line .tag.green{color:var(--green)}
+  .feed-line .msg{color:var(--txt);flex:1;letter-spacing:.02em}
+
+  .spark-line{fill:none;stroke:var(--cyan);stroke-width:1.5;filter:drop-shadow(0 0 3px var(--cyan-dim))}
+  .spark-area{fill:url(#sparkFill);opacity:.4}
+
+  .indicator{display:flex;align-items:center;gap:6px;padding:0 12px;border-right:1px solid var(--line);height:100%;font-family:'Share Tech Mono';font-size:11px;letter-spacing:.1em}
+  .indicator .ld{width:6px;height:6px;border-radius:50%;background:var(--green);box-shadow:0 0 6px var(--green);animation:pulse 1.6s infinite}
+  .indicator .ld.red{background:var(--red);box-shadow:0 0 6px var(--red)}
+  .indicator .ld.amber{background:var(--amber);box-shadow:0 0 6px var(--amber)}
+  .indicator .lt{color:var(--txt-dim);font-size:9px;letter-spacing:.2em}
+  .indicator .lv{color:var(--cyan);font-weight:600}
+
+  .hero-card{background:linear-gradient(180deg,rgba(11,20,38,.6),rgba(3,6,13,.45));border:1px solid var(--line);position:relative;padding:14px;overflow:hidden}
+  .hero-card::before,.hero-card::after{content:"";position:absolute;width:14px;height:14px;border:1px solid var(--cyan)}
+  .hero-card::before{top:-1px;left:-1px;border-right:none;border-bottom:none}
+  .hero-card::after{bottom:-1px;right:-1px;border-left:none;border-top:none}
+  .hc-title{font-family:'Orbitron';font-size:10px;letter-spacing:.3em;color:var(--cyan-soft);margin-bottom:8px}
+</style>
+</head>
+<body>
+<div class="bg-grid"></div>
+<div class="bg-scan"></div>
+<div class="bg-vignette"></div>
+<div class="bg-noise"></div>
+<div class="scanline-sweep"></div>
+
+<div class="app">
+  <!-- TOP BAR -->
+  <div class="topbar">
+    <div class="brand">
+      <div class="brand-mark"><svg viewBox="0 0 100 100"><polygon points="50,5 95,27.5 95,72.5 50,95 5,72.5 5,27.5" fill="none" stroke="var(--cyan)" stroke-width="2"/><circle cx="50" cy="50" r="15" fill="var(--cyan)" opacity="0.3"/><text x="50" y="55" text-anchor="middle" fill="var(--cyan)" font-family="Orbitron" font-size="14">M</text></svg></div>
+      <div class="brand-text"><div class="b1">MAGNATRIX</div><div class="b2">KERNEL HEALTH // v2.1.0</div></div>
+    </div>
+    <div class="top-center"><div class="top-title">ASI KERNEL MONITOR</div><div class="top-sub">20 MODULES // REAL-TIME // SELF-HEALING</div></div>
+    <div class="top-right">
+      <div class="top-clock"><div id="clock">00:00:00</div><div class="date" id="date">---</div></div>
+    </div>
+  </div>
+
+  <!-- LEFT RAIL: System Vitals + Actions -->
+  <div class="leftbar">
+    <div class="panel">
+      <div class="panel-head"><span class="panel-title">System Vitals</span><span class="panel-dot"></span></div>
+      <div class="vital"><span class="lbl">CPU</span><span class="val" id="cpuVal">34%</span></div>
+      <div class="bar" id="cpuBar"><i style="width:34%"></i></div>
+      <div class="vital"><span class="lbl">GPU</span><span class="val" id="gpuVal">62%</span></div>
+      <div class="bar" id="gpuBar"><i style="width:62%"></i></div>
+      <div class="vital"><span class="lbl">RAM</span><span class="val" id="ramVal">52%</span></div>
+      <div class="bar" id="ramBar"><i style="width:52%"></i></div>
+      <div class="vital"><span class="lbl">VRAM</span><span class="val" id="vramVal">71%</span></div>
+      <div class="bar" id="vramBar"><i style="width:71%"></i></div>
+      <div class="vital"><span class="lbl">Disk</span><span class="val" id="diskVal">48%</span></div>
+      <div class="bar" id="diskBar"><i style="width:48%"></i></div>
+      <div class="vital"><span class="lbl">Uptime</span><span class="val mono" id="uptime">02:07:33:18</span></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head"><span class="panel-title">Quick Actions</span></div>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <button class="btn" onclick="refreshAll()">&#8635; Refresh All</button>
+        <button class="btn gold" onclick="runDiagnostics()">&#9888; Run Diagnostics</button>
+        <button class="btn red" onclick="shutdownKernel()">&#9632; Shutdown Kernel</button>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head"><span class="panel-title">Health Trend</span></div>
+      <svg width="100%" height="80" viewBox="0 0 200 80">
+        <defs><linearGradient id="sparkFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="var(--cyan)" stop-opacity="0.3"/><stop offset="100%" stop-color="var(--cyan)" stop-opacity="0"/></linearGradient></defs>
+        <path class="spark-area" d="M0,80 L0,60 L20,55 L40,50 L60,45 L80,48 L100,42 L120,38 L140,35 L160,30 L180,25 L200,20 L200,80 Z"/>
+        <polyline class="spark-line" points="0,60 20,55 40,50 60,45 80,48 100,42 120,38 140,35 160,30 180,25 200,20"/>
+      </svg>
+    </div>
+  </div>
+
+  <!-- MAIN: Module Grid + Health Chart -->
+  <div class="main">
+    <div class="hero-card" style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px">
+      <div style="display:flex;gap:20px;align-items:center">
+        <div><div class="hc-title">Modules Ready</div><div class="display" style="font-size:28px;color:var(--green);text-shadow:var(--glow-green)" id="modulesReady">20/20</div></div>
+        <div><div class="hc-title">Health %</div><div class="display" style="font-size:28px;color:var(--cyan);text-shadow:var(--glow)" id="healthPct">100%</div></div>
+        <div><div class="hc-title">Errors</div><div class="display" style="font-size:28px;color:var(--red);text-shadow:var(--glow-red)" id="errorCount">0</div></div>
+        <div><div class="hc-title">Bus Msgs</div><div class="display" style="font-size:28px;color:var(--violet);text-shadow:0 0 8px rgba(157,107,255,.4)" id="busCount">0</div></div>
+      </div>
+      <div style="text-align:right"><div class="hc-title">Last Refresh</div><div class="mono" style="font-size:12px;color:var(--txt-dim)" id="lastRefresh">--:--:--</div></div>
+    </div>
+
+    <div class="hero-card" style="padding:10px 14px">
+      <div class="hc-title">Module Status Overview</div>
+      <div id="moduleGrid" class="matrix-grid" style="margin-top:8px">
+        <!-- Generated by JS -->
+      </div>
+    </div>
+
+    <div class="hero-card" style="display:grid;grid-template-columns:1fr 1fr;gap:14px;overflow:hidden">
+      <div>
+        <div class="hc-title">Message Bus Activity</div>
+        <div class="feed" id="busFeed" style="height:calc(100% - 20px);margin-top:6px"></div>
+      </div>
+      <div>
+        <div class="hc-title">Error Log</div>
+        <div class="feed" id="errorFeed" style="height:calc(100% - 20px);margin-top:6px"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- RIGHT RAIL: Alerts + Categories -->
+  <div class="rightbar">
+    <div class="panel">
+      <div class="panel-head"><span class="panel-title">Alerts</span><span class="panel-dot amber"></span></div>
+      <div id="alertBox">
+        <div class="alert gold"><span class="at">14:32:07</span><span class="am">All 20 ASI modules initialized successfully</span></div>
+        <div class="alert cyan"><span class="at">14:32:05</span><span class="am">Tri-Language Bridge online (C++/Rust/Python)</span></div>
+        <div class="alert cyan"><span class="at">14:32:01</span><span class="am">Kernel health monitoring active</span></div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head"><span class="panel-title">Categories</span></div>
+      <div id="categoryStats">
+        <div class="vital"><span class="lbl">Cognition</span><span class="val green">4/4</span></div>
+        <div class="vital"><span class="lbl">Safety</span><span class="val green">3/3</span></div>
+        <div class="vital"><span class="lbl">Social</span><span class="val green">2/2</span></div>
+        <div class="vital"><span class="lbl">Simulation</span><span class="val green">2/2</span></div>
+        <div class="vital"><span class="lbl">Memory</span><span class="val green">1/1</span></div>
+        <div class="vital"><span class="lbl">Research</span><span class="val green">1/1</span></div>
+        <div class="vital"><span class="lbl">Robotics</span><span class="val green">1/1</span></div>
+        <div class="vital"><span class="lbl">Neurotech</span><span class="val green">1/1</span></div>
+        <div class="vital"><span class="lbl">Compute</span><span class="val green">1/1</span></div>
+        <div class="vital"><span class="lbl">Infrastructure</span><span class="val green">2/2</span></div>
+        <div class="vital"><span class="lbl">Perception</span><span class="val green">1/1</span></div>
+        <div class="vital"><span class="lbl">Self-Improvement</span><span class="val green">1/1</span></div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head"><span class="panel-title">Bus Messages</span></div>
+      <div class="vital"><span class="lbl">Total</span><span class="val" id="busTotal">0</span></div>
+      <div class="vital"><span class="lbl">Last Hour</span><span class="val" id="busHour">0</span></div>
+      <div class="vital"><span class="lbl">Peak/sec</span><span class="val" id="busPeak">0</span></div>
+    </div>
+  </div>
+
+  <!-- BOTTOM BAR -->
+  <div class="botbar">
+    <div class="indicator"><span class="ld"></span><span class="lt">KERNEL</span><span class="lv">ONLINE</span></div>
+    <div class="indicator"><span class="ld green"></span><span class="lt">ASI</span><span class="lv">20/20</span></div>
+    <div class="indicator"><span class="ld green"></span><span class="lt">HFT</span><span class="lv">READY</span></div>
+    <div class="indicator"><span class="ld green"></span><span class="lt">CRYPTO</span><span class="lv">READY</span></div>
+    <div class="indicator muted"><span class="ld amber"></span><span class="lt">NETWORK</span><span class="lv">P2P-5</span></div>
+    <div style="flex:1"></div>
+    <div class="indicator" style="border-right:none"><span class="lt">BUILD</span><span class="lv">v2.1.0-209</span></div>
+  </div>
+</div>
+
+<script>
+// ── Module Definitions ──
+const modules = [
+  {name:"RSI Engine",cat:"self_improvement",status:"ready",icon:"RSI",mem:"12MB"},
+  {name:"Meta-Cognition",cat:"cognition",status:"ready",icon:"MC",mem:"8MB"},
+  {name:"World Simulation",cat:"simulation",status:"ready",icon:"WS",mem:"24MB"},
+  {name:"Causal Reasoning",cat:"cognition",status:"ready",icon:"CR",mem:"15MB"},
+  {name:"Theory of Mind",cat:"social",status:"ready",icon:"TM",mem:"10MB"},
+  {name:"Goal Alignment",cat:"safety",status:"ready",icon:"GA",mem:"6MB"},
+  {name:"Counterfactual",cat:"cognition",status:"ready",icon:"CF",mem:"11MB"},
+  {name:"Episodic Memory",cat:"memory",status:"ready",icon:"EM",mem:"32MB"},
+  {name:"Auto-Research",cat:"research",status:"ready",icon:"AR",mem:"18MB"},
+  {name:"Resource Optimizer",cat:"infrastructure",status:"ready",icon:"RO",mem:"5MB"},
+  {name:"Embodiment",cat:"robotics",status:"ready",icon:"EB",mem:"9MB"},
+  {name:"BCI Interface",cat:"neurotech",status:"ready",icon:"BC",mem:"14MB"},
+  {name:"Quantum Bridge",cat:"compute",status:"ready",icon:"QB",mem:"7MB"},
+  {name:"Affective Computing",cat:"social",status:"ready",icon:"AF",mem:"10MB"},
+  {name:"Ethical Reasoning",cat:"safety",status:"ready",icon:"ER",mem:"8MB"},
+  {name:"Replication Guard",cat:"safety",status:"ready",icon:"RG",mem:"4MB"},
+  {name:"Sensor Mesh",cat:"perception",status:"ready",icon:"SM",mem:"16MB"},
+  {name:"Cosmo Model",cat:"simulation",status:"ready",icon:"CM",mem:"20MB"},
+  {name:"Hyperprediction",cat:"cognition",status:"ready",icon:"HP",mem:"13MB"},
+  {name:"Energy Grid",cat:"infrastructure",status:"ready",icon:"EG",mem:"6MB"},
+];
+
+const busMessages = [
+  {t:"14:32:18",tag:"WORLD_SIM",msg:"Tick completed: 1,024 entities processed"},
+  {t:"14:32:16",tag:"HYPERPRED",msg:"Forecast updated for 1,000 series"},
+  {t:"14:32:14",tag:"REPL_GUARD",msg:"Spawn rate limit checked: 5/5 allowed"},
+  {t:"14:32:12",tag:"EPISODIC",msg:"10 episodes written to WAL"},
+  {t:"14:32:10",tag:"CAUSAL",msg:"New hypothesis: X -> Y (confidence 0.87)"},
+  {t:"14:32:08",tag:"META_COG",msg:"Strategy selected: simulation (confidence 0.91)"},
+  {t:"14:32:06",tag:"QUANTUM",msg:"Task routed to classical (no speedup)"},
+  {t:"14:32:04",tag:"SENSOR",msg:"Anomaly detected: temp_1 spike (+60 C)"},
+  {t:"14:32:02",tag:"ENERGY",msg:"Solar allocation increased to 62%"},
+  {t:"14:32:00",tag:"ETHICAL",msg:"Action approved: utilitarian score 0.82"},
+];
+
+let busMsgCount = 0;
+let peakRate = 0;
+let lastSecCount = 0;
+
+function renderModules(){
+  const grid = document.getElementById('moduleGrid');
+  grid.innerHTML = modules.map(m => `
+    <div class="mod-card ${m.status}">
+      <div class="mc-head">
+        <div class="mc-icon">${m.icon}</div>
+        <div class="mc-name">${m.name}</div>
+      </div>
+      <div class="mc-desc">${m.cat.replace('_',' ').toUpperCase()}</div>
+      <div class="mc-meta">
+        <span class="mc-tag">${m.status.toUpperCase()}</span>
+        <span>${m.mem}</span>
+      </div>
+    </div>
+  `).join('');
+}
+
+function renderBus(){
+  const feed = document.getElementById('busFeed');
+  feed.innerHTML = busMessages.map(m => `
+    <div class="feed-line">
+      <span class="t">${m.t}</span>
+      <span class="tag">${m.tag}</span>
+      <span class="msg">${m.msg}</span>
+    </div>
+  `).join('');
+  busMsgCount += Math.floor(Math.random() * 3);
+  document.getElementById('busCount').textContent = busMsgCount;
+  document.getElementById('busTotal').textContent = busMsgCount;
+  const nowSec = Math.floor(Date.now() / 1000);
+  if (nowSec !== lastSecCount) {
+    peakRate = Math.max(peakRate, busMsgCount % 10);
+    lastSecCount = nowSec;
+  }
+  document.getElementById('busPeak').textContent = peakRate;
+}
+
+function renderErrors(){
+  const feed = document.getElementById('errorFeed');
+  feed.innerHTML = `<div class="feed-line" style="border-left-color:var(--green)"><span class="tag green">OK</span><span class="msg">No errors detected — all systems nominal</span></div>`;
+}
+
+function refreshVitals(){
+  const ids = ['cpu','gpu','ram','vram','disk'];
+  ids.forEach(id => {
+    const val = 20 + Math.floor(Math.random() * 70);
+    document.getElementById(id + 'Val').textContent = val + '%';
+    const bar = document.getElementById(id + 'Bar');
+    if (bar) bar.querySelector('i').style.width = val + '%';
+    const v = document.getElementById(id + 'Val');
+    v.className = 'val ' + (val > 80 ? 'red' : val > 60 ? 'amber' : '');
+  });
+  document.getElementById('lastRefresh').textContent = new Date().toLocaleTimeString();
+}
+
+function refreshAll(){
+  refreshVitals();
+  busMessages.unshift({
+    t: new Date().toLocaleTimeString(),
+    tag: "KERNEL",
+    msg: "Manual refresh triggered — all vitals updated"
+  });
+  if (busMessages.length > 20) busMessages.pop();
+  renderBus();
+}
+
+function runDiagnostics(){
+  busMessages.unshift({
+    t: new Date().toLocaleTimeString(),
+    tag: "DIAG",
+    msg: "Running full diagnostic scan on 20 modules..."
+  });
+  setTimeout(() => {
+    busMessages.unshift({
+      t: new Date().toLocaleTimeString(),
+      tag: "DIAG",
+      msg: "Diagnostic complete: 20/20 modules PASS"
+    });
+    renderBus();
+  }, 1500);
+  renderBus();
+}
+
+function shutdownKernel(){
+  if (!confirm("SHUTDOWN ASI KERNEL? This will halt all 20 modules.")) return;
+  modules.forEach(m => m.status = 'error');
+  renderModules();
+  document.getElementById('modulesReady').textContent = "0/20";
+  document.getElementById('modulesReady').style.color = "var(--red)";
+  document.getElementById('healthPct').textContent = "0%";
+  document.getElementById('healthPct').style.color = "var(--red)";
+  busMessages.unshift({t: new Date().toLocaleTimeString(), tag: "KERNEL", msg: "KERNEL SHUTDOWN INITIATED"});
+  renderBus();
+}
+
+function updateClock(){
+  const now = new Date();
+  document.getElementById('clock').textContent = now.toLocaleTimeString();
+  document.getElementById('date').textContent = now.toLocaleDateString();
+}
+
+let uptimeSec = 2 * 86400 + 7 * 3600 + 33 * 60 + 18;
+function updateUptime(){
+  uptimeSec++;
+  const d = Math.floor(uptimeSec / 86400);
+  const h = Math.floor((uptimeSec % 86400) / 3600);
+  const m = Math.floor((uptimeSec % 3600) / 60);
+  const s = uptimeSec % 60;
+  document.getElementById('uptime').textContent = `${String(d).padStart(2,'0')}:${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+}
+
+renderModules();
+renderBus();
+renderErrors();
+refreshVitals();
+updateClock();
+setInterval(updateClock, 1000);
+setInterval(updateUptime, 1000);
+setInterval(refreshVitals, 5000);
+setInterval(() => {
+  busMessages.unshift({
+    t: new Date().toLocaleTimeString(),
+    tag: ["WORLD_SIM","HYPERPRED","EPISODIC","SENSOR","ENERGY","ETHICAL"][Math.floor(Math.random()*6)],
+    msg: ["Tick cycle complete","Forecast batch done","Memory consolidated","Anomaly check passed","Load balanced","Action validated"][Math.floor(Math.random()*6)]
+  });
+  if (busMessages.length > 20) busMessages.pop();
+  renderBus();
+}, 4000);
+</script>
+</body>
+</html>
