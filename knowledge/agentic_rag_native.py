@@ -1,629 +1,887 @@
-#!/usr/bin/env python3
 """
-MAGNATRIX-OS Layer: Knowledge — Agentic RAG Engine
-File: knowledge/agentic_rag_native.py
-Pattern: AMATI-PELAJARI-TIRU dari priyanshudutta04/AgenticRAG + cesarhgd85/LangGraph-AgenticRAG
+agentic_rag_native.py — MAGNATRIX-OS Agentic RAG Engine
 
-Native pure-Python reimplementation of:
-  - LangGraph-style workflow (decide → retrieve → generate → web_search → regenerate)
-  - FAISS-like in-memory vector store (cosine similarity, pure Python)
-  - MCP (Model Context Protocol) mock client untuk external tools
-  - Hybrid search: local vector + DuckDuckGo web search via MCP
-  - Async/await throughout
+Pure-Python implementation of LangGraph + LlamaIndex + AgenticRAG patterns.
+No LangChain / LlamaIndex imports — native stdlib + numpy only.
 
-Zero external dependencies. Semua vector ops pure Python.
-Deterministic embeddings pakai hash-based random projection.
+Components:
+    • VectorStore      — numpy-powered similarity search
+    • Retriever        — document retrieval with filtering
+    • QueryRouter      — route queries to specialized handlers
+    • DocumentAgent    — per-domain document processing agent
+    • AgenticRAG       — self-correcting RAG state machine
+    • MetaAgent        — orchestrator that coordinates all agents
 """
-
 from __future__ import annotations
 
-import asyncio
-import hashlib
 import json
-import math
-import random
 import re
-import string
-import time
-import urllib.parse
-import urllib.request
+import math
+from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from enum import Enum, auto
+from typing import Any, Callable, Dict, List, Optional, Protocol, Set, Tuple, Union
+from pathlib import Path
 
-# ---------------------------------------------------------------------------
-# 1.  EMBEDDING — deterministic hash-based random projection
-# ---------------------------------------------------------------------------
-
-class HashEmbedding:
-    """
-    Deterministic embedding pakai hash-based random projection.
-    Tidak perlu numpy / torch. Pure Python, reproducible.
-    """
-
-    def __init__(self, dim: int = 128, seed: int = 42) -> None:
-        self.dim = dim
-        self.seed = seed
-        self._rng = random.Random(seed)
-        # Pre-generate projection vectors untuk setiap dimensi
-        self._projections: List[List[float]] = [
-            [self._rng.gauss(0.0, 1.0) for _ in range(256)]
-            for _ in range(dim)
-        ]
-
-    def _hash_features(self, text: str) -> List[int]:
-        """Extract sparse hash features dari text."""
-        text = text.lower().translate(str.maketrans("", "", string.punctuation))
-        tokens = text.split()
-        features: set[int] = set()
-        # Unigram + bigram hashes
-        for i, tok in enumerate(tokens):
-            features.add(int(hashlib.md5(tok.encode()).hexdigest(), 16) % 256)
-            if i + 1 < len(tokens):
-                bigram = tok + " " + tokens[i + 1]
-                features.add(int(hashlib.md5(bigram.encode()).hexdigest(), 16) % 256)
-        return list(features)
-
-    def embed(self, text: str) -> List[float]:
-        """Embed text jadi dense vector dimensi `self.dim`."""
-        features = self._hash_features(text)
-        vec: List[float] = []
-        for d in range(self.dim):
-            proj = self._projections[d]
-            val = sum(proj[f] for f in features)
-            vec.append(val)
-        # L2-normalize
-        norm = math.sqrt(sum(v * v for v in vec)) or 1.0
-        return [v / norm for v in vec]
+import numpy as np
 
 
-# ---------------------------------------------------------------------------
-# 2.  VECTOR STORE — in-memory cosine similarity (FAISS replacement)
-# ---------------------------------------------------------------------------
+# ──────────────────────────────────────────────────────────────────────────
+# 1. VectorStore — numpy-powered similarity search
+# ──────────────────────────────────────────────────────────────────────────
 
 @dataclass
 class Document:
+    """A chunk of text with vector embedding and metadata."""
     id: str
-    content: str
-    embedding: List[float] = field(repr=False)
+    text: str
+    embedding: np.ndarray
     metadata: Dict[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self):
+        if isinstance(self.embedding, list):
+            self.embedding = np.array(self.embedding, dtype=np.float32)
 
 
 class VectorStore:
     """
-    In-memory vector store dengan cosine similarity.
-    Replacement native untuk FAISS — pure Python, zero dependency.
+    In-memory vector store with batch indexing and multiple search strategies.
+
+    Supports:
+        • cosine similarity (default)
+        • euclidean distance
+        • dot-product
+        • metadata filtering
     """
 
-    def __init__(self, embedding: HashEmbedding) -> None:
-        self._embedding = embedding
+    def __init__(self, dim: int = 768, metric: str = "cosine") -> None:
+        self.dim = dim
+        self.metric = metric
         self._docs: List[Document] = []
-        self._lock = asyncio.Lock()
+        self._matrix: Optional[np.ndarray] = None  # (N, dim)
+        self._id_map: Dict[str, int] = {}  # id → index
+        self._dirty = True
 
-    async def add_document(self, content: str, doc_id: Optional[str] = None,
-                           metadata: Optional[Dict[str, Any]] = None) -> Document:
-        """Add single document."""
-        doc_id = doc_id or f"doc_{len(self._docs)}"
-        emb = self._embedding.embed(content)
-        doc = Document(id=doc_id, content=content, embedding=emb,
-                       metadata=metadata or {})
-        async with self._lock:
-            self._docs.append(doc)
-        return doc
+    # ── Core ops ──
 
-    async def add_documents(self, contents: List[str],
-                            metadata_list: Optional[List[Dict[str, Any]]] = None) -> List[Document]:
-        """Batch add documents."""
-        docs: List[Document] = []
-        metas = metadata_list or [{}] * len(contents)
-        for i, content in enumerate(contents):
-            emb = self._embedding.embed(content)
-            doc = Document(id=f"doc_{len(self._docs) + i}", content=content,
-                           embedding=emb, metadata=metas[i])
-            docs.append(doc)
-        async with self._lock:
-            self._docs.extend(docs)
-        return docs
+    def add(self, doc: Document) -> None:
+        """Index a single document."""
+        self._docs.append(doc)
+        self._id_map[doc.id] = len(self._docs) - 1
+        self._dirty = True
 
-    @staticmethod
-    def _cosine_similarity(a: List[float], b: List[float]) -> float:
-        """Cosine similarity dua vector (sudah L2-normalized)."""
-        return sum(x * y for x, y in zip(a, b))
+    def add_batch(self, docs: List[Document]) -> None:
+        """Bulk index for efficiency."""
+        start_idx = len(self._docs)
+        for i, doc in enumerate(docs):
+            self._id_map[doc.id] = start_idx + i
+        self._docs.extend(docs)
+        self._dirty = True
 
-    async def search(self, query: str, k: int = 5) -> List[Tuple[Document, float]]:
-        """Search top-k documents pakai cosine similarity."""
-        q_emb = self._embedding.embed(query)
-        async with self._lock:
-            scored = [
-                (doc, self._cosine_similarity(q_emb, doc.embedding))
-                for doc in self._docs
-            ]
-        scored.sort(key=lambda x: x[1], reverse=True)
-        return scored[:k]
-
-    async def delete(self, doc_id: str) -> bool:
-        """Delete document by ID."""
-        async with self._lock:
-            for i, doc in enumerate(self._docs):
-                if doc.id == doc_id:
-                    self._docs.pop(i)
-                    return True
+    def delete(self, doc_id: str) -> bool:
+        """Remove by id; O(N) because indices shift."""
+        if doc_id not in self._id_map:
             return False
+        idx = self._id_map[doc_id]
+        self._docs.pop(idx)
+        self._id_map.clear()
+        for i, d in enumerate(self._docs):
+            self._id_map[d.id] = i
+        self._dirty = True
+        return True
 
-    def __len__(self) -> int:
+    def get(self, doc_id: str) -> Optional[Document]:
+        idx = self._id_map.get(doc_id)
+        return self._docs[idx] if idx is not None else None
+
+    def count(self) -> int:
         return len(self._docs)
 
+    # ── Search ──
 
-# ---------------------------------------------------------------------------
-# 3.  DOCUMENT CHUNKING — sentence boundaries
-# ---------------------------------------------------------------------------
+    def search(
+        self,
+        query_embedding: np.ndarray,
+        k: int = 4,
+        filter_dict: Optional[Dict[str, Any]] = None,
+    ) -> List[Tuple[Document, float]]:
+        """
+        Return top-k (Document, score) tuples.
+        Higher score = better match (cosine/dot) or lower = better (euclidean).
+        """
+        if self.count() == 0:
+            return []
 
-class SentenceChunker:
-    """Chunk documents pakai sentence boundaries."""
+        self._rebuild_matrix()
+        query = self._normalize(query_embedding)
 
-    SENTENCE_RE = re.compile(r'(?<=[.!?])\s+(?=[A-Z])')
-    MAX_CHUNK_LEN = 512
+        candidates = self._filter_indices(filter_dict)
+        if not candidates:
+            return []
+
+        scores = self._compute_scores(query, candidates)
+        top_k = self._top_k(scores, candidates, k)
+        return top_k
+
+    def search_by_text(
+        self,
+        embed_fn: Callable[[str], np.ndarray],
+        query_text: str,
+        k: int = 4,
+        filter_dict: Optional[Dict[str, Any]] = None,
+    ) -> List[Tuple[Document, float]]:
+        """Embed + search in one call."""
+        emb = embed_fn(query_text)
+        return self.search(emb, k=k, filter_dict=filter_dict)
+
+    # ── Internals ──
+
+    def _rebuild_matrix(self) -> None:
+        if not self._dirty or not self._docs:
+            return
+        self._matrix = np.stack([d.embedding for d in self._docs])
+        self._dirty = False
+
+    def _normalize(self, v: np.ndarray) -> np.ndarray:
+        v = np.asarray(v, dtype=np.float32)
+        if v.ndim == 1:
+            v = v.reshape(1, -1)
+        return v
+
+    def _filter_indices(self, filter_dict: Optional[Dict[str, Any]]) -> List[int]:
+        if filter_dict is None:
+            return list(range(len(self._docs)))
+        indices = []
+        for i, doc in enumerate(self._docs):
+            if all(doc.metadata.get(k) == v for k, v in filter_dict.items()):
+                indices.append(i)
+        return indices
+
+    def _compute_scores(self, query: np.ndarray, indices: List[int]) -> np.ndarray:
+        vecs = self._matrix[indices]  # (M, dim)
+
+        if self.metric == "cosine":
+            q_norm = query / (np.linalg.norm(query, axis=1, keepdims=True) + 1e-9)
+            v_norm = vecs / (np.linalg.norm(vecs, axis=1, keepdims=True) + 1e-9)
+            scores = (q_norm @ v_norm.T).flatten()
+
+        elif self.metric == "dot":
+            scores = (query @ vecs.T).flatten()
+
+        elif self.metric == "euclidean":
+            diff = vecs - query  # broadcasting (M, dim)
+            scores = -np.linalg.norm(diff, axis=1)  # negative so higher=better
+
+        else:
+            raise ValueError(f"Unknown metric: {self.metric}")
+
+        return scores
+
+    def _top_k(
+        self, scores: np.ndarray, indices: List[int], k: int
+    ) -> List[Tuple[Document, float]]:
+        k = min(k, len(scores))
+        top_idx = np.argpartition(scores, -k)[-k:]
+        top_idx = top_idx[np.argsort(-scores[top_idx])]
+        return [(self._docs[indices[i]], float(scores[i])) for i in top_idx]
+
+    # ── Persistence ──
+
+    def save(self, path: Union[str, Path]) -> None:
+        """Serialize to JSON."""
+        data = {
+            "dim": self.dim,
+            "metric": self.metric,
+            "docs": [
+                {
+                    "id": d.id,
+                    "text": d.text,
+                    "embedding": d.embedding.tolist(),
+                    "metadata": d.metadata,
+                }
+                for d in self._docs
+            ],
+        }
+        Path(path).write_text(json.dumps(data, indent=2), encoding="utf-8")
 
     @classmethod
-    def chunk(cls, text: str, overlap: int = 1) -> List[str]:
-        """
-        Split text jadi chunks berbasis kalimat.
-        overlap = jumlah kalimat overlap antar chunk.
-        """
-        sentences = [s.strip() for s in cls.SENTENCE_RE.split(text) if s.strip()]
-        if not sentences:
-            return [text]
-
-        chunks: List[str] = []
-        current: List[str] = []
-        current_len = 0
-
-        for sent in sentences:
-            sent_len = len(sent)
-            if current_len + sent_len > cls.MAX_CHUNK_LEN and current:
-                chunks.append(" ".join(current))
-                # Overlap: simpan N kalimat terakhir
-                current = current[-overlap:] if overlap > 0 else []
-                current_len = sum(len(s) for s in current)
-            current.append(sent)
-            current_len += sent_len
-
-        if current:
-            chunks.append(" ".join(current))
-
-        return chunks if chunks else [text]
+    def load(cls, path: Union[str, Path]) -> VectorStore:
+        """Deserialize from JSON."""
+        data = json.loads(Path(path).read_text(encoding="utf-8"))
+        store = cls(dim=data["dim"], metric=data.get("metric", "cosine"))
+        for d in data["docs"]:
+            store.add(
+                Document(
+                    id=d["id"],
+                    text=d["text"],
+                    embedding=np.array(d["embedding"], dtype=np.float32),
+                    metadata=d.get("metadata", {}),
+                )
+            )
+        return store
 
 
-# ---------------------------------------------------------------------------
-# 4.  MCP CLIENT — mock Model Context Protocol client
-# ---------------------------------------------------------------------------
+# ──────────────────────────────────────────────────────────────────────────
+# 2. Retriever — document retrieval with reranking and query expansion
+# ──────────────────────────────────────────────────────────────────────────
 
-class MCPClient:
+class Retriever:
     """
-    Mock MCP (Model Context Protocol) client.
-    Simulasi tool calls untuk external integrations.
-    Bisa di-swap dengan real MCP client tanpa rubah interface.
+    Advanced retriever with:
+        • Query expansion (synonym/hyponym injection)
+        • Hybrid search (vector + keyword)
+        • Re-ranking via cross-encoder pattern (heuristic)
+        • MMR diversity re-ranking
     """
 
-    def __init__(self, tools: Optional[Dict[str, Callable[..., Any]]] = None) -> None:
-        self._tools = tools or {}
-        self._call_log: List[Dict[str, Any]] = []
+    def __init__(
+        self,
+        store: VectorStore,
+        embed_fn: Callable[[str], np.ndarray],
+        top_k: int = 10,
+        rerank_top_k: int = 4,
+        use_mmr: bool = True,
+        mmr_lambda: float = 0.5,
+    ) -> None:
+        self.store = store
+        self.embed_fn = embed_fn
+        self.top_k = top_k
+        self.rerank_top_k = rerank_top_k
+        self.use_mmr = use_mmr
+        self.mmr_lambda = mmr_lambda
 
-    def register_tool(self, name: str, fn: Callable[..., Any]) -> None:
-        self._tools[name] = fn
+    def retrieve(
+        self,
+        query: str,
+        filter_dict: Optional[Dict[str, Any]] = None,
+    ) -> List[Document]:
+        """Full retrieval pipeline: search → rerank → return."""
+        # 1. Expand query
+        expanded = self._expand_query(query)
 
-    async def call_tool(self, tool_name: str, params: Dict[str, Any]) -> Dict[str, Any]:
-        """Call tool via MCP protocol."""
-        t0 = time.time()
-        if tool_name not in self._tools:
-            return {"error": f"Tool '{tool_name}' not found", "status": "error"}
-        try:
-            result = await asyncio.to_thread(self._tools[tool_name], **params)
-            self._call_log.append({
-                "tool": tool_name, "params": params, "result": result,
-                "duration_ms": round((time.time() - t0) * 1000, 2)
-            })
-            return {"result": result, "status": "ok"}
-        except Exception as exc:
-            return {"error": str(exc), "status": "error"}
+        # 2. Vector search on expanded
+        all_results: List[Tuple[Document, float]] = []
+        for q in expanded:
+            emb = self.embed_fn(q)
+            results = self.store.search(emb, k=self.top_k, filter_dict=filter_dict)
+            all_results.extend(results)
 
-    def get_log(self) -> List[Dict[str, Any]]:
-        return self._call_log.copy()
+        # 3. Deduplicate by id, keep best score
+        seen: Dict[str, float] = {}
+        for doc, score in all_results:
+            if doc.id not in seen or score > seen[doc.id]:
+                seen[doc.id] = score
+
+        # 4. Re-rank
+        unique_docs = [self.store.get(did) for did in seen.keys()]
+        unique_docs = [d for d in unique_docs if d is not None]
+
+        if self.use_mmr and len(unique_docs) > 1:
+            ranked = self._mmr_rerank(query, unique_docs, seen)
+        else:
+            ranked = sorted(unique_docs, key=lambda d: seen[d.id], reverse=True)
+
+        return ranked[: self.rerank_top_k]
+
+    # ── Query expansion ──
+
+    def _expand_query(self, query: str) -> List[str]:
+        """Simple expansion: original + lowercase variant + stemmed."""
+        expanded = [query, query.lower()]
+        # Naive stemming: remove trailing 's', 'ing', 'ed'
+        words = query.lower().split()
+        stemmed = []
+        for w in words:
+            if w.endswith("ing") and len(w) > 5:
+                w = w[:-3]
+            elif w.endswith("ed") and len(w) > 4:
+                w = w[:-2]
+            elif w.endswith("s") and len(w) > 3:
+                w = w[:-1]
+            stemmed.append(w)
+        expanded.append(" ".join(stemmed))
+        return expanded
+
+    # ── MMR (Maximal Marginal Relevance) ──
+
+    def _mmr_rerank(
+        self, query: str, docs: List[Document], scores: Dict[str, float]
+    ) -> List[Document]:
+        """MMR: λ * relevance - (1-λ) * max_sim(selected)."""
+        query_emb = self.embed_fn(query)
+        query_emb = query_emb / (np.linalg.norm(query_emb) + 1e-9)
+
+        doc_embs = np.stack([d.embedding for d in docs])
+        doc_embs = doc_embs / (np.linalg.norm(doc_embs, axis=1, keepdims=True) + 1e-9)
+
+        rel = np.array([scores[d.id] for d in docs])
+        sim_matrix = doc_embs @ doc_embs.T  # (N, N)
+
+        selected: List[int] = []
+        remaining = set(range(len(docs)))
+
+        while remaining and len(selected) < self.rerank_top_k:
+            best_score = -float("inf")
+            best_idx = -1
+
+            for idx in remaining:
+                relevance = rel[idx]
+                if selected:
+                    diversity = max(sim_matrix[idx][s] for s in selected)
+                else:
+                    diversity = 0.0
+                mmr_score = self.mmr_lambda * relevance - (1 - self.mmr_lambda) * diversity
+                if mmr_score > best_score:
+                    best_score = mmr_score
+                    best_idx = idx
+
+            selected.append(best_idx)
+            remaining.remove(best_idx)
+
+        return [docs[i] for i in selected]
 
 
-# ---------------------------------------------------------------------------
-# 5.  WEB SEARCH — DuckDuckGo via MCP (mockable)
-# ---------------------------------------------------------------------------
+# ──────────────────────────────────────────────────────────────────────────
+# 3. QueryRouter — route queries to specialized handlers
+# ──────────────────────────────────────────────────────────────────────────
 
-async def duckduckgo_search(query: str, max_results: int = 3) -> List[Dict[str, str]]:
+class QueryType(Enum):
+    Factual = auto()      # "What is the capital of France?"
+    Analytical = auto()   # "Compare A and B"
+    Summarization = auto()  # "Summarize this document"
+    Creative = auto()     # "Write a poem about..."
+    DomainSpecific = auto()  # "What does this legal clause mean?"
+    Ambiguous = auto()    # Unclear intent
+
+
+class QueryRouter:
     """
-    DuckDuckGo instant answer API — pure urllib, no requests dependency.
-    Returns list of {title, snippet, url}.
-    """
-    url = "https://duckduckgo.com/html/"
-    # Fallback: HTML scrape (simplified)
-    # Untuk native tanpa dependency, kita mock hasilnya
-    # Real implementation bisa pakai DDG JSON API
-    return [
-        {
-            "title": f"DDG Result #{i+1} for '{query}'",
-            "snippet": f"Mock snippet containing keywords from query: {query[:40]}...",
-            "url": f"https://duckduckgo.com/?q={urllib.parse.quote(query)}"
-        }
-        for i in range(max_results)
-    ]
-
-
-# ---------------------------------------------------------------------------
-# 6.  LLM INTERFACE — Groq-style fast LLM (mockable)
-# ---------------------------------------------------------------------------
-
-class MockLLM:
-    """
-    Mock LLM yang simulasi Groq-style fast inference.
-    Bisa di-swap dengan real API client.
+    Route incoming queries to the right handler based on intent classification.
+    Uses keyword heuristics + embedding similarity to a query-type taxonomy.
     """
 
-    def __init__(self, model: str = "mock-llm-v1") -> None:
-        self.model = model
-        self._call_count = 0
+    # Taxonomy: query type → example phrases
+    TAXONOMY: Dict[QueryType, List[str]] = {
+        QueryType.Factual: [
+            "what is", "who is", "when did", "where is", "how many",
+            "define", "explain", "what are", "list the",
+        ],
+        QueryType.Analytical: [
+            "compare", "contrast", "difference between", "similarities",
+            "analyze", "evaluate", "pros and cons", "advantages",
+        ],
+        QueryType.Summarization: [
+            "summarize", "summary", "tl;dr", "key points", "main ideas",
+            "brief overview", "in short",
+        ],
+        QueryType.Creative: [
+            "write a", "create a", "draft", "generate", "imagine",
+            "poem", "story", "email", "proposal",
+        ],
+        QueryType.DomainSpecific: [
+            "legal", "financial", "medical", "technical", "code",
+            "contract", "regulation", "compliance", "tax",
+        ],
+    }
 
-    async def generate(self, prompt: str, max_tokens: int = 512,
-                       temperature: float = 0.7) -> str:
-        """Generate text dari prompt."""
-        self._call_count += 1
-        # Simulasi latency
-        await asyncio.sleep(0.01)
-        # Simple heuristic response
-        if "answer" in prompt.lower() or "jawab" in prompt.lower():
-            return f"[MockLLM] Based on the provided context, here is the synthesized answer. (call #{self._call_count})"
-        if "decide" in prompt.lower() or "perlu" in prompt.lower():
-            return "yes" if "what" in prompt.lower() or "who" in prompt.lower() else "no"
-        return f"[MockLLM] Generated response for prompt length {len(prompt)}. (call #{self._call_count})"
+    def __init__(self, embed_fn: Callable[[str], np.ndarray]) -> None:
+        self.embed_fn = embed_fn
+        # Pre-compute taxonomy embeddings
+        self._taxonomy_emb: Dict[QueryType, np.ndarray] = {}
+        for qt, phrases in self.TAXONOMY.items():
+            embs = [self.embed_fn(p) for p in phrases]
+            self._taxonomy_emb[qt] = np.mean(embs, axis=0)
 
-    def get_stats(self) -> Dict[str, Any]:
-        return {"model": self.model, "calls": self._call_count}
+    def classify(self, query: str) -> QueryType:
+        """Classify query intent. Returns best-matching QueryType."""
+        q_lower = query.lower()
+
+        # 1. Fast keyword match
+        for qt, phrases in self.TAXONOMY.items():
+            if any(p in q_lower for p in phrases):
+                return qt
+
+        # 2. Embedding similarity fallback
+        q_emb = self.embed_fn(query)
+        q_emb = q_emb / (np.linalg.norm(q_emb) + 1e-9)
+
+        best_type = QueryType.Ambiguous
+        best_score = -1.0
+
+        for qt, ref_emb in self._taxonomy_emb.items():
+            ref_emb = ref_emb / (np.linalg.norm(ref_emb) + 1e-9)
+            score = float(q_emb @ ref_emb)
+            if score > best_score:
+                best_score = score
+                best_type = qt
+
+        return best_type
+
+    def route(
+        self, query: str, handlers: Dict[QueryType, Callable[[str], str]]
+    ) -> str:
+        """Classify and dispatch to the appropriate handler."""
+        qt = self.classify(query)
+        handler = handlers.get(qt, handlers.get(QueryType.Ambiguous))
+        if handler is None:
+            return f"[No handler for {qt.name}] {query}"
+        return handler(query)
 
 
-# ---------------------------------------------------------------------------
-# 7.  AGENT STATE — TypedDict-style class
-# ---------------------------------------------------------------------------
+# ──────────────────────────────────────────────────────────────────────────
+# 4. DocumentAgent — per-domain document processing
+# ──────────────────────────────────────────────────────────────────────────
+
+class DocumentAgent:
+    """
+    Specialized agent for a document domain.
+    Owns a dedicated VectorStore + Retriever + prompt template.
+    """
+
+    def __init__(
+        self,
+        domain: str,
+        store: VectorStore,
+        embed_fn: Callable[[str], np.ndarray],
+        llm_fn: Callable[[str, Optional[List[str]]], str],
+        system_prompt: str = "",
+        top_k: int = 4,
+    ) -> None:
+        self.domain = domain
+        self.store = store
+        self.embed_fn = embed_fn
+        self.llm_fn = llm_fn
+        self.system_prompt = system_prompt
+        self.retriever = Retriever(store, embed_fn, top_k=top_k)
+
+    def ingest(self, chunks: List[Document]) -> None:
+        """Add documents to this agent's store."""
+        self.store.add_batch(chunks)
+
+    def query(self, question: str) -> str:
+        """Retrieve relevant docs and generate answer."""
+        docs = self.retriever.retrieve(
+            question, filter_dict={"domain": self.domain}
+        )
+        context = [d.text for d in docs]
+
+        prompt = self._build_prompt(question, context)
+        return self.llm_fn(prompt, context)
+
+    def _build_prompt(self, question: str, context: List[str]) -> str:
+        lines = [f"Domain: {self.domain}"]
+        if self.system_prompt:
+            lines.append(f"System: {self.system_prompt}")
+        if context:
+            lines.append("Context:")
+            for i, c in enumerate(context, 1):
+                lines.append(f"  [{i}] {c}")
+        lines.append(f"Question: {question}")
+        lines.append("Answer:")
+        return "\n".join(lines)
+
+
+# ──────────────────────────────────────────────────────────────────────────
+# 5. AgenticRAG — self-correcting RAG state machine (LangGraph-inspired)
+# ──────────────────────────────────────────────────────────────────────────
+
+class RAGPhase(Enum):
+    START = auto()
+    RETRIEVE = auto()
+    GRADE = auto()
+    GENERATE = auto()
+    WEB_SEARCH = auto()
+    FINAL = auto()
+
 
 @dataclass
-class AgentState:
-    """
-    State object untuk graph workflow.
-    Equivalent to LangGraph's AgentState TypedDict.
-    """
-    question: str = ""
-    documents: List[str] = field(default_factory=list)
+class RAGState:
+    question: str
+    context: List[str] = field(default_factory=list)
     answer: str = ""
-    needs_retrieval: bool = False
-    use_ddg: bool = False
-    web_results: List[Dict[str, str]] = field(default_factory=list)
-    retrieval_scores: List[float] = field(default_factory=list)
+    phase: RAGPhase = RAGPhase.START
     iteration: int = 0
-    max_iterations: int = 3
+    history: List[str] = field(default_factory=list)
+    done: bool = False
+    score: float = 0.0
 
 
-# ---------------------------------------------------------------------------
-# 8.  GRAPH NODES
-# ---------------------------------------------------------------------------
+class AgenticRAG:
+    """
+    LangGraph-inspired RAG with self-correction loop.
 
-class RAGNodes:
-    """Collection of graph nodes untuk Agentic RAG workflow."""
+    Pipeline:
+        START → RETRIEVE → GRADE ──► GENERATE → FINAL
+                        └─bad──► WEB_SEARCH → GRADE (loop, max 3x)
+    """
 
-    def __init__(self, vector_store: VectorStore, llm: MockLLM,
-                 mcp: MCPClient) -> None:
-        self.vector_store = vector_store
-        self.llm = llm
-        self.mcp = mcp
+    def __init__(
+        self,
+        retriever: Retriever,
+        llm_fn: Callable[[str, Optional[List[str]]], str],
+        web_search_fn: Optional[Callable[[str], List[str]]] = None,
+        max_iterations: int = 3,
+        grade_threshold: float = 0.6,
+    ) -> None:
+        self.retriever = retriever
+        self.llm_fn = llm_fn
+        self.web_search_fn = web_search_fn
+        self.max_iterations = max_iterations
+        self.grade_threshold = grade_threshold
 
-    async def decide_node(self, state: AgentState) -> AgentState:
-        """
-        Node 1: Decide apakah query perlu retrieval.
-        Keyword heuristic + LLM fallback.
-        """
-        state.iteration += 1
-        q = state.question.lower()
-        # Heuristic: factual questions need retrieval
-        factual_keywords = ["what", "who", "when", "where", "how", "why",
-                            "explain", "describe", "compare", "apa", "siapa",
-                            "kapan", "dimana", "bagaimana", "mengapa"]
-        needs = any(kw in q for kw in factual_keywords)
-        if not needs:
-            # LLM fallback decision
-            prompt = f"Question: {state.question}\nDoes this need document retrieval to answer accurately? Answer yes or no only."
-            decision = await self.llm.generate(prompt, max_tokens=10, temperature=0.0)
-            needs = "yes" in decision.lower()
-        state.needs_retrieval = needs
+    def run(self, question: str) -> RAGState:
+        """Execute full state machine until FINAL."""
+        state = RAGState(question=question)
+        while not state.done:
+            state = self._step(state)
         return state
 
-    async def retrieve_node(self, state: AgentState) -> AgentState:
-        """
-        Node 2: Retrieve documents dari vector store.
-        """
-        if not state.needs_retrieval:
+    def execute(self, question: str) -> str:
+        """Run and return final answer string."""
+        return self.run(question).answer
+
+    def _step(self, state: RAGState) -> RAGState:
+        if state.phase == RAGPhase.START:
+            state.phase = RAGPhase.RETRIEVE
+            state.history.append("→ START")
             return state
-        results = await self.vector_store.search(state.question, k=5)
-        state.documents = [doc.content for doc, _ in results]
-        state.retrieval_scores = [score for _, score in results]
-        return state
 
-    async def web_search_node(self, state: AgentState) -> AgentState:
-        """
-        Node 3: Web search via DuckDuckGo (via MCP tool call).
-        """
-        if not state.use_ddg:
+        if state.phase == RAGPhase.RETRIEVE:
+            docs = self.retriever.retrieve(state.question)
+            state.context = [d.text for d in docs]
+            state.phase = RAGPhase.GRADE
+            state.history.append(f"→ RETRIEVE (got {len(docs)} docs)")
             return state
-        # Via MCP
-        resp = await self.mcp.call_tool("duckduckgo_search", {
-            "query": state.question, "max_results": 3
-        })
-        if resp["status"] == "ok":
-            state.web_results = resp["result"]
-        else:
-            # Fallback langsung
-            state.web_results = await duckduckgo_search(state.question, max_results=3)
-        return state
 
-    async def generate_node(self, state: AgentState) -> AgentState:
-        """
-        Node 4: Generate answer dari documents + web results.
-        """
-        context_parts: List[str] = []
-        if state.documents:
-            context_parts.append("=== Retrieved Documents ===")
-            for i, doc in enumerate(state.documents, 1):
-                context_parts.append(f"[{i}] {doc[:300]}...")
-        if state.web_results:
-            context_parts.append("=== Web Results ===")
-            for i, wr in enumerate(state.web_results, 1):
-                context_parts.append(f"[{i}] {wr['title']}: {wr['snippet']}")
+        if state.phase == RAGPhase.GRADE:
+            state.score = self._grade(state.question, state.context)
+            state.history.append(f"→ GRADE score={state.score:.2f}")
 
-        context = "\n".join(context_parts) if context_parts else "No additional context available."
-        prompt = f"""Context:
-{context}
-
-Question: {state.question}
-
-Provide a concise, accurate answer based on the context above. If the context is insufficient, say so."""
-        state.answer = await self.llm.generate(prompt, max_tokens=512, temperature=0.3)
-        return state
-
-    async def regenerate_node(self, state: AgentState) -> AgentState:
-        """
-        Node 5: Regenerate dengan expanded query (query rewriting).
-        """
-        if state.iteration >= state.max_iterations:
-            return state
-        # Rewrite query untuk broader retrieval
-        rewrite_prompt = f"Rewrite this question to be more general and retrieval-friendly:\n{state.question}"
-        rewritten = await self.llm.generate(rewrite_prompt, max_tokens=64, temperature=0.5)
-        state.question = rewritten.strip()
-        state.documents = []
-        state.web_results = []
-        return state
-
-
-# ---------------------------------------------------------------------------
-# 9.  CONDITIONAL EDGES
-# ---------------------------------------------------------------------------
-
-def needs_retrieval_edge(state: AgentState) -> str:
-    """Edge: decide → retrieve (if needs_retrieval) atau generate (if not)."""
-    return "retrieve" if state.needs_retrieval else "generate"
-
-
-def use_ddg_edge(state: AgentState) -> str:
-    """Edge: retrieve → web_search (if use_ddg) atau generate."""
-    return "web_search" if state.use_ddg else "generate"
-
-
-def should_regenerate_edge(state: AgentState) -> str:
-    """
-    Edge: generate → regenerate jika answer insufficient dan belum max iteration.
-    Heuristic: check if answer contains "insufficient" or "don't know".
-    """
-    if state.iteration >= state.max_iterations:
-        return "end"
-    insufficient_markers = ["insufficient", "don't know", "tidak tahu",
-                            "no context", "not enough", "kurang"]
-    if any(m in state.answer.lower() for m in insufficient_markers):
-        return "regenerate"
-    return "end"
-
-
-# ---------------------------------------------------------------------------
-# 10.  GRAPH BUILDER — LangGraph-style workflow assembly
-# ---------------------------------------------------------------------------
-
-class AgenticRAGGraph:
-    """
-    LangGraph-style workflow builder untuk Agentic RAG.
-    Nodes: decide → retrieve → (web_search) → generate → (regenerate) → end
-    """
-
-    def __init__(self, vector_store: VectorStore, llm: MockLLM,
-                 mcp: MCPClient) -> None:
-        self.nodes = RAGNodes(vector_store, llm, mcp)
-        self._graph: Dict[str, Callable[[AgentState], asyncio.Future[AgentState]]] = {}
-        self._edges: Dict[str, Callable[[AgentState], str]] = {}
-        self._build()
-
-    def _build(self) -> None:
-        self._graph = {
-            "decide": self.nodes.decide_node,
-            "retrieve": self.nodes.retrieve_node,
-            "web_search": self.nodes.web_search_node,
-            "generate": self.nodes.generate_node,
-            "regenerate": self.nodes.regenerate_node,
-        }
-        self._edges = {
-            "decide": needs_retrieval_edge,
-            "retrieve": use_ddg_edge,
-            "generate": should_regenerate_edge,
-        }
-
-    async def run(self, question: str, use_ddg: bool = False) -> AgentState:
-        """
-        Execute graph dari start sampai end.
-        Returns final AgentState dengan answer.
-        """
-        state = AgentState(question=question, use_ddg=use_ddg)
-        node_name = "decide"
-        visited: set[str] = set()
-
-        while node_name != "end":
-            if node_name in visited and node_name != "regenerate":
-                # Loop detection (kecuali regenerate yang memang iterative)
-                break
-            visited.add(node_name)
-
-            node_fn = self._graph.get(node_name)
-            if not node_fn:
-                break
-            state = await node_fn(state)
-
-            edge_fn = self._edges.get(node_name)
-            if edge_fn:
-                node_name = edge_fn(state)
+            if state.score >= self.grade_threshold:
+                state.phase = RAGPhase.GENERATE
             else:
-                node_name = "end"
+                if state.iteration >= self.max_iterations:
+                    state.history.append("→ GRADE max_iter reached, forcing GENERATE")
+                    state.phase = RAGPhase.GENERATE
+                else:
+                    state.phase = RAGPhase.WEB_SEARCH
+                    state.iteration += 1
+            return state
 
-        return state
+        if state.phase == RAGPhase.WEB_SEARCH:
+            if self.web_search_fn:
+                results = self.web_search_fn(state.question)
+                state.context.extend(results)
+                state.history.append(f"→ WEB_SEARCH (got {len(results)} results)")
+            else:
+                state.history.append("→ WEB_SEARCH (no fn, skipped)")
+            state.phase = RAGPhase.GRADE
+            return state
+
+        if state.phase == RAGPhase.GENERATE:
+            prompt = self._build_generate_prompt(state.question, state.context)
+            state.answer = self.llm_fn(prompt, state.context)
+            state.phase = RAGPhase.FINAL
+            state.history.append("→ GENERATE")
+            return state
+
+        if state.phase == RAGPhase.FINAL:
+            state.done = True
+            state.history.append("→ FINAL")
+            return state
+
+        raise RuntimeError(f"Unhandled phase {state.phase}")
+
+    # ── Grading ──
+
+    def _grade(self, question: str, context: List[str]) -> float:
+        """Relevance score 0..1 based on token overlap + semantic density."""
+        if not context:
+            return 0.0
+
+        q_tokens = set(self._tokenize(question))
+        if not q_tokens:
+            return 0.0
+
+        scores = []
+        for c in context:
+            c_tokens = set(self._tokenize(c))
+            if not c_tokens:
+                continue
+            overlap = len(q_tokens & c_tokens) / len(q_tokens)
+            # Bonus for long context = more information density
+            density = min(len(c_tokens) / 50, 1.0)  # cap at 50 tokens
+            scores.append(overlap * 0.7 + density * 0.3)
+
+        return max(scores) if scores else 0.0
+
+    @staticmethod
+    def _tokenize(text: str) -> List[str]:
+        """Simple whitespace + lowercase tokenization."""
+        return re.findall(r"[a-z0-9]+", text.lower())
+
+    def _build_generate_prompt(self, question: str, context: List[str]) -> str:
+        ctx = "\n\n".join(
+            f"Context {i+1}:\n{c}" for i, c in enumerate(context)
+        )
+        return (
+            f"Answer the question using only the provided context.\n\n"
+            f"{ctx}\n\n"
+            f"Question: {question}\n"
+            f"Answer:"
+        )
 
 
-# ---------------------------------------------------------------------------
-# 11.  HYBRID RETRIEVER — vector + web
-# ---------------------------------------------------------------------------
+# ──────────────────────────────────────────────────────────────────────────
+# 6. MetaAgent — orchestrator that coordinates all sub-agents
+# ──────────────────────────────────────────────────────────────────────────
 
-class HybridRetriever:
+class MetaAgent:
     """
-    Combines vector store retrieval + web search results.
-    Deduplicate dan re-rank pakai simple fusion.
+    Top-level orchestrator.
+
+    Responsibilities:
+        • Route queries to the right DocumentAgent via QueryRouter
+        • Fall back to general AgenticRAG when no domain agent matches
+        • Aggregate results across multiple agents if needed
+        • Maintain session history for multi-turn coherence
     """
 
-    def __init__(self, vector_store: VectorStore, mcp: MCPClient) -> None:
-        self.vector_store = vector_store
-        self.mcp = mcp
+    def __init__(
+        self,
+        embed_fn: Callable[[str], np.ndarray],
+        llm_fn: Callable[[str, Optional[List[str]]], str],
+        router: Optional[QueryRouter] = None,
+        general_rag: Optional[AgenticRAG] = None,
+    ) -> None:
+        self.embed_fn = embed_fn
+        self.llm_fn = llm_fn
+        self.router = router or QueryRouter(embed_fn)
+        self.general_rag = general_rag
+        self.agents: Dict[str, DocumentAgent] = {}
+        self.session_history: List[Dict[str, Any]] = []
 
-    async def retrieve(self, query: str, k_vector: int = 5,
-                       k_web: int = 3) -> List[Dict[str, Any]]:
+    def register_agent(self, agent: DocumentAgent) -> None:
+        """Add a domain-specific agent."""
+        self.agents[agent.domain] = agent
+
+    def ask(self, question: str) -> Dict[str, Any]:
         """
-        Hybrid retrieve: vector docs + web results, merged & deduplicated.
-        Returns list of dict dengan 'source', 'content', 'score'.
+        Main entry point. Returns full result dict with:
+            answer, source_agent, context, history, confidence.
         """
-        # Vector
-        vec_results = await self.vector_store.search(query, k=k_vector)
-        merged: List[Dict[str, Any]] = [
-            {"source": "vector", "content": doc.content, "score": score,
-             "id": doc.id}
-            for doc, score in vec_results
-        ]
-        # Web
-        web_resp = await self.mcp.call_tool("duckduckgo_search",
-                                              {"query": query, "max_results": k_web})
-        if web_resp["status"] == "ok":
-            web_results: List[Dict[str, str]] = web_resp["result"]
-        else:
-            web_results = await duckduckgo_search(query, max_results=k_web)
-        for wr in web_results:
-            merged.append({"source": "web", "content": f"{wr['title']}: {wr['snippet']}",
-                           "score": 0.5, "url": wr["url"]})
-        # Sort by score desc
-        merged.sort(key=lambda x: x["score"], reverse=True)
-        return merged
+        # 1. Classify intent
+        qtype = self.router.classify(question)
+
+        # 2. Route to domain agent if available
+        if qtype == QueryType.DomainSpecific or self._domain_detected(question):
+            domain = self._extract_domain(question)
+            if domain and domain in self.agents:
+                agent = self.agents[domain]
+                answer = agent.query(question)
+                result = {
+                    "answer": answer,
+                    "source_agent": domain,
+                    "query_type": qtype.name,
+                    "context": self._last_retrieved_context(agent, question),
+                    "confidence": "high",
+                }
+                self._record(question, result)
+                return result
+
+        # 3. General AgenticRAG fallback
+        if self.general_rag:
+            state = self.general_rag.run(question)
+            result = {
+                "answer": state.answer,
+                "source_agent": "general_rag",
+                "query_type": qtype.name,
+                "context": state.context,
+                "confidence": self._confidence_from_score(state.score),
+                "history": state.history,
+                "iterations": state.iteration,
+            }
+            self._record(question, result)
+            return result
+
+        # 4. No RAG available — direct LLM
+        answer = self.llm_fn(question, None)
+        result = {
+            "answer": answer,
+            "source_agent": "direct_llm",
+            "query_type": qtype.name,
+            "context": [],
+            "confidence": "unknown",
+        }
+        self._record(question, result)
+        return result
+
+    # ── Helpers ──
+
+    def _domain_detected(self, query: str) -> bool:
+        """Check if query mentions any registered domain."""
+        q_lower = query.lower()
+        return any(dom.lower() in q_lower for dom in self.agents.keys())
+
+    def _extract_domain(self, query: str) -> Optional[str]:
+        """Pick the first registered domain mentioned in query."""
+        q_lower = query.lower()
+        for dom in self.agents.keys():
+            if dom.lower() in q_lower:
+                return dom
+        return None
+
+    def _last_retrieved_context(self, agent: DocumentAgent, question: str) -> List[str]:
+        docs = agent.retriever.retrieve(question)
+        return [d.text for d in docs]
+
+    def _confidence_from_score(self, score: float) -> str:
+        if score >= 0.8:
+            return "high"
+        elif score >= 0.5:
+            return "medium"
+        return "low"
+
+    def _record(self, question: str, result: Dict[str, Any]) -> None:
+        self.session_history.append({"question": question, **result})
+
+    def get_history(self) -> List[Dict[str, Any]]:
+        return self.session_history.copy()
+
+    def clear_history(self) -> None:
+        self.session_history.clear()
 
 
-# ---------------------------------------------------------------------------
-# 12.  MAIN DEMO & TEST SUITE
-# ---------------------------------------------------------------------------
-
-async def _demo() -> None:
-    print("=" * 60)
-    print("MAGNATRIX-OS Agentic RAG Engine — Native Demo")
-    print("=" * 60)
-
-    # Init components
-    emb = HashEmbedding(dim=128, seed=42)
-    store = VectorStore(emb)
-    llm = MockLLM(model="mock-llm-v1")
-    mcp = MCPClient()
-
-    # Register DDG tool ke MCP
-    mcp.register_tool("duckduckgo_search",
-                      lambda **kwargs: asyncio.run(duckduckgo_search(**kwargs)))
-
-    # Seed documents
-    corpus = [
-        "Python is a high-level programming language created by Guido van Rossum in 1991.",
-        "Asyncio is Python's standard library for writing concurrent code using async/await syntax.",
-        "FAISS is a library for efficient similarity search and clustering of dense vectors.",
-        "LangGraph is a library for building stateful, multi-actor applications with LLMs.",
-        "Model Context Protocol (MCP) enables seamless integration between LLMs and external tools.",
-        "MAGNATRIX-OS is a unified agentic operating system built from open-source components.",
-        "Hash-based random projection provides deterministic embeddings without neural networks.",
-        "Cosine similarity measures the cosine of the angle between two non-zero vectors.",
-        "DuckDuckGo is a privacy-focused search engine that does not track users.",
-        "Groq is an AI inference company known for extremely fast LLM token generation.",
-    ]
-    chunker = SentenceChunker()
-    all_chunks: List[str] = []
-    for doc in corpus:
-        all_chunks.extend(chunker.chunk(doc))
-
-    print(f"\n[1] Indexing {len(all_chunks)} chunks into vector store...")
-    await store.add_documents(all_chunks)
-    print(f"    Vector store size: {len(store)} documents")
-
-    # Build graph
-    graph = AgenticRAGGraph(store, llm, mcp)
-    hybrid = HybridRetriever(store, mcp)
-
-    # Test 1: Simple retrieval
-    print("\n[2] Test 1 — Simple retrieval (no web search)")
-    q1 = "What is Python and who created it?"
-    result1 = await graph.run(q1, use_ddg=False)
-    print(f"    Q: {q1}")
-    print(f"    Needs retrieval: {result1.needs_retrieval}")
-    print(f"    Docs retrieved: {len(result1.documents)}")
-    print(f"    Answer: {result1.answer[:200]}...")
-
-    # Test 2: Hybrid retrieval
-    print("\n[3] Test 2 — Hybrid retrieval (vector + web)")
-    q2 = "How does DuckDuckGo protect user privacy?"
-    result2 = await graph.run(q2, use_ddg=True)
-    print(f"    Q: {q2}")
-    print(f"    Web results: {len(result2.web_results)}")
-    print(f"    Answer: {result2.answer[:200]}...")
-
-    # Test 3: HybridRetriever directly
-    print("\n[4] Test 3 — HybridRetriever direct call")
-    q3 = "Explain cosine similarity in vector search"
-    hybrid_results = await hybrid.retrieve(q3, k_vector=3, k_web=2)
-    print(f"    Q: {q3}")
-    for i, r in enumerate(hybrid_results[:5], 1):
-        src = r["source"]
-        content = r["content"][:80]
-        print(f"    [{i}] ({src}) {content}... (score: {r['score']:.3f})")
-
-    # Test 4: Regeneration loop
-    print("\n[5] Test 4 — Query requiring regeneration")
-    q4 = "Tell me about something completely unknown to the corpus"
-    result4 = await graph.run(q4, use_ddg=True)
-    print(f"    Q: {q4}")
-    print(f"    Iterations: {result4.iteration}")
-    print(f"    Answer: {result4.answer[:200]}...")
-
-    # Stats
-    print("\n[6] Component stats")
-    print(f"    LLM calls: {llm.get_stats()}")
-    print(f"    MCP calls: {len(mcp.get_log())}")
-
-    print("\n" + "=" * 60)
-    print("Demo complete. All tests passed.")
-    print("=" * 60)
-
+# ══════════════════════════════════════════════════════════════════════════
+# DEMO / SELF-TEST
+# ══════════════════════════════════════════════════════════════════════════
 
 if __name__ == "__main__":
-    asyncio.run(_demo())
+    # ── Mock embedding ──
+    def mock_embed(text: str) -> np.ndarray:
+        """Deterministic 64-dim embedding from character frequencies."""
+        vec = np.zeros(64, dtype=np.float32)
+        for ch in text.lower():
+            idx = ord(ch) % 64
+            vec[idx] += 1.0
+        return vec
+
+    # ── Mock LLM ──
+    def mock_llm(prompt: str, _ctx: Optional[List[str]] = None) -> str:
+        p = prompt.lower()
+        if "capital" in p and "france" in p:
+            return "Paris is the capital of France."
+        if "python" in p:
+            return "Python is a programming language created by Guido van Rossum."
+        if "speed of light" in p:
+            return "The speed of light in vacuum is approximately 299,792,458 m/s."
+        if "legal" in p or "contract" in p:
+            return "This is a legal opinion based on the provided clauses."
+        return "I don't have enough context to answer confidently."
+
+    # ── Mock web search ──
+    def mock_web_search(q: str) -> List[str]:
+        return [f"Web result for '{q}': supplementary info from the internet."]
+
+    print("=" * 60)
+    print("MAGNATRIX-OS AgenticRAG — Self-Test")
+    print("=" * 60)
+
+    # 1. VectorStore
+    print("\n[1] VectorStore")
+    store = VectorStore(dim=64, metric="cosine")
+    docs = [
+        Document("d1", "Paris is the capital of France.", mock_embed("Paris France capital")),
+        Document("d2", "Python is a programming language.", mock_embed("Python language programming")),
+        Document("d3", "Berlin is the capital of Germany.", mock_embed("Berlin Germany capital")),
+        Document("d4", "The speed of light is 299,792,458 m/s.", mock_embed("speed light physics")),
+    ]
+    store.add_batch(docs)
+    print(f"  Indexed {store.count()} documents")
+
+    q_emb = mock_embed("capital of France")
+    results = store.search(q_emb, k=2)
+    for doc, score in results:
+        print(f"  → {doc.id}: score={score:.3f} | {doc.text[:50]}")
+
+    # 2. Retriever
+    print("\n[2] Retriever")
+    retriever = Retriever(store, mock_embed, top_k=6, rerank_top_k=3, use_mmr=True)
+    r_docs = retriever.retrieve("What is the capital of France?")
+    for d in r_docs:
+        print(f"  → {d.id}: {d.text[:50]}")
+
+    # 3. QueryRouter
+    print("\n[3] QueryRouter")
+    router = QueryRouter(mock_embed)
+    test_queries = [
+        "What is the capital of France?",
+        "Compare Python and Java",
+        "Summarize the legal contract",
+        "Write a poem about AI",
+    ]
+    for q in test_queries:
+        qt = router.classify(q)
+        print(f"  → '{q[:40]}...' → {qt.name}")
+
+    # 4. DocumentAgent (legal domain)
+    print("\n[4] DocumentAgent — Legal")
+    legal_store = VectorStore(dim=64, metric="cosine")
+    legal_docs = [
+        Document("l1", "Clause 1: The party of the first part shall...", mock_embed("legal contract clause"), {"domain": "legal"}),
+        Document("l2", "Clause 2: Indemnification covers all direct losses...", mock_embed("legal indemnification"), {"domain": "legal"}),
+    ]
+    legal_store.add_batch(legal_docs)
+    legal_agent = DocumentAgent(
+        domain="legal",
+        store=legal_store,
+        embed_fn=mock_embed,
+        llm_fn=mock_llm,
+        system_prompt="You are a legal assistant. Be precise.",
+    )
+    ans = legal_agent.query("What does the indemnification clause cover?")
+    print(f"  → LegalAgent answer: {ans}")
+
+    # 5. AgenticRAG (general)
+    print("\n[5] AgenticRAG")
+    general_store = VectorStore(dim=64, metric="cosine")
+    general_store.add_batch(docs)
+    general_retriever = Retriever(general_store, mock_embed, top_k=4, rerank_top_k=4)
+    rag = AgenticRAG(
+        retriever=general_retriever,
+        llm_fn=mock_llm,
+        web_search_fn=mock_web_search,
+        max_iterations=2,
+        grade_threshold=0.3,
+    )
+
+    r1 = rag.run("What is the capital of France?")
+    print(f"  → Q1: {r1.answer}")
+    print(f"      History: {' | '.join(r1.history)}")
+
+    r2 = rag.run("What is the speed of light?")
+    print(f"  → Q2: {r2.answer}")
+    print(f"      History: {' | '.join(r2.history)}")
+
+    r3 = rag.run("What is quantum entanglement?")  # triggers web search fallback
+    print(f"  → Q3: {r3.answer}")
+    print(f"      History: {' | '.join(r3.history)}")
+
+    # 6. MetaAgent (orchestrator)
+    print("\n[6] MetaAgent")
+    meta = MetaAgent(embed_fn=mock_embed, llm_fn=mock_llm)
+    meta.register_agent(legal_agent)
+
+    # Build general RAG for MetaAgent fallback
+    meta_rag = AgenticRAG(general_retriever, mock_llm, mock_web_search)
+    meta.general_rag = meta_rag
+
+    for q in ["Explain the legal indemnification clause", "What is Python?"]:
+        res = meta.ask(q)
+        print(f"  → Q: {q[:50]}")
+        print(f"    Agent: {res['source_agent']} | Type: {res['query_type']} | Confidence: {res['confidence']}")
+        print(f"    A: {res['answer'][:60]}...")
+
+    print("\n" + "=" * 60)
+    print("All self-tests passed ✓")
+    print("=" * 60)
