@@ -325,7 +325,7 @@ class ExpressionEvaluator:
 
     # Pattern: {{ expression }} atau $expression
     EXPR_PATTERN = re.compile(r'\{\{\s*(.+?)\s*\}\}')
-    SHORT_EXPR_PATTERN = re.compile(r'\$\{(\w+(?:\.\w+)*(?:\[[\w']+\])*)\}')
+    SHORT_EXPR_PATTERN = re.compile(r"\$\{(\w+(?:\.\w+)*(?:\[[\w"]+\])*)\}")
 
     def __init__(self):
         self._globals = {

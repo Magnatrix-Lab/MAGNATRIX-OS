@@ -1022,8 +1022,7 @@ if __name__ == "__main__":
         print(f"Search time: {session.total_search_time_ms:.0f}ms")
         print(f"Answer time: {session.total_answer_time_ms:.0f}ms")
         print(f"Answer:
-{session.answer}")
-        print(f"
+{session.answer}"\nprint(f"
 Citations:")
         for c in session.citations:
             print(f"  [{c.id}] {c.title} ({c.source_name})")

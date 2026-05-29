@@ -154,14 +154,12 @@ if __name__ == "__main__":
 ")
 
     result = rsi.execute_pipeline("signal_generator.py", "accuracy", "# optimized feature extraction
-")
-    print(f"
+"\nprint(f"
 Result: {result['status']} | Δ = {result['performance_delta']:.3f}")
 
     rsi.escalate_level()
     result2 = rsi.execute_pipeline("risk_manager.py", "drawdown_control", "# new adaptive algorithm
-")
-    print(f"
+"\nprint(f"
 Result: {result2['status']}")
 
     rsi.save()

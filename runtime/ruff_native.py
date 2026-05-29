@@ -129,13 +129,11 @@ class RuffNative:
         """Basic formatting: trim trailing whitespace, ensure newline at end."""
         with open(path, "r") as f:
             lines = f.readlines()
-        formatted = [line.rstrip() + "
-" for line in lines]
+        formatted = [line.rstrip() + "\n" for line in lines]
         while formatted and formatted[-1].strip() == "":
             formatted.pop()
         if formatted:
-            formatted.append("
-")
+            formatted.append("\n")
         return "".join(formatted)
 
     def stats(self) -> Dict[str, Any]:

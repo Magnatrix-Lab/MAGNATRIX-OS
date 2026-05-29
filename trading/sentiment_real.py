@@ -11,8 +11,7 @@ class RealSentiment:
     def fetch_headlines(self):
         try:
             r = requests.get("https://r.jina.ai/https://feeds.coindesk.com/coindesk", timeout=15)
-            return r.text.split("
-")[:10]
+            return r.text.split()[:10]
         except:
             return ["Error fetching RSS"]
 

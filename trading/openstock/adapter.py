@@ -38,8 +38,7 @@ class OpenStockAdapter:
             rss_url = "https://feeds.coindesk.com/coindesk"
             jina_url = f"https://r.jina.ai/{rss_url}"
             r = requests.get(jina_url, timeout=15)
-            lines = r.text.strip().split("
-")[:limit]
+            lines = r.text.strip().split()[:limit]
             return [{"headline": line[:100], "source": "coindesk"} for line in lines if line.strip()]
         except Exception as e:
             return [{"headline": f"Error fetching news: {e}", "source": "error"}]
