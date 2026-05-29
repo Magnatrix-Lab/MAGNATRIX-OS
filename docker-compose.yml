@@ -1,205 +1,59 @@
-# ═══════════════════════════════════════════════════════════════════════════════
-# MAGNATRIX-OS — Docker Compose Stack
-# ═══════════════════════════════════════════════════════════════════════════════
+# MAGNATRIX-OS Docker Compose
+# ═══════════════════════════════════════════
+# Full stack: MAGNATRIX-OS + optional reverse proxy + monitoring
+#
 # Usage:
-#   docker compose up -d        → Start full stack
-#   docker compose logs -f      → Follow logs
-#   docker compose down -v      → Stop and remove volumes
-# ═══════════════════════════════════════════════════════════════════════════════
+#   docker-compose up -d          # Start all services
+#   docker-compose up -d --build  # Rebuild and start
+#   docker-compose logs -f        # Follow logs
+#   docker-compose down           # Stop all
 
-version: "3.9"
+version: "3.8"
 
 services:
-  # ── Core MAGNATRIX-OS Node ────────────────────────────────────────────────
-  magnatrix:
+  magnatrix-os:
     build:
       context: .
       dockerfile: Dockerfile
       target: runtime
     image: magnatrix-os:latest
-    container_name: magnatrix-core
-    hostname: magnatrix-core
+    container_name: magnatrix-os
     restart: unless-stopped
-
-    command: ["python", "magnatrix.py", "boot", "--config", "/var/lib/magnatrix/config/magnatrix.yaml", "--verbose"]
-
+    ports:
+      - "8080:8080"    # Dashboard HTTP
+      - "8765:8765"    # WebSocket metrics
+      - "9090:9090"    # P2P mesh
+    volumes:
+      - magnatrix-data:/root/.magnatrix-os
+      - ./website:/opt/magnatrix-os/website:ro
     environment:
-      - MAGNATRIX_HOME=/var/lib/magnatrix
       - MAGNATRIX_LOG_LEVEL=INFO
-      - MAGNATRIX_BRIDGE_HOST=0.0.0.0
-      - MAGNATRIX_BRIDGE_PORT=17000
-      - PYTHONUNBUFFERED=1
-
-    ports:
-      # Inter-layer Bridge (Layer 0 communication bus)
-      - "17000:17000"
-      # P2P Rendezvous Server (NAT traversal coordination)
-      - "17171:17171/udp"
-      # P2P Transport (mesh networking)
-      - "17777:17777/udp"
-      # HTTP API Gateway (Layer 1.5)
-      - "18080:18080"
-
-    volumes:
-      # Persistent data directories
-      - magnatrix-models:/var/lib/magnatrix/models
-      - magnatrix-knowledge:/var/lib/magnatrix/knowledge
-      - magnatrix-logs:/var/lib/magnatrix/logs
-      - magnatrix-repos:/var/lib/magnatrix/repos
-      # Config from host (read-only)
-      - ./config:/var/lib/magnatrix/config:ro
-
-    networks:
-      - magnatrix-net
-
+      - MAGNATRIX_WS_PORT=8765
+      - MAGNATRIX_DASHBOARD_PORT=8080
     healthcheck:
-      test: ["CMD", "python", "-c", "import magnatrix; print('HEALTHY')"]
+      test: ["CMD", "python3", "-c", "import magnatrix; print('ok')"]
       interval: 30s
-      timeout: 10s
+      timeout: 5s
       retries: 3
-      start_period: 10s
+      start_period: 15s
 
-    # Resource limits (tune based on deployment target)
-    deploy:
-      resources:
-        limits:
-          cpus: "4.0"
-          memory: 8G
-        reservations:
-          cpus: "1.0"
-          memory: 2G
+  # Optional: Caddy reverse proxy with HTTPS
+  # caddy:
+  #   image: caddy:2-alpine
+  #   container_name: magnatrix-caddy
+  #   restart: unless-stopped
+  #   ports:
+  #     - "80:80"
+  #     - "443:443"
+  #   volumes:
+  #     - ./Caddyfile:/etc/caddy/Caddyfile:ro
+  #     - caddy-data:/data
+  #     - caddy-config:/config
+  #   depends_on:
+  #     - magnatrix-os
 
-  # ── Optional: Vector Database Node (separate for scaling) ────────────────
-  vector-db:
-    build:
-      context: .
-      dockerfile: Dockerfile
-      target: runtime
-    image: magnatrix-os:latest
-    container_name: magnatrix-vector
-    hostname: magnatrix-vector
-    restart: unless-stopped
-
-    # Run vector store as standalone service
-    command: ["python", "-c", "from knowledge.vector_store_native import VectorStore, CollectionManager; cm = CollectionManager('/var/lib/magnatrix/vector_db'); print('Vector DB ready'); import time; time.sleep(3600)"]
-
-    environment:
-      - MAGNATRIX_HOME=/var/lib/magnatrix
-      - PYTHONUNBUFFERED=1
-
-    volumes:
-      - magnatrix-vector-db:/var/lib/magnatrix/vector_db
-
-    networks:
-      - magnatrix-net
-
-    profiles:
-      - vector-db
-
-  # ── Optional: P2P Bootstrap Node (for mesh seeding) ───────────────────────
-  p2p-bootstrap:
-    build:
-      context: .
-      dockerfile: Dockerfile
-      target: runtime
-    image: magnatrix-os:latest
-    container_name: magnatrix-bootstrap
-    hostname: magnatrix-bootstrap
-    restart: unless-stopped
-
-    # Run rendezvous server
-    command: ["python", "-c", "from p2p_mesh.dht_nat_native import RendezvousServer; srv = RendezvousServer('0.0.0.0', 17171); srv.start(); print('Bootstrap ready'); import time; time.sleep(3600)"]
-
-    ports:
-      - "17172:17171/udp"
-
-    networks:
-      - magnatrix-net
-
-    profiles:
-      - p2p
-
-  # ── Optional: Trading Node (isolated for security) ────────────────────────
-  trading:
-    build:
-      context: .
-      dockerfile: Dockerfile
-      target: runtime
-    image: magnatrix-os:latest
-    container_name: magnatrix-trading
-    hostname: magnatrix-trading
-    restart: unless-stopped
-
-    environment:
-      - MAGNATRIX_TRADING_MODE=paper
-      - MAGNATRIX_EXCHANGE=binance
-      - PYTHONUNBUFFERED=1
-
-    volumes:
-      - magnatrix-trading-logs:/var/lib/magnatrix/logs
-
-    networks:
-      - magnatrix-net
-
-    profiles:
-      - trading
-
-  # ── Monitoring: Prometheus (optional) ─────────────────────────────────────
-  prometheus:
-    image: prom/prometheus:v2.50.0
-    container_name: magnatrix-prometheus
-    restart: unless-stopped
-    volumes:
-      - ./observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
-      - prometheus-data:/prometheus
-    ports:
-      - "19090:9090"
-    networks:
-      - magnatrix-net
-    profiles:
-      - monitoring
-
-  # ── Monitoring: Grafana (optional) ────────────────────────────────────────
-  grafana:
-    image: grafana/grafana:10.3.0
-    container_name: magnatrix-grafana
-    restart: unless-stopped
-    environment:
-      - GF_SECURITY_ADMIN_PASSWORD=magnatrix
-    volumes:
-      - grafana-data:/var/lib/grafana
-      - ./observability/grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
-      - ./observability/grafana/datasources:/etc/grafana/provisioning/datasources:ro
-    ports:
-      - "13000:3000"
-    networks:
-      - magnatrix-net
-    profiles:
-      - monitoring
-
-# ── Volumes ─────────────────────────────────────────────────────────────────
 volumes:
-  magnatrix-models:
+  magnatrix-data:
     driver: local
-  magnatrix-knowledge:
-    driver: local
-  magnatrix-logs:
-    driver: local
-  magnatrix-repos:
-    driver: local
-  magnatrix-vector-db:
-    driver: local
-  magnatrix-trading-logs:
-    driver: local
-  prometheus-data:
-    driver: local
-  grafana-data:
-    driver: local
-
-# ── Networks ────────────────────────────────────────────────────────────────
-networks:
-  magnatrix-net:
-    driver: bridge
-    ipam:
-      config:
-        - subnet: 172.28.0.0/16
+  # caddy-data:
+  # caddy-config:

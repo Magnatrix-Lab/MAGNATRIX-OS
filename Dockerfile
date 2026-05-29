@@ -1,89 +1,77 @@
-# ═══════════════════════════════════════════════════════════════════════════════
-# MAGNATRIX-OS — Multi-Stage Docker Build
-# ═══════════════════════════════════════════════════════════════════════════════
-# Build:  docker build -t magnatrix-os .
-# Run:    docker run --rm -it -p 17000:17000 magnatrix-os boot
-# ═══════════════════════════════════════════════════════════════════════════════
+# MAGNATRIX-OS Dockerfile
+# ════════════════════════════════════════════════════════════════
+# Multi-stage build: compile C++ HFT + Rust Crypto, then bundle Python.
+#
+# Build:
+#   docker build -t magnatrix-os:latest .
+# Run:
+#   docker run -p 8080:8080 -p 8765:8765 magnatrix-os:latest
+#   docker run -it --rm magnatrix-os:latest magnatrix status
 
-# ── Stage 1: Build dependencies ───────────────────────────────────────────────
-FROM python:3.12-slim-bookworm AS builder
+# ── Stage 1: Build C++ HFT Engine ───────────────────────────────────────────
+FROM python:3.12-slim AS cpp-builder
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    g++ cmake make && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /build
+COPY trading/cpp_hft_engine/ .
+RUN pip install pybind11
+RUN python3 -c "import pybind11; print(pybind11.get_include())" > /tmp/pybind_include.txt
+RUN PYINC=$(python3 -c "import pybind11; print(pybind11.get_include())") && \
+    PYHEAD=$(python3 -c "import sysconfig; print(sysconfig.get_paths()['include'])") && \
+    g++ -O3 -shared -fPIC -std=c++17 \
+    -I${PYHEAD} -I${PYINC} -Iinclude \
+    src/order_book.cpp src/arbitrage_detector.cpp src/hft_engine.cpp src/bindings.cpp \
+    -o _hft_engine.so
 
-# Install build tools for potential C extensions (llama.cpp, numpy, etc.)
+# ── Stage 2: Build Rust Crypto Engine ───────────────────────────────────────
+FROM rust:1.82-slim AS rust-builder
+
+WORKDIR /build
+COPY security/rust_crypto_engine/ .
+RUN apt-get update && apt-get install -y --no-install-recommends python3-dev && rm -rf /var/lib/apt/lists/*
+RUN pip install maturin || pip install setuptools-rust
+RUN cargo build --release
+# .so will be in target/release/
+
+# ── Stage 3: Final Runtime ───────────────────────────────────────────────────
+FROM python:3.12-slim AS runtime
+
+LABEL org.opencontainers.image.title="MAGNATRIX-OS"
+LABEL org.opencontainers.image.description="Open-Source AI Operating System"
+LABEL org.opencontainers.image.version="0.9.5-alpha"
+
+# Install runtime deps
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential \
-    cmake \
-    git \
-    libssl-dev \
-    pkg-config \
-    && rm -rf /var/lib/apt/lists/*
+    libgomp1 && rm -rf /var/lib/apt/lists/*
 
-# Create virtual environment
-RUN python -m venv /opt/venv
-ENV PATH="/opt/venv/bin:$PATH"
+WORKDIR /opt/magnatrix-os
 
-# Copy project metadata first (for layer caching)
-COPY pyproject.toml ./
-RUN pip install --no-cache-dir --upgrade pip setuptools wheel \
-    && mkdir -p magnatrix_os && touch magnatrix_os/__init__.py \
-    && pip install --no-cache-dir -e ".[all]"
+# Copy Python codebase
+COPY . .
 
-# ── Stage 2: Runtime image ────────────────────────────────────────────────────
-FROM python:3.12-slim-bookworm AS runtime
+# Copy compiled C++ extension
+COPY --from=cpp-builder /build/_hft_engine.so trading/cpp_hft_engine/
 
-LABEL maintainer="Magnatrix Lab <dev@magnatrix.ai>"
-LABEL description="MAGNATRIX-OS — Private Uncensored Agentic AI Operating System"
-LABEL version="0.9.5-alpha"
+# Copy compiled Rust extension (if available)
+COPY --from=rust-builder /build/target/release/*.so security/rust_crypto_engine/ 2>/dev/null || true
 
-# Runtime dependencies (minimal)
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    curl \
-    ca-certificates \
-    && rm -rf /var/lib/apt/lists/*
+# Install package
+RUN pip install --no-cache-dir -e .
 
-# Create non-root user for security
-RUN groupadd --gid 1000 magnatrix && \
-    useradd --uid 1000 --gid magnatrix --shell /bin/bash --create-home magnatrix
+# Expose ports
+# 8080 — Dashboard HTTP server
+# 8765 — WebSocket metrics stream
+# 9090 — P2P mesh (optional)
+EXPOSE 8080 8765 9090
 
-# Copy virtual environment from builder
-COPY --from=builder /opt/venv /opt/venv
-ENV PATH="/opt/venv/bin:$PATH"
-ENV PYTHONDONTWRITEBYTECODE=1
-ENV PYTHONUNBUFFERED=1
-ENV MAGNATRIX_HOME=/var/lib/magnatrix
-ENV MAGNATRIX_LOG_LEVEL=INFO
-
-# Create data directories
-RUN mkdir -p /var/lib/magnatrix/{models,knowledge,logs,config,repos} \
-    && chown -R magnatrix:magnatrix /var/lib/magnatrix
-
-WORKDIR /app
-
-# Copy application code
-COPY --chown=magnatrix:magnatrix . /app/
-
-# Install magnatrix-os in editable mode (as root before switching user)
-RUN pip install --no-cache-dir -e "."
+# Data volume
+VOLUME ["/root/.magnatrix-os"]
 
 # Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD python -c "import sys; sys.path.insert(0, '/app'); import magnatrix; print('OK')" || exit 1
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+    CMD python3 -c "import magnatrix; print('ok')" || exit 1
 
-# Ports exposed by various layers
-# 17000: Inter-layer Bridge Server
-# 17171: P2P Rendezvous
-# 17777: P2P Transport
-# 18080: API Router / HTTP Gateway
-EXPOSE 17000 17171 17777 18080
-
-USER magnatrix
-
-# Default command: show version/help
-ENTRYPOINT ["python", "-m", "magnatrix"]
-CMD ["--help"]
-
-# Sub-commands available:
-#   docker run magnatrix-os boot      → Boot all 15 layers
-#   docker run magnatrix-os status    → Show system status
-#   docker run magnatrix-os --version → Show version
+# Default: boot with dashboard + websocket
+CMD ["python3", "-m", "magnatrix", "boot"]

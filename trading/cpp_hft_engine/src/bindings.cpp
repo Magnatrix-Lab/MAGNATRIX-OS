@@ -1,6 +1,7 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 #include <pybind11/functional.h>
+#include <cstring>
 #include "market_data.h"
 #include "order_book.h"
 #include "arbitrage_detector.h"
@@ -71,7 +72,12 @@ PYBIND11_MODULE(_hft_engine, m) {
     // ── ArbitrageOpportunity ────────────────────────────────────────────────
     py::class_<ArbitrageOpportunity>(m, "ArbitrageOpportunity")
         .def(py::init<>())
-        .def_readwrite("symbol", &ArbitrageOpportunity::symbol)
+        .def_property("symbol",
+            [](const ArbitrageOpportunity& a) { return std::string(a.symbol); },
+            [](ArbitrageOpportunity& a, const std::string& s) {
+                std::strncpy(a.symbol, s.c_str(), sizeof(a.symbol) - 1);
+                a.symbol[sizeof(a.symbol) - 1] = '\0';
+            })
         .def_readwrite("buy_exchange", &ArbitrageOpportunity::buy_exchange)
         .def_readwrite("sell_exchange", &ArbitrageOpportunity::sell_exchange)
         .def_readwrite("buy_price", &ArbitrageOpportunity::buy_price)

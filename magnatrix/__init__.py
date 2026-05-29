@@ -350,7 +350,7 @@ class AppContext:
         run_fn = getattr(a, "run", getattr(a, "execute", None))
         if run_fn is None:
             raise AttributeError(f"Agent '{name}' has no run()/execute()")
-        return run_fn(*args, **kwargs)
+        return run_fn(self, *args, **kwargs)
 
     def skill_call(self, name: str, *args, **kwargs) -> Any:
         """Call a registered skill by name."""
