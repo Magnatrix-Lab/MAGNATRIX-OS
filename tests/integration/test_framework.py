@@ -45,17 +45,17 @@ class TestTrader:
 
 
 @mx.skill("test_analyze")
-def test_analyze(ctx: mx.AppContext, data: str) -> str:
+def skill_analyze(ctx: mx.AppContext, data: str) -> str:
     return f"analyzed: {data}"
 
 
 @mx.tool("test_lookup")
-def test_lookup(ctx: mx.AppContext, key: str) -> Optional[str]:
+def tool_lookup(ctx: mx.AppContext, key: str) -> Optional[str]:
     return {"foo": "bar"}.get(key)
 
 
 @mx.workflow("test_pipeline")
-def test_pipeline(ctx: mx.AppContext) -> str:
+def workflow_pipeline(ctx: mx.AppContext) -> str:
     result = ctx.skills["test_analyze"]("market_data")
     return result
 

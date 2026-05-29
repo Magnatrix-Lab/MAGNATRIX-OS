@@ -1,248 +1,353 @@
-#!/usr/bin/env python3
 """
-streaming/event_stream_native.py
-================================
-Layer 5 Extension — Real-Time Event Streaming
-
-MAGNATRIX-OS Event Streaming Engine
-Pure-Python pub/sub event bus with persistent log, consumer groups,
-and exactly-once delivery semantics.
-
-Includes:
-  - In-memory + file-backed append-only event log
-  - Pub/sub topics with wildcard matching
-  - Consumer groups with offset tracking
-  - Exactly-once delivery via idempotent producers
-  - Stream processing: map/filter/reduce/window
-  - Backpressure handling
-  - WAL per topic for durability
+event_stream_native.py — Native Event Streaming Backbone
+Pure Python stdlib. Pub/sub, topics, partitions, consumer groups,
+at-least-once delivery. NativeEventStream with run().
 """
-
 from __future__ import annotations
 
-import hashlib
 import json
 import os
-import struct
 import threading
 import time
-from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Tuple, Any, Callable, Set
+from collections import defaultdict, deque
+from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 
 
-@dataclass
-class Event:
-    topic: str
-    payload: Any
-    key: str = ""
-    timestamp: float = field(default_factory=time.time)
-    id: str = field(default_factory=lambda: hashlib.sha256(str(time.time()).encode()).hexdigest()[:16])
+class NativeEventStream:
+    """
+    Native event streaming backbone.
 
-    def to_bytes(self) -> bytes:
-        return json.dumps({"id": self.id, "topic": self.topic, "key": self.key,
-                           "payload": self.payload, "ts": self.timestamp}).encode()
+    Simulates pub/sub with topics, partitions, consumer groups,
+    and at-least-once delivery semantics. Pure stdlib.
 
-    @classmethod
-    def from_bytes(cls, b: bytes) -> Event:
-        d = json.loads(b.decode())
-        return cls(id=d["id"], topic=d["topic"], key=d.get("key", ""),
-                   payload=d["payload"], timestamp=d["ts"])
+    Attributes:
+        topics: name -> list of partition deques.
+        partitions: number of partitions per topic.
+        subscribers: topic -> set of (group_id, callback).
+        consumer_offsets: (group_id, topic, partition) -> last read index.
+        committed: Dict of committed offsets for durability.
+    """
 
+    def __init__(
+        self,
+        partitions: int = 4,
+        persist_path: Optional[str] = None,
+    ) -> None:
+        self.topics: Dict[str, List[deque]] = {}
+        self.partitions = max(1, partitions)
+        self.subscribers: Dict[str, Any] = defaultdict(set)
+        self.lock = threading.RLock()
+        self.consumer_offsets: Dict[Tuple[str, str, int], int] = {}
+        self.committed_offsets: Dict[Tuple[str, str, int], int] = {}
+        self.persist_path = persist_path
+        self._seq = 0
+        if self.persist_path and os.path.exists(self.persist_path):
+            self._load()
 
-class TopicLog:
-    """Append-only WAL for a single topic."""
+    def _hash_partition(self, key: str) -> int:
+        """Hash a key to a partition index."""
+        return hash(key) % self.partitions
 
-    def __init__(self, topic: str, data_dir: str = "/var/lib/magnatrix/streaming") -> None:
-        self.topic = topic
-        self.dir = os.path.join(data_dir, topic.replace("/", "__"))
-        os.makedirs(self.dir, exist_ok=True)
-        self.log_path = os.path.join(self.dir, "events.wal")
-        self._lock = threading.Lock()
-        self._offset = 0
-        self._load_offset()
+    def _next_seq(self) -> int:
+        with self.lock:
+            self._seq += 1
+            return self._seq
 
-    def _load_offset(self) -> None:
-        if os.path.exists(self.log_path):
-            with open(self.log_path, "rb") as f:
-                while True:
-                    h = f.read(8)
-                    if len(h) < 8:
+    def create_topic(self, name: str) -> None:
+        """Create a topic with N partitions."""
+        with self.lock:
+            if name not in self.topics:
+                self.topics[name] = [deque() for _ in range(self.partitions)]
+
+    def publish(
+        self,
+        topic: str,
+        payload: Any,
+        key: Optional[str] = None,
+        meta: Optional[Dict[str, Any]] = None,
+    ) -> str:
+        """
+        Publish an event to a topic.
+
+        Args:
+            topic: Topic name.
+            payload: Event body.
+            key: Partition key; if None, round-robin.
+            meta: Optional metadata.
+
+        Returns:
+            Event ID.
+        """
+        with self.lock:
+            if topic not in self.topics:
+                self.create_topic(topic)
+            partition = self._hash_partition(key) if key else (self._seq % self.partitions)
+            partition = partition % self.partitions
+            event_id = f"{topic}:{partition}:{self._next_seq()}:{int(time.time() * 1000)}"
+            event = {
+                "id": event_id,
+                "topic": topic,
+                "partition": partition,
+                "payload": payload,
+                "meta": meta or {},
+                "timestamp": time.time(),
+                "delivered": [],
+                "attempts": 0,
+            }
+            self.topics[topic][partition].append(event)
+            self._persist()
+        return event_id
+
+    def subscribe(
+        self,
+        topic: str,
+        group_id: str,
+        callback: Callable[[Dict[str, Any]], bool],
+    ) -> None:
+        """
+        Subscribe a consumer group callback to a topic.
+
+        Args:
+            topic: Topic name.
+            group_id: Consumer group identifier.
+            callback: Function receiving event dict, returns True if acked.
+        """
+        with self.lock:
+            self.subscribers[topic].add((group_id, callback))
+
+    def unsubscribe(
+        self,
+        topic: str,
+        group_id: str,
+        callback: Callable[[Dict[str, Any]], bool],
+    ) -> None:
+        """Remove a subscription."""
+        with self.lock:
+            self.subscribers[topic].discard((group_id, callback))
+
+    def poll(
+        self,
+        topic: str,
+        group_id: str,
+        max_events: int = 10,
+    ) -> List[Dict[str, Any]]:
+        """
+        Poll events for a consumer group from all partitions.
+
+        Implements at-least-once delivery: event remains in queue
+        until commit_offset is called.
+
+        Args:
+            topic: Topic name.
+            group_id: Consumer group ID.
+            max_events: Max events to return.
+
+        Returns:
+            List of event dicts.
+        """
+        results: List[Dict[str, Any]] = []
+        with self.lock:
+            if topic not in self.topics:
+                return results
+            for partition_idx, partition in enumerate(self.topics[topic]):
+                offset_key = (group_id, topic, partition_idx)
+                # Use committed offset as the base for at-least-once semantics
+                offset = self.committed_offsets.get(offset_key, -1)
+                for event in list(partition):
+                    event_idx = list(partition).index(event)
+                    if event_idx <= offset:
+                        continue
+                    if len(results) >= max_events:
                         break
-                    length = struct.unpack("<Q", h)[0]
-                    f.seek(length, os.SEEK_CUR)
-                    self._offset += 1
+                    event["attempts"] += 1
+                    results.append(event)
+                    # Update transient offset (not committed)
+                    self.consumer_offsets[offset_key] = event_idx
+                if len(results) >= max_events:
+                    break
+        return results
 
-    def append(self, event: Event) -> int:
-        data = event.to_bytes()
-        record = struct.pack("<Q", len(data)) + data
-        # SECURITY: Validate WAL path before write
-        from kernel.path_guard_native import PathGuard
-        PathGuard.validate(self.log_path)
-        with self._lock:
-            offset = self._offset
-            with open(self.log_path, "ab") as f:
-                f.write(record)
-                f.flush()
-                os.fsync(f.fileno())
-            self._offset += 1
-            return offset
+    def commit_offset(self, topic: str, group_id: str, partition: int, offset: int) -> None:
+        """
+        Commit offset for a consumer group, marking events as processed.
 
-    def read(self, start_offset: int = 0) -> List[Tuple[int, Event]]:
-        results: List[Tuple[int, Event]] = []
-        with self._lock:
-            with open(self.log_path, "rb") as f:
-                offset = 0
-                while True:
-                    h = f.read(8)
-                    if len(h) < 8:
-                        break
-                    length = struct.unpack("<Q", h)[0]
-                    data = f.read(length)
-                    if offset >= start_offset:
-                        try:
-                            results.append((offset, Event.from_bytes(data)))
-                        except Exception:
-                            pass
-                    offset += 1
+        Args:
+            topic: Topic name.
+            group_id: Consumer group.
+            partition: Partition index.
+            offset: Last successfully processed index.
+        """
+        key = (group_id, topic, partition)
+        with self.lock:
+            self.committed_offsets[key] = offset
+            self._persist()
+
+    def get_committed(self, topic: str, group_id: str, partition: int) -> int:
+        """Get committed offset for a consumer group."""
+        key = (group_id, topic, partition)
+        with self.lock:
+            return self.committed_offsets.get(key, -1)
+
+    def fanout(self, topic: str, payload: Any, key: Optional[str] = None) -> int:
+        """
+        Publish and immediately deliver to all subscribers.
+
+        Returns:
+            Number of successful acks.
+        """
+        event_id = self.publish(topic, payload, key)
+        count = 0
+        with self.lock:
+            subs = list(self.subscribers.get(topic, set()))
+        for group_id, callback in subs:
+            try:
+                ack = callback({"id": event_id, "topic": topic, "payload": payload})
+                if ack:
+                    count += 1
+            except Exception:
+                pass
+        return count
+
+    def _persist(self) -> None:
+        if not self.persist_path:
+            return
+        try:
+            data = {
+                "topics": {k: [list(p) for p in v] for k, v in self.topics.items()},
+                "committed_offsets": {f"{k[0]}|{k[1]}|{k[2]}": v for k, v in self.committed_offsets.items()},
+            }
+            with open(self.persist_path, "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=2)
+        except Exception:
+            pass
+
+    def _load(self) -> None:
+        try:
+            with open(self.persist_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            for topic, partitions in data.get("topics", {}).items():
+                self.topics[topic] = [deque(p) for p in partitions]
+            for k, v in data.get("committed_offsets", {}).items():
+                parts = k.split("|")
+                if len(parts) == 3:
+                    self.committed_offsets[(parts[0], parts[1], int(parts[2]))] = v
+        except Exception:
+            pass
+
+    def topic_stats(self, topic: str) -> Dict[str, Any]:
+        """Return per-partition stats for a topic."""
+        with self.lock:
+            if topic not in self.topics:
+                return {"exists": False}
+            partitions = []
+            for idx, part in enumerate(self.topics[topic]):
+                partitions.append({
+                    "partition": idx,
+                    "messages": len(part),
+                    "committed_offsets": {
+                        g: self.committed_offsets.get((g, topic, idx), -1)
+                        for g in set(s[0] for s in self.subscribers.get(topic, set()))
+                    },
+                })
+            return {
+                "exists": True,
+                "partitions": self.partitions,
+                "partition_stats": partitions,
+                "subscribers": len(self.subscribers.get(topic, set())),
+            }
+
+    def run(self) -> Dict[str, Any]:
+        """
+        Self-test demo.
+
+        Returns:
+            Dict with test results and topic stats.
+        """
+        results: Dict[str, Any] = {"status": "ok", "tests": []}
+
+        # Test 1: Publish / partition
+        self.create_topic("events")
+        e1 = self.publish("events", {"msg": "hello"}, key="user-1")
+        e2 = self.publish("events", {"msg": "world"}, key="user-2")
+        e3 = self.publish("events", {"msg": "again"}, key="user-1")
+        assert e1.startswith("events:"), "Event ID format wrong"
+        stats = self.topic_stats("events")
+        assert stats["exists"] is True, "Topic should exist"
+        total_msgs = sum(p["messages"] for p in stats["partition_stats"])
+        assert total_msgs == 3, f"Expected 3 messages, got {total_msgs}"
+        results["tests"].append({"name": "publish_partition", "pass": True})
+
+        # Test 2: Poll / at-least-once
+        self.create_topic("orders")
+        for i in range(5):
+            self.publish("orders", {"order_id": i}, key=f"order-{i}")
+        msgs = self.poll("orders", "group-a", max_events=3)
+        assert len(msgs) == 3, f"Expected 3 messages, got {len(msgs)}"
+        # Re-poll without commit should give same messages again (at-least-once)
+        msgs2 = self.poll("orders", "group-a", max_events=3)
+        assert len(msgs2) == 3, f"Expected 3 messages again, got {len(msgs2)}"
+        results["tests"].append({"name": "at_least_once", "pass": True})
+
+        # Test 3: Commit offset
+        self.commit_offset("orders", "group-a", msgs[0]["partition"], 0)
+        self.commit_offset("orders", "group-a", msgs[0]["partition"], 1)
+        committed = self.get_committed("orders", "group-a", msgs[0]["partition"])
+        assert committed == 1, f"Expected committed=1, got {committed}"
+        results["tests"].append({"name": "commit_offset", "pass": True})
+
+        # Test 4: Consumer groups
+        self.create_topic("logs")
+        for i in range(4):
+            self.publish("logs", {"log": i})
+        msgs_g1 = self.poll("logs", "group-1", max_events=10)
+        msgs_g2 = self.poll("logs", "group-2", max_events=10)
+        assert len(msgs_g1) == 4, f"Group-1 expected 4, got {len(msgs_g1)}"
+        assert len(msgs_g2) == 4, f"Group-2 expected 4, got {len(msgs_g2)}"
+        results["tests"].append({"name": "consumer_groups", "pass": True})
+
+        # Test 5: Fanout
+        received: List[Dict[str, Any]] = []
+        def ack_cb(msg: Dict[str, Any]) -> bool:
+            received.append(msg)
+            return True
+        self.subscribe("alerts", "group-fan", ack_cb)
+        count = self.fanout("alerts", {"level": "critical"})
+        assert count == 1, f"Expected 1 ack, got {count}"
+        assert len(received) == 1, f"Expected 1 received, got {len(received)}"
+        results["tests"].append({"name": "fanout", "pass": True})
+
+        # Test 6: Persistence
+        tmp_path = "/tmp/native_event_stream_test.json"
+        es2 = NativeEventStream(partitions=2, persist_path=tmp_path)
+        es2.create_topic("persist")
+        es2.publish("persist", {"k": "v"})
+        es2.commit_offset("persist", "g1", 0, 0)
+        es3 = NativeEventStream(partitions=2, persist_path=tmp_path)
+        assert es3.get_committed("persist", "g1", 0) == 0, "Persistence load failed"
+        os.remove(tmp_path)
+        results["tests"].append({"name": "persistence", "pass": True})
+
+        # Test 7: Thread safety
+        errors: List[str] = []
+        def worker():
+            try:
+                for i in range(50):
+                    self.publish("stress", {"n": i})
+                    self.poll("stress", f"g-{i}", max_events=1)
+            except Exception as e:
+                errors.append(str(e))
+        threads = [threading.Thread(target=worker) for _ in range(4)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+        results["tests"].append({"name": "thread_safety", "pass": len(errors) == 0, "errors": errors})
+
+        results["summary"] = f"{sum(1 for t in results['tests'] if t['pass'])}/{len(results['tests'])} tests passed"
+        results["topic_stats"] = self.topic_stats("events")
         return results
 
 
-class ConsumerGroup:
-    """Track consumer offsets within a group."""
-
-    def __init__(self, name: str, topics: List[str]) -> None:
-        self.name = name
-        self.topics = set(topics)
-        self.offsets: Dict[str, int] = {t: 0 for t in topics}
-        self._lock = threading.Lock()
-
-    def commit(self, topic: str, offset: int) -> None:
-        with self._lock:
-            self.offsets[topic] = max(self.offsets.get(topic, 0), offset + 1)
-
-    def get_offset(self, topic: str) -> int:
-        with self._lock:
-            return self.offsets.get(topic, 0)
-
-
-class EventStreamingEngine:
-    """Central pub/sub event streaming engine."""
-
-    def __init__(self, data_dir: str = "/var/lib/magnatrix/streaming") -> None:
-        self.data_dir = data_dir
-        os.makedirs(data_dir, exist_ok=True)
-        self._topics: Dict[str, TopicLog] = {}
-        self._subscribers: Dict[str, List[Callable[[Event], None]]] = {}
-        self._groups: Dict[str, ConsumerGroup] = {}
-        self._lock = threading.Lock()
-        self._running = True
-
-    def _get_topic(self, name: str) -> TopicLog:
-        with self._lock:
-            if name not in self._topics:
-                self._topics[name] = TopicLog(name, self.data_dir)
-            return self._topics[name]
-
-    def publish(self, event: Event) -> int:
-        topic = self._get_topic(event.topic)
-        offset = topic.append(event)
-        # Notify subscribers
-        for pattern, cbs in list(self._subscribers.items()):
-            if self._match(event.topic, pattern):
-                for cb in cbs:
-                    try:
-                        cb(event)
-                    except Exception:
-                        pass
-        return offset
-
-    def subscribe(self, pattern: str, callback: Callable[[Event], None]) -> None:
-        with self._lock:
-            self._subscribers.setdefault(pattern, []).append(callback)
-
-    def create_consumer_group(self, name: str, topics: List[str]) -> ConsumerGroup:
-        group = ConsumerGroup(name, topics)
-        self._groups[name] = group
-        return group
-
-    def consume(self, group_name: str, topic: str, max_events: int = 100) -> List[Event]:
-        group = self._groups.get(group_name)
-        if not group:
-            raise KeyError(f"Consumer group '{group_name}' not found")
-        if topic not in group.topics:
-            return []
-        topic_log = self._get_topic(topic)
-        offset = group.get_offset(topic)
-        events = topic_log.read(offset)
-        result = [e for _, e in events[:max_events]]
-        if events:
-            group.commit(topic, events[-1][0])
-        return result
-
-    def _match(self, topic: str, pattern: str) -> bool:
-        if pattern == "*":
-            return True
-        if pattern.endswith(".*"):
-            return topic.startswith(pattern[:-1])
-        return topic == pattern
-
-    def stream_window(self, topic: str, window_size_sec: float) -> List[Event]:
-        """Return events in the last N seconds."""
-        now = time.time()
-        topic_log = self._get_topic(topic)
-        events = topic_log.read(0)
-        return [e for _, e in events if now - e.timestamp <= window_size_sec]
-
-    def stats(self) -> Dict[str, Any]:
-        return {
-            "topics": len(self._topics),
-            "subscribers": sum(len(cbs) for cbs in self._subscribers.values()),
-            "consumer_groups": len(self._groups),
-        }
-
-    def shutdown(self) -> None:
-        self._running = False
-
-
-# Kernel bridge
-class StreamingKernelBridge:
-    def __init__(self, engine: EventStreamingEngine) -> None:
-        self.engine = engine
-
-    def handle_request(self, action: str, **kwargs) -> Dict[str, Any]:
-        if action == "publish":
-            ev = Event(topic=kwargs["topic"], payload=kwargs["payload"], key=kwargs.get("key", ""))
-            offset = self.engine.publish(ev)
-            return {"ok": True, "offset": offset}
-        elif action == "consume":
-            events = self.engine.consume(kwargs["group"], kwargs["topic"], kwargs.get("max", 100))
-            return {"ok": True, "events": [{"topic": e.topic, "payload": e.payload, "ts": e.timestamp} for e in events]}
-        elif action == "subscribe":
-            self.engine.subscribe(kwargs["pattern"], lambda ev: None)
-            return {"ok": True}
-        return {"ok": False, "error": "unknown action"}
-
-
-def demo() -> None:
-    print("=" * 60)
-    print("MAGNATRIX-OS  |  EVENT STREAMING ENGINE")
-    print("=" * 60)
-    engine = EventStreamingEngine(data_dir="/tmp/magnatrix-streaming")
-    # Publish
-    for i in range(5):
-        engine.publish(Event(topic="agent.logs", payload={"level": "info", "msg": f"event-{i}"}))
-    # Consume
-    group = engine.create_consumer_group("log-processor", ["agent.logs"])
-    batch = engine.consume("log-processor", "agent.logs")
-    print(f"Published 5 events, consumed {len(batch)}")
-    print(f"First event: {batch[0].payload if batch else None}")
-    # Window
-    window = engine.stream_window("agent.logs", 1.0)
-    print(f"Events in last 1s: {len(window)}")
-    print(f"Stats: {engine.stats()}")
-    engine.shutdown()
-    print("=" * 60)
-
-
 if __name__ == "__main__":
-    demo()
+    stream = NativeEventStream(partitions=4)
+    print(stream.run())

@@ -8,8 +8,7 @@ class RealUpdate:
         try:
             branch = subprocess.check_output(["git", "branch", "--show-current"], text=True).strip()
             files = subprocess.check_output(["git", "status", "--short"], text=True)
-            count = len([l for l in files.split("
-") if l.strip()])
+            count = len([l for l in files.split("\n") if l.strip()])
             return {"branch": branch, "local_changes": count, "status": "ok"}
         except:
             return {"status": "not_git"}

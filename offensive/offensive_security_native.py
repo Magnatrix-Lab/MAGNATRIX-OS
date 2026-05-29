@@ -97,7 +97,7 @@ class XSSChecker:
     PAYLOADS = [
         "<script>alert(1)</script>",
         "<img src=x onerror=alert(1)>",
-        ""><script>alert(1)</script>",
+        '"><script>alert(1)</script>',
     ]
 
     def test_url(self, url: str) -> List[Vulnerability]:
@@ -158,8 +158,7 @@ class OffensiveSecurityNative:
             lines.append(f"- **Evidence**: {v.evidence[:100]}...")
             lines.append(f"- **Remediation**: {v.remediation}")
             lines.append("")
-        return "
-".join(lines)
+        return "\n".join(lines)
 
 
 def _demo():
