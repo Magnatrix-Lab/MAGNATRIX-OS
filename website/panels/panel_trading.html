@@ -3,276 +3,356 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>MAGNATRIX Trading Desk</title>
+<title>MAGNATRIX Trading Command Center</title>
 <style>
 :root {
-  --bg: #0a0a0f; --bg2: #111118; --bg3: #1a1a24;
+  --bg: #0a0a0f; --bg2: #111118; --bg3: #1a1a24; --bg4: #22222e;
   --text: #e8e8f0; --text2: #8888a0; --text3: #555570;
   --cyan: #00e5ff; --green: #69f0ae; --red: #ff5252;
   --orange: #ffab40; --purple: #b388ff; --blue: #448aff;
+  --yellow: #ffd740; --pink: #ff80ab;
   --font-mono: 'SF Mono', 'Fira Code', monospace;
   --border: rgba(255,255,255,0.06);
 }
 * { margin:0; padding:0; box-sizing:border-box; }
-body { background:var(--bg); color:var(--text); font-family:var(--font-mono); font-size:13px; height:100vh; overflow:hidden; }
-.app { display:grid; grid-template-rows:48px 1fr; height:100vh; }
+body { background:var(--bg); color:var(--text); font-family:var(--font-mono); font-size:12px; height:100vh; overflow:hidden; }
+.app { display:grid; grid-template-rows:44px 1fr; height:100vh; }
 
 /* Top bar */
-.topbar { display:flex; align-items:center; justify-content:space-between; padding:0 20px; background:var(--bg2); border-bottom:1px solid var(--border); }
-.topbar .title { font-size:14px; font-weight:600; display:flex; align-items:center; gap:8px; }
-.topbar .status { display:flex; gap:12px; align-items:center; }
-.tag { padding:2px 10px; border-radius:4px; font-size:11px; font-weight:600; }
+.topbar { display:flex; align-items:center; justify-content:space-between; padding:0 16px; background:var(--bg2); border-bottom:1px solid var(--border); }
+.topbar .title { font-size:13px; font-weight:600; display:flex; align-items:center; gap:8px; }
+.topbar .status { display:flex; gap:10px; align-items:center; }
+.tag { padding:2px 8px; border-radius:4px; font-size:10px; font-weight:600; }
 .tag-live { background:rgba(105,240,174,0.15); color:var(--green); }
 .tag-paper { background:rgba(255,171,64,0.15); color:var(--orange); }
+.tag-beta { background:rgba(179,136,255,0.15); color:var(--purple); }
 
-/* Main grid */
-.main { display:grid; grid-template-columns:1fr 300px; grid-template-rows:120px 1fr 180px; gap:1px; background:var(--border); }
-.panel { background:var(--bg); padding:12px; overflow:hidden; display:flex; flex-direction:column; }
+/* Main layout */
+.main { display:grid; grid-template-columns:1fr 320px; grid-template-rows:110px 1fr; gap:1px; background:var(--border); }
+.panel { background:var(--bg); padding:10px; overflow:auto; display:flex; flex-direction:column; }
+.panel::-webkit-scrollbar { width:4px; }
+.panel::-webkit-scrollbar-thumb { background:var(--bg4); border-radius:2px; }
 
 /* Stats row */
-.stats { grid-column:1 / -1; display:grid; grid-template-columns:repeat(4,1fr); gap:12px; }
-.stat-box { background:var(--bg2); border:1px solid var(--border); border-radius:8px; padding:12px; }
-.stat-label { font-size:11px; color:var(--text2); text-transform:uppercase; margin-bottom:6px; }
-.stat-value { font-size:22px; font-weight:700; }
-.stat-delta { font-size:11px; margin-top:4px; }
-.up { color:var(--green); } .down { color:var(--red); }
+.stats { grid-column:1 / -1; display:grid; grid-template-columns:repeat(6,1fr); gap:10px; }
+.stat-box { background:var(--bg2); border:1px solid var(--border); border-radius:6px; padding:10px; }
+.stat-label { font-size:10px; color:var(--text2); text-transform:uppercase; margin-bottom:4px; letter-spacing:0.5px; }
+.stat-value { font-size:18px; font-weight:700; }
+.stat-delta { font-size:10px; margin-top:2px; }
+.up { color:var(--green); } .down { color:var(--red); } .warn { color:var(--orange); }
 
-/* Chart area */
-.chart-area { position:relative; }
-.chart-title { font-size:12px; color:var(--text2); margin-bottom:8px; display:flex; justify-content:space-between; }
-#priceChart { width:100%; height:calc(100% - 30px); }
+/* Left panel: module grid */
+.modules { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; }
+.mod-card { background:var(--bg2); border:1px solid var(--border); border-radius:8px; padding:10px; position:relative; }
+.mod-card:hover { border-color:rgba(0,229,255,0.2); }
+.mod-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; }
+.mod-name { font-size:11px; font-weight:600; color:var(--text); }
+.mod-status { width:6px; height:6px; border-radius:50%; }
+.mod-status.on { background:var(--green); box-shadow:0 0 6px var(--green); }
+.mod-status.off { background:var(--text3); }
+.mod-body { font-size:10px; color:var(--text2); line-height:1.5; }
+.mod-body .row { display:flex; justify-content:space-between; padding:2px 0; border-bottom:1px solid rgba(255,255,255,0.03); }
+.mod-body .row:last-child { border-bottom:none; }
+.mod-body .key { color:var(--text3); }
+.mod-body .val { color:var(--text); font-family:var(--font-mono); }
+.mod-actions { display:flex; gap:4px; margin-top:8px; }
+.btn { padding:3px 8px; border-radius:4px; font-size:10px; border:none; cursor:pointer; font-family:var(--font-mono); }
+.btn-cyan { background:rgba(0,229,255,0.15); color:var(--cyan); }
+.btn-green { background:rgba(105,240,174,0.15); color:var(--green); }
+.btn-red { background:rgba(255,82,82,0.15); color:var(--red); }
+.btn-orange { background:rgba(255,171,64,0.15); color:var(--orange); }
+.btn-purple { background:rgba(179,136,255,0.15); color:var(--purple); }
+.btn:hover { filter:brightness(1.2); }
 
-/* Order book */
-.orderbook { display:grid; grid-template-rows:auto 1fr; }
-.ob-header { display:flex; justify-content:space-between; font-size:11px; color:var(--text2); margin-bottom:8px; }
-.ob-rows { display:flex; flex-direction:column; gap:2px; overflow:hidden; }
-.ob-row { display:grid; grid-template-columns:1fr 1fr 60px; gap:8px; font-size:12px; padding:2px 4px; border-radius:3px; }
-.ob-row:hover { background:rgba(255,255,255,0.03); }
-.ob-bid { color:var(--green); }
-.ob-ask { color:var(--red); }
-.ob-bar { height:100%; background:currentColor; opacity:0.15; border-radius:2px; }
-.ob-depth { display:flex; align-items:center; }
+/* Right panel: log + alerts */
+.log-panel { display:flex; flex-direction:column; gap:8px; }
+.log-box { background:var(--bg2); border:1px solid var(--border); border-radius:6px; flex:1; overflow:hidden; display:flex; flex-direction:column; }
+.log-title { font-size:10px; color:var(--text2); text-transform:uppercase; padding:8px 10px; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; }
+.log-content { flex:1; overflow:auto; padding:6px 10px; font-size:10px; line-height:1.6; }
+.log-line { display:flex; gap:6px; padding:1px 0; }
+.log-time { color:var(--text3); min-width:50px; }
+.log-level { min-width:40px; font-size:9px; text-transform:uppercase; }
+.level-info { color:var(--cyan); } .level-decision { color:var(--purple); }
+.level-trade { color:var(--green); } .level-risk { color:var(--orange); }
+.level-error { color:var(--red); } .level-alert { color:var(--yellow); }
+.log-msg { color:var(--text); }
 
-/* Trades / Arb */
-.trades-title { font-size:12px; color:var(--text2); margin-bottom:8px; }
-.trade-row { display:grid; grid-template-columns:80px 1fr 1fr 80px 70px; gap:8px; font-size:11px; padding:4px 0; border-bottom:1px solid var(--border); }
-.trade-header { color:var(--text2); font-size:10px; text-transform:uppercase; }
-.trade-profit { font-weight:700; }
-
-/* Canvas styling */
-canvas { width:100%; height:100%; }
-
-/* Scrollbar */
-::-webkit-scrollbar { width:4px; }
-::-webkit-scrollbar-thumb { background:var(--text3); border-radius:2px; }
+/* Alert banner */
+.alert-banner { background:var(--bg2); border:1px solid var(--border); border-radius:6px; padding:8px; }
+.alert-item { display:flex; align-items:center; gap:8px; padding:4px 0; font-size:10px; border-bottom:1px solid rgba(255,255,255,0.03); }
+.alert-item:last-child { border-bottom:none; }
+.alert-dot { width:6px; height:6px; border-radius:50%; flex-shrink:0; }
+.alert-dot.critical { background:var(--red); box-shadow:0 0 6px var(--red); }
+.alert-dot.high { background:var(--orange); box-shadow:0 0 6px var(--orange); }
+.alert-dot.moderate { background:var(--yellow); }
+.alert-text { flex:1; }
+.alert-edge { color:var(--green); font-weight:600; }
 </style>
 </head>
 <body>
 <div class="app">
   <div class="topbar">
-    <div class="title">📈 MAGNATRIX Trading Desk <span style="color:var(--text3);font-weight:400;">| HFT Engine v2.0</span></div>
+    <div class="title">
+      <span style="color:var(--cyan)">◆</span>
+      MAGNATRIX Trading Command Center
+      <span class="tag tag-live">LIVE</span>
+      <span class="tag tag-paper">PAPER</span>
+      <span class="tag tag-beta">v0.9.5</span>
+    </div>
     <div class="status">
-      <span class="tag tag-live">● C++ Engine Active</span>
-      <span class="tag tag-paper">○ Paper Trading</span>
-      <span style="color:var(--text3);font-size:11px;">Latency: <span id="latency" style="color:var(--cyan)">12μs</span></span>
+      <span style="color:var(--text3)">C++ HFT: <span style="color:var(--green)">ON</span></span>
+      <span style="color:var(--text3)">Rust Crypto: <span style="color:var(--green)">ON</span></span>
+      <span style="color:var(--text3)">Tri-Lang: <span style="color:var(--green)">ON</span></span>
+      <span style="color:var(--text3)">Native Files: <span style="color:var(--cyan)">195</span></span>
     </div>
   </div>
   <div class="main">
-    <div class="stats panel">
+    <div class="stats">
       <div class="stat-box">
-        <div class="stat-label">Portfolio Value</div>
-        <div class="stat-value" style="color:var(--green)">$<span id="portfolio">124,892</span></div>
-        <div class="stat-delta up">▲ +$<span id="pnl">1,245</span> (<span id="pnlpct">1.01</span>%)</div>
+        <div class="stat-label">Equity</div>
+        <div class="stat-value" style="color:var(--cyan)">$102,847</div>
+        <div class="stat-delta up">+2.85% (+$2,847)</div>
       </div>
       <div class="stat-box">
         <div class="stat-label">Open Positions</div>
-        <div class="stat-value" style="color:var(--cyan)"><span id="positions">7</span></div>
-        <div class="stat-delta up">▲ <span id="newpos">2</span> new today</div>
+        <div class="stat-value" style="color:var(--purple)">7</div>
+        <div class="stat-delta">3 prediction / 2 spot / 2 arb</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-label">Drawdown</div>
+        <div class="stat-value" style="color:var(--green)">3.2%</div>
+        <div class="stat-delta">Circuit: 15% max</div>
       </div>
       <div class="stat-box">
         <div class="stat-label">Today's P&L</div>
-        <div class="stat-value" style="color:var(--green)">+$<span id="daypnl">892</span></div>
-        <div class="stat-delta up">▲ <span id="ntrades">12</span> trades</div>
+        <div class="stat-value" style="color:var(--green)">+$1,240</div>
+        <div class="stat-delta">Win rate: 71% (5/7)</div>
       </div>
       <div class="stat-box">
-        <div class="stat-label">Avg Tick Latency</div>
-        <div class="stat-value" style="color:var(--purple)"><span id="avglat">12</span>μs</div>
-        <div class="stat-delta up">▲ C++ Hot Path</div>
+        <div class="stat-label">Sharpe</div>
+        <div class="stat-value" style="color:var(--blue)">1.84</div>
+        <div class="stat-delta">Sortino: 2.31</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-label">Edge Alerts</div>
+        <div class="stat-value" style="color:var(--orange)">3</div>
+        <div class="stat-delta">2 very_high / 1 high</div>
       </div>
     </div>
-    <div class="panel chart-area">
-      <div class="chart-title"><span>📊 BTCUSDT Price Action</span><span style="color:var(--text3)">1m • Real-time</span></div>
-      <canvas id="priceChart"></canvas>
-    </div>
-    <div class="panel orderbook">
-      <div class="ob-header"><span>Order Book (BTCUSDT)</span><span id="spread" style="color:var(--cyan)">Spread: 2.50</span></div>
-      <div class="ob-rows" id="obRows"></div>
-    </div>
-    <div class="panel" style="grid-column:1/-1;">
-      <div class="trades-title">🔥 Arbitrage Scanner — Cross-Exchange Opportunities</div>
-      <div class="trade-row trade-header">
-        <span>Pair</span><span>Buy @</span><span>Sell @</span><span>Profit</span><span>Status</span>
+
+    <div class="panel">
+      <div class="modules">
+        <!-- Prediction Market -->
+        <div class="mod-card">
+          <div class="mod-header">
+            <span class="mod-name" style="color:var(--cyan)">📊 Prediction Market</span>
+            <span class="mod-status on"></span>
+          </div>
+          <div class="mod-body">
+            <div class="row"><span class="key">Active</span><span class="val">BTC-UP, ETH-UP, SPX-UP</span></div>
+            <div class="row"><span class="key">Edge</span><span class="val" style="color:var(--green)">+12.4% (BTC)</span></div>
+            <div class="row"><span class="key">Kelly</span><span class="val">$2,400 (0.5x)</span></div>
+            <div class="row"><span class="key">Risk Gate</span><span class="val" style="color:var(--green)">PASS 5/5</span></div>
+          </div>
+          <div class="mod-actions">
+            <button class="btn btn-cyan">Scan</button>
+            <button class="btn btn-green">Buy YES</button>
+            <button class="btn btn-red">Buy NO</button>
+          </div>
+        </div>
+
+        <!-- Market Scanner -->
+        <div class="mod-card">
+          <div class="mod-header">
+            <span class="mod-name" style="color:var(--purple)">🔍 Market Scanner</span>
+            <span class="mod-status on"></span>
+          </div>
+          <div class="mod-body">
+            <div class="row"><span class="key">Cycles</span><span class="val">1,247</span></div>
+            <div class="row"><span class="key">Watchdog</span><span class="val" style="color:var(--green)">Healthy</span></div>
+            <div class="row"><span class="key">Discrepancies</span><span class="val">3 found</span></div>
+            <div class="row"><span class="key">Best Edge</span><span class="val" style="color:var(--green)">24.7 bps</span></div>
+          </div>
+          <div class="mod-actions">
+            <button class="btn btn-purple">Start Loop</button>
+            <button class="btn btn-cyan">Config</button>
+          </div>
+        </div>
+
+        <!-- Risk Engine -->
+        <div class="mod-card">
+          <div class="mod-header">
+            <span class="mod-name" style="color:var(--orange)">🛡 Risk Engine</span>
+            <span class="mod-status on"></span>
+          </div>
+          <div class="mod-body">
+            <div class="row"><span class="key">Portfolio Heat</span><span class="val">7.2%</span></div>
+            <div class="row"><span class="key">Daily Loss</span><span class="val" style="color:var(--green)">-$120 / -$3,000</span></div>
+            <div class="row"><span class="key">Corr Guard</span><span class="val">BTC/ETH blocked</span></div>
+            <div class="row"><span class="key">Stop Loss</span><span class="val">2 ATR trailing</span></div>
+          </div>
+          <div class="mod-actions">
+            <button class="btn btn-orange">Audit</button>
+            <button class="btn btn-cyan">Reset</button>
+          </div>
+        </div>
+
+        <!-- Backtest Engine -->
+        <div class="mod-card">
+          <div class="mod-header">
+            <span class="mod-name" style="color:var(--blue)">📈 Backtest</span>
+            <span class="mod-status off"></span>
+          </div>
+          <div class="mod-body">
+            <div class="row"><span class="key">Strategy</span><span class="val">TrendFollow_v3</span></div>
+            <div class="row"><span class="key">Walk-Forward</span><span class="val">3 windows</span></div>
+            <div class="row"><span class="key">Slippage</span><span class="val">5 bps fixed</span></div>
+            <div class="row"><span class="key">Max DD</span><span class="val" style="color:var(--red)">8.4%</span></div>
+          </div>
+          <div class="mod-actions">
+            <button class="btn btn-cyan">Run</button>
+            <button class="btn btn-purple">Optimize</button>
+          </div>
+        </div>
+
+        <!-- Execution Engine -->
+        <div class="mod-card">
+          <div class="mod-header">
+            <span class="mod-name" style="color:var(--green)">⚡ Execution</span>
+            <span class="mod-status on"></span>
+          </div>
+          <div class="mod-body">
+            <div class="row"><span class="key">Orders</span><span class="val">12 total</span></div>
+            <div class="row"><span class="key">Fill Rate</span><span class="val" style="color:var(--green)">92%</span></div>
+            <div class="row"><span class="key">Avg Slippage</span><span class="val">2.3 bps</span></div>
+            <div class="row"><span class="key">Algo</span><span class="val">TWAP (3 slices)</span></div>
+          </div>
+          <div class="mod-actions">
+            <button class="btn btn-green">Pending</button>
+            <button class="btn btn-red">Cancel All</button>
+          </div>
+        </div>
+
+        <!-- Markov Scalper -->
+        <div class="mod-card">
+          <div class="mod-header">
+            <span class="mod-name" style="color:var(--pink)">🎯 Markov Scalper</span>
+            <span class="mod-status on"></span>
+          </div>
+          <div class="mod-body">
+            <div class="row"><span class="key">Regime</span><span class="val" style="color:var(--green)">BULL</span></div>
+            <div class="row"><span class="key">MC Prob</span><span class="val">68.4%</span></div>
+            <div class="row"><span class="key">Pattern</span><span class="val">FVG Bullish</span></div>
+            <div class="row"><span class="key">Confidence</span><span class="val" style="color:var(--green)">0.82</span></div>
+          </div>
+          <div class="mod-actions">
+            <button class="btn btn-cyan">Signal</button>
+            <button class="btn btn-green">Execute</button>
+          </div>
+        </div>
+
+        <!-- Fastloop Arbitrage -->
+        <div class="mod-card">
+          <div class="mod-header">
+            <span class="mod-name" style="color:var(--yellow)">🔄 Fastloop</span>
+            <span class="mod-status on"></span>
+          </div>
+          <div class="mod-body">
+            <div class="row"><span class="key">Exchanges</span><span class="val">Binance, Coinbase</span></div>
+            <div class="row"><span class="key">Oracle</span><span class="val">Chainlink</span></div>
+            <div class="row"><span class="key">CLOB</span><span class="val">Polymarket</span></div>
+            <div class="row"><span class="key">Cycle</span><span class="val" style="color:var(--green)">847ms</span></div>
+          </div>
+          <div class="mod-actions">
+            <button class="btn btn-cyan">Cycle</button>
+            <button class="btn btn-orange">Config</button>
+          </div>
+        </div>
+
+        <!-- Behavioral Signature -->
+        <div class="mod-card">
+          <div class="mod-header">
+            <span class="mod-name" style="color:var(--red)">👤 Behavioral</span>
+            <span class="mod-status on"></span>
+          </div>
+          <div class="mod-body">
+            <div class="row"><span class="key">Target</span><span class="val">Meridian-A</span></div>
+            <div class="row"><span class="key">Overlap</span><span class="val">7/9 opposite</span></div>
+            <div class="row"><span class="key">Tags</span><span class="val">consensus_chaser</span></div>
+            <div class="row"><span class="key">Win Rate</span><span class="val" style="color:var(--red)">33%</span></div>
+          </div>
+          <div class="mod-actions">
+            <button class="btn btn-cyan">Analyze</button>
+            <button class="btn btn-purple">Clusters</button>
+          </div>
+        </div>
+
+        <!-- Audit Trail -->
+        <div class="mod-card">
+          <div class="mod-header">
+            <span class="mod-name" style="color:var(--text2)">📋 Audit Trail</span>
+            <span class="mod-status on"></span>
+          </div>
+          <div class="mod-body">
+            <div class="row"><span class="key">Entries</span><span class="val">1,847</span></div>
+            <div class="row"><span class="key">Integrity</span><span class="val" style="color:var(--green)">OK</span></div>
+            <div class="row"><span class="key">Trades</span><span class="val">42</span></div>
+            <div class="row"><span class="key">Errors</span><span class="val" style="color:var(--green)">0</span></div>
+          </div>
+          <div class="mod-actions">
+            <button class="btn btn-cyan">Verify</button>
+            <button class="btn btn-purple">Export</button>
+          </div>
+        </div>
       </div>
-      <div id="arbRows"></div>
+    </div>
+
+    <div class="panel log-panel">
+      <div class="log-box">
+        <div class="log-title">Live Audit Trail <span style="color:var(--text3)">NDJSON</span></div>
+        <div class="log-content" id="auditLog">
+          <div class="log-line"><span class="log-time">14:32:01</span><span class="log-level level-decision">DECISION</span><span class="log-msg">BTC-UP: edge=12.4%, buy YES 24 contracts @ 58¢</span></div>
+          <div class="log-line"><span class="log-time">14:32:01</span><span class="log-level level-risk">RISK</span><span class="log-msg">Kelly=0.048, spread=3¢, vol=1200, cat=1/3, DD=3.2%</span></div>
+          <div class="log-line"><span class="log-time">14:32:01</span><span class="log-level level-trade">TRADE</span><span class="log-msg">Paper: BUY YES 24 BTC-UP @ 58¢ ($1,392)</span></div>
+          <div class="log-line"><span class="log-time">14:31:45</span><span class="log-level level-alert">ALERT</span><span class="log-msg">Edge: BTC-UP very_high (12.4%) → risk_passed</span></div>
+          <div class="log-line"><span class="log-time">14:31:44</span><span class="log-level level-info">INFO</span><span class="log-msg">Scanner cycle #1,247: 3 discrepancies found</span></div>
+          <div class="log-line"><span class="log-time">14:31:20</span><span class="log-level level-decision">DECISION</span><span class="log-msg">ETH-UP: edge=5.1%, moderate, skip (below threshold)</span></div>
+          <div class="log-line"><span class="log-time">14:30:55</span><span class="log-level level-trade">TRADE</span><span class="log-msg">Paper: BUY NO 5 SPX-UP @ 45¢ ($225)</span></div>
+          <div class="log-line"><span class="log-time">14:30:12</span><span class="log-level level-risk">RISK</span><span class="log-msg">Daily loss limit: -$120 / -$3,000 (4%)</span></div>
+          <div class="log-line"><span class="log-time">14:29:48</span><span class="log-level level-info">INFO</span><span class="log-msg">Markov regime: BTC → BULL (p=0.85)</span></div>
+          <div class="log-line"><span class="log-time">14:29:30</span><span class="log-level level-alert">ALERT</span><span class="log-msg">Fastloop: Binance/Coinbase discrepancy 24.7 bps</span></div>
+        </div>
+      </div>
+
+      <div class="alert-banner">
+        <div style="font-size:10px; color:var(--text2); text-transform:uppercase; margin-bottom:6px; letter-spacing:0.5px;">Active Edge Alerts</div>
+        <div class="alert-item">
+          <span class="alert-dot critical"></span>
+          <span class="alert-text">BTC-UP: edge <span class="alert-edge">+12.4%</span> (YES 24 contracts)</span>
+        </div>
+        <div class="alert-item">
+          <span class="alert-dot high"></span>
+          <span class="alert-text">ETH-DOWN: edge <span class="alert-edge">-8.2%</span> (NO 12 contracts)</span>
+        </div>
+        <div class="alert-item">
+          <span class="alert-dot moderate"></span>
+          <span class="alert-text">SPX-UP: edge <span class="alert-edge">+5.1%</span> (moderate, pending)</span>
+        </div>
+      </div>
     </div>
   </div>
 </div>
 
 <script>
-/* ── Price Chart ── */
-const canvas = document.getElementById('priceChart');
-const ctx = canvas.getContext('2d');
-let priceHistory = [];
-let lastPrice = 50313.75;
-
-function resizeCanvas() {
-  const dpr = window.devicePixelRatio || 1;
-  const rect = canvas.getBoundingClientRect();
-  canvas.width = rect.width * dpr;
-  canvas.height = rect.height * dpr;
-  ctx.scale(dpr, dpr);
-}
-window.addEventListener('resize', resizeCanvas);
-resizeCanvas();
-
-function genCandle() {
-  const open = lastPrice;
-  const volatility = open * 0.001;
-  const close = open + (Math.random() - 0.48) * volatility;
-  const high = Math.max(open, close) + Math.random() * volatility * 0.5;
-  const low = Math.min(open, close) - Math.random() * volatility * 0.5;
-  lastPrice = close;
-  return { open, high, low, close, time: Date.now() };
-}
-
-for (let i = 0; i < 60; i++) priceHistory.push(genCandle());
-
-function drawChart() {
-  const w = canvas.width / (window.devicePixelRatio || 1);
-  const h = canvas.height / (window.devicePixelRatio || 1);
-  ctx.clearRect(0, 0, w, h);
-
-  // Grid
-  ctx.strokeStyle = 'rgba(255,255,255,0.03)';
-  ctx.lineWidth = 1;
-  for (let i = 0; i < 5; i++) {
-    const y = h * i / 4;
-    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke();
+// Auto-refresh stats
+setInterval(() => {
+  const now = new Date();
+  const timeStr = now.toTimeString().split(' ')[0];
+  const log = document.getElementById('auditLog');
+  if (log && log.children.length > 20) {
+    log.removeChild(log.firstChild);
   }
-
-  const prices = priceHistory.map(c => [c.low, c.high, c.open, c.close]).flat();
-  const minP = Math.min(...prices) * 0.9998;
-  const maxP = Math.max(...prices) * 1.0002;
-  const range = maxP - minP;
-  const barW = w / priceHistory.length * 0.7;
-  const step = w / priceHistory.length;
-
-  priceHistory.forEach((c, i) => {
-    const x = i * step + step / 2;
-    const yHigh = h - (c.high - minP) / range * h;
-    const yLow = h - (c.low - minP) / range * h;
-    const yOpen = h - (c.open - minP) / range * h;
-    const yClose = h - (c.close - minP) / range * h;
-    const isUp = c.close >= c.open;
-
-    ctx.fillStyle = isUp ? '#69f0ae' : '#ff5252';
-    ctx.strokeStyle = isUp ? '#69f0ae' : '#ff5252';
-
-    // Wick
-    ctx.beginPath(); ctx.moveTo(x, yHigh); ctx.lineTo(x, yLow); ctx.stroke();
-    // Body
-    const bodyTop = Math.min(yOpen, yClose);
-    const bodyH = Math.abs(yClose - yOpen) || 1;
-    ctx.fillRect(x - barW / 2, bodyTop, barW, bodyH);
-  });
-
-  // Current price line
-  const yLast = h - (lastPrice - minP) / range * h;
-  ctx.strokeStyle = '#00e5ff'; ctx.setLineDash([4, 4]); ctx.lineWidth = 1;
-  ctx.beginPath(); ctx.moveTo(0, yLast); ctx.lineTo(w, yLast); ctx.stroke();
-  ctx.setLineDash([]);
-
-  // Price label
-  ctx.fillStyle = '#00e5ff'; ctx.font = '11px ' + getComputedStyle(document.body).fontFamily;
-  ctx.fillText(lastPrice.toFixed(2), w - 70, yLast - 5);
-}
-
-/* ── Order Book ── */
-function renderOrderBook() {
-  const mid = lastPrice;
-  const rows = document.getElementById('obRows');
-  let html = '';
-  for (let i = 5; i >= 1; i--) {
-    const price = mid - i * 2.5 + (Math.random() - 0.5);
-    const size = (Math.random() * 4 + 0.5).toFixed(3);
-    const depthPct = Math.random() * 80 + 10;
-    html += `<div class="ob-row ob-bid">
-      <span>${price.toFixed(2)}</span>
-      <span>${size}</span>
-      <div class="ob-depth"><div class="ob-bar" style="width:${depthPct}%"></div></div>
-    </div>`;
-  }
-  html += `<div style="text-align:center;padding:4px 0;font-size:11px;color:#00e5ff;font-weight:700;">${mid.toFixed(2)}</div>`;
-  for (let i = 1; i <= 5; i++) {
-    const price = mid + i * 2.5 + (Math.random() - 0.5);
-    const size = (Math.random() * 4 + 0.5).toFixed(3);
-    const depthPct = Math.random() * 80 + 10;
-    html += `<div class="ob-row ob-ask">
-      <span>${price.toFixed(2)}</span>
-      <span>${size}</span>
-      <div class="ob-depth"><div class="ob-bar" style="width:${depthPct}%"></div></div>
-    </div>`;
-  }
-  rows.innerHTML = html;
-}
-
-/* ── Arbitrage ── */
-const arbData = [
-  { pair: 'BTCUSDT', buy: 'Binance $50,245', sell: 'Bybit $50,312', profit: '+5.3 bps', status: 'Active', color: 'var(--green)' },
-  { pair: 'ETHUSDT', buy: 'OKX $3,008', sell: 'Binance $3,015', profit: '+3.1 bps', status: 'Active', color: 'var(--green)' },
-  { pair: 'SOLUSDT', buy: 'Bybit $142.10', sell: 'Binance $142.30', profit: '+1.8 bps', status: 'Marginal', color: 'var(--orange)' },
-  { pair: 'DOGEUSDT', buy: '—', sell: '—', profit: '—', status: 'None', color: 'var(--text3)' },
-];
-function renderArb() {
-  const rows = document.getElementById('arbRows');
-  rows.innerHTML = arbData.map(a => `
-    <div class="trade-row">
-      <span style="font-weight:600">${a.pair}</span>
-      <span style="color:var(--text2)">${a.buy}</span>
-      <span style="color:var(--text2)">${a.sell}</span>
-      <span class="trade-profit" style="color:${a.color}">${a.profit}</span>
-      <span style="color:${a.color};font-size:11px">● ${a.status}</span>
-    </div>
-  `).join('');
-}
-
-/* ── Live Updates ── */
-function update() {
-  priceHistory.push(genCandle());
-  if (priceHistory.length > 60) priceHistory.shift();
-  drawChart();
-  renderOrderBook();
-
-  // Update stats with jitter
-  const jitter = (Math.random() - 0.5) * 200;
-  document.getElementById('portfolio').textContent = (124892 + jitter).toLocaleString('en', {minimumFractionDigits:0, maximumFractionDigits:0});
-  document.getElementById('latency').textContent = (10 + Math.random() * 8 | 0) + 'μs';
-
-  // Random arb profit updates
-  arbData.forEach(a => {
-    if (a.status === 'Active') {
-      const base = parseFloat(a.profit);
-      if (!isNaN(base)) {
-        const newVal = (base + (Math.random() - 0.5) * 0.5).toFixed(1);
-        a.profit = (newVal >= 0 ? '+' : '') + newVal + ' bps';
-      }
-    }
-  });
-  renderArb();
-}
-
-renderArb();
-setInterval(update, 1000);
+}, 5000);
 </script>
 </body>
 </html>
