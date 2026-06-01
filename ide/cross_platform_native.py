@@ -27,12 +27,10 @@ class CrossPlatformIDE:
         if path not in self.buffers:
             try:
                 with open(path) as f:
-                    self.buffers[path] = f.read().split('
-')
+                    self.buffers[path] = f.read().split('\n')
             except:
                 self.buffers[path] = []
-        return '
-'.join(self.buffers[path])
+        return '\n'.join(self.buffers[path])
 
     def edit_file(self, path: str, line: int, content: str) -> None:
         if path not in self.buffers:

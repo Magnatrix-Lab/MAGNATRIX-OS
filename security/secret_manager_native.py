@@ -62,7 +62,7 @@ class SecretManager:
                 line = line.strip()
                 if line and not line.startswith('#') and '=' in line:
                     k, v = line.split('=', 1)
-                    self.store(k.strip(), v.strip().strip('"''))
+                    self.store(k.strip(), v.strip().strip('"'))
 
     def audit_log(self, limit: int = 100) -> List[Dict[str, Any]]:
         with self._lock:
