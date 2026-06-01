@@ -1,651 +1,404 @@
-#!/usr/bin/env python3
-"""
-MAGNATRIX-OS Layer: AI — Meta Agent Framework
-File: ai/meta_agent_native.py
-Pattern: AMATI-PELAJARI-TIRU dari matthiasgeihs/agent
-
-Native pure-Python reimplementation of:
-  - Minimalist agent framework: everything prompt-driven
-  - XML tool protocol: <TOOL: TOOL_NAME>args</TOOL>
-  - Variable JSON system: all prompts stored as JSON arrays ["content"]
-  - Pluggable: tool_detection, end_detection, memory_management
-  - StreamingLogger: real-time file + stdout output
-  - Agent optimization via variable variations testing
-  - Directory-based agent organization
-
-Zero external dependencies. Pure Python standard library.
-"""
+# meta_agent_native.py
+# AMATI-PELAJARI-TIRU: matthiasgeihs/agent (Prompt-Driven Agent Optimization)
+# XML tool protocol, JSON variable system, streaming logger, agent optimizer.
+# Pure Python, standard library only.
 
 from __future__ import annotations
-
-import importlib.util
-import inspect
-import json
-import os
-import re
-import sys
-import time
-import traceback
-from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, List, Optional, Tuple, Type, Union
-
-# LLM bridge for real backend integration
-from ai.mock_to_unified_bridge import MockToUnifiedBridge
-
+import re, json, os, time, dataclasses, typing, hashlib, random
+from typing import List, Dict, Optional, Callable, Any, Tuple
 
 # ---------------------------------------------------------------------------
-# 1.  STREAMING LOGGER — real-time tee stdout + file
-# ---------------------------------------------------------------------------
-
-class StreamingLogger:
-    """Logger yang writes to both file dan stdout in real-time."""
-
-    def __init__(self, log_path: str, mode: str = "w") -> None:
-        self.terminal = sys.stdout
-        self.log_file = open(log_path, mode)
-        self._start_time = time.time()
-
-    def write(self, message: str) -> None:
-        self.terminal.write(message)
-        self.log_file.write(message)
-        self.terminal.flush()
-        self.log_file.flush()
-
-    def flush(self) -> None:
-        self.terminal.flush()
-        self.log_file.flush()
-
-    def close(self) -> None:
-        self.log_file.close()
-
-    def __enter__(self) -> StreamingLogger:
-        return self
-
-    def __exit__(self, *args: Any) -> None:
-        self.close()
-
-
-# ---------------------------------------------------------------------------
-# 2.  VARIABLE STORE — JSON array prompt management
+# Variable Store (JSON array prompt management)
 # ---------------------------------------------------------------------------
 
 class VariableStore:
-    """
-    Manages runtime variables dari JSON array format.
-    Each file: ["content"]  (bukan dict)
-    """
+    """All prompts stored as JSON arrays ["content"]."""
 
-    def __init__(self, var_dir: str) -> None:
-        self.var_dir = var_dir
-        self._cache: Dict[str, str] = {}
-        self._load_all()
+    def __init__(self, base_dir: str = "variables"):
+        self.base_dir = base_dir
+        os.makedirs(base_dir, exist_ok=True)
 
-    def _load_all(self) -> None:
-        if not os.path.isdir(self.var_dir):
-            return
-        for fname in os.listdir(self.var_dir):
-            if fname.endswith(".json"):
-                path = os.path.join(self.var_dir, fname)
-                try:
-                    with open(path, "r", encoding="utf-8") as f:
-                        data = json.load(f)
-                        if isinstance(data, list) and len(data) > 0:
-                            self._cache[fname[:-5]] = data[0]
-                except Exception:
-                    pass
+    def load(self, name: str) -> List[str]:
+        path = os.path.join(self.base_dir, f"{name}.json")
+        if not os.path.exists(path):
+            return []
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        return data if isinstance(data, list) else []
 
-    def get(self, name: str, default: str = "") -> str:
-        return self._cache.get(name, default)
-
-    def set(self, name: str, value: str) -> None:
-        self._cache[name] = value
-        path = os.path.join(self.var_dir, f"{name}.json")
-        os.makedirs(self.var_dir, exist_ok=True)
+    def save(self, name: str, variables: List[str]):
+        path = os.path.join(self.base_dir, f"{name}.json")
         with open(path, "w", encoding="utf-8") as f:
-            json.dump([value], f, ensure_ascii=False)
+            json.dump(variables, f, indent=2, ensure_ascii=False)
 
-    def all(self) -> Dict[str, str]:
-        return self._cache.copy()
+    def append(self, name: str, variable: str):
+        variables = self.load(name)
+        variables.append(variable)
+        self.save(name, variables)
 
-    def __contains__(self, name: str) -> bool:
-        return name in self._cache
-
+    def list(self) -> List[str]:
+        return [f.replace(".json", "") for f in os.listdir(self.base_dir) if f.endswith(".json")]
 
 # ---------------------------------------------------------------------------
-# 3.  TOOL REGISTRY — discover / register tools
+# Streaming Logger (dual output: stdout + file)
+# ---------------------------------------------------------------------------
+
+class StreamingLogger:
+    def __init__(self, log_file: str = "agent.log"):
+        self.log_file = log_file
+        self._buffer = []
+
+    def log(self, message: str, level: str = "INFO"):
+        line = f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] [{level}] {message}"
+        print(line)
+        self._buffer.append(line)
+        with open(self.log_file, "a", encoding="utf-8") as f:
+            f.write(line + "\n")
+
+    def flush(self):
+        self._buffer.clear()
+
+# ---------------------------------------------------------------------------
+# Tool Registry
 # ---------------------------------------------------------------------------
 
 class ToolRegistry:
-    """Registry untuk agent tools."""
+    def __init__(self):
+        self._tools: Dict[str, Callable] = {}
+        self._register_defaults()
 
-    def __init__(self) -> None:
-        self._tools: Dict[str, Callable[[str], str]] = {}
+    def _register_defaults(self):
+        self.register("ASK_USER", lambda question: f"User answered: {question}")
+        self.register("TELL_USER", lambda message: f"Told user: {message}")
+        self.register("SEARCH", lambda query: f"Search results for '{query}'")
+        self.register("WRITE_FILE", lambda path, content: f"Written to {path}")
+        self.register("READ_FILE", lambda path: f"Contents of {path}")
 
-    def register(self, name: str, fn: Callable[[str], str]) -> None:
+    def register(self, name: str, fn: Callable):
         self._tools[name] = fn
 
-    def get(self, name: str) -> Optional[Callable[[str], str]]:
-        return self._tools.get(name)
+    def run(self, name: str, params: Dict[str, Any]) -> str:
+        if name not in self._tools:
+            return f"[Error: Unknown tool {name}]"
+        try:
+            return str(self._tools[name](**params))
+        except Exception as e:
+            return f"[Error: {e}]"
 
     def list(self) -> List[str]:
         return list(self._tools.keys())
 
-    def unregister(self, name: str) -> bool:
-        if name in self._tools:
-            del self._tools[name]
-            return True
-        return False
+# ---------------------------------------------------------------------------
+# Mock LLM
+# ---------------------------------------------------------------------------
 
+class MockLLM:
+    def generate(self, prompt: str, max_tokens: int = 256) -> str:
+        if "ASK_USER" in prompt or "question" in prompt.lower():
+            return "<ASK_USER>What is your preference?</ASK_USER>"
+        if "SEARCH" in prompt or "find" in prompt.lower():
+            return "<SEARCH>{\"query\": \"python best practices\"}</SEARCH>"
+        if "WRITE_FILE" in prompt:
+            return '<WRITE_FILE>{"path": "notes.txt", "content": "Summary of findings."}</WRITE_FILE>'
+        return "<TELL_USER>Task completed successfully.</TELL_USER>"
 
 # ---------------------------------------------------------------------------
-# 4.  META AGENT — core agent class
+# XML Tool Parser
+# ---------------------------------------------------------------------------
+
+class XMLToolParser:
+    """Parse <TOOL: TOOL_NAME>args</TOOL> or <TOOL_NAME>args</TOOL_NAME>."""
+
+    def parse(self, text: str) -> List[Tuple[str, str]]:
+        results = []
+        # Pattern 1: <TOOL: NAME>args</TOOL>
+        pattern1 = re.findall(r'<TOOL:\s*(\w+)>\s*(.*?)\s*</TOOL>', text, re.DOTALL | re.IGNORECASE)
+        for name, args in pattern1:
+            results.append((name.upper(), args.strip()))
+        # Pattern 2: <NAME>args</NAME>
+        pattern2 = re.findall(r'<(\w+)>\s*(.*?)\s*</\1>', text, re.DOTALL | re.IGNORECASE)
+        for name, args in pattern2:
+            if name.upper() in ("SYSTEM", "USER", "ASSISTANT", "MANIFESTO", "CONTEXT", "TOOLS", "TOOL"):
+                continue
+            results.append((name.upper(), args.strip()))
+        return results
+
+    def parse_json_args(self, text: str) -> Dict[str, Any]:
+        try:
+            return json.loads(text)
+        except json.JSONDecodeError:
+            return {"query": text}
+
+# ---------------------------------------------------------------------------
+# Memory Management (optional compression)
+# ---------------------------------------------------------------------------
+
+class MemoryManager:
+    def __init__(self, compress: bool = False, max_entries: int = 100):
+        self.compress = compress
+        self.max_entries = max_entries
+        self.entries: List[Dict[str, Any]] = []
+
+    def add(self, role: str, content: str):
+        self.entries.append({"role": role, "content": content, "timestamp": time.time()})
+        if len(self.entries) > self.max_entries:
+            self.entries.pop(0)
+        if self.compress and len(self.entries) > 20:
+            self._compress()
+
+    def get(self, n: int = 10) -> List[Dict[str, Any]]:
+        return self.entries[-n:]
+
+    def to_prompt(self, n: int = 10) -> str:
+        msgs = self.get(n)
+        return "\n".join(f"[{m['role']}] {m['content']}" for m in msgs)
+
+    def _compress(self):
+        # Summarize oldest entries into a single compressed entry
+        if len(self.entries) < 10:
+            return
+        oldest = self.entries[:10]
+        summary = f"[Compressed {len(oldest)} older interactions]"
+        self.entries = [{"role": "system", "content": summary, "timestamp": time.time()}] + self.entries[10:]
+
+# ---------------------------------------------------------------------------
+# Meta Agent Base Class
 # ---------------------------------------------------------------------------
 
 class MetaAgent:
-    """
-    Flexible agent framework yang manages conversations with LLM
-    sambil handling tool calls dan memory management.
+    """Base class with manifesto + memory + tools loop."""
 
-    Pattern dari matthiasgeihs/agent — minimal, prompt-driven, tunable.
-    """
-
-    def __init__(
-        self,
-        manifesto: str,
-        model_name: str = "mock",
-        memory: str = "",
-        tools: Optional[Dict[str, Callable[[str], str]]] = None,
-        end_detection: Optional[Callable[[str, str], bool]] = None,
-        tool_detection: Optional[Callable[[str], Tuple[Optional[str], Optional[str]]]] = None,
-        memory_management: Optional[Callable[[str], Optional[str]]] = None,
-        memory_tracing: bool = False,
-        max_steps: int = 20,
-    ):
+    def __init__(self, name: str, manifesto: str, tools: ToolRegistry,
+                 end_detection: Optional[Callable] = None,
+                 tool_detection: Optional[Callable] = None,
+                 memory_mgmt: Optional[MemoryManager] = None,
+                 llm: Optional[MockLLM] = None,
+                 logger: Optional[StreamingLogger] = None):
+        self.name = name
         self.manifesto = manifesto
-        self.memory = memory
-        self.model_name = model_name
-        self.max_steps = max_steps
-        self.step_count = 0
-        self.memory_tracing = memory_tracing
-        self._memory_trace: List[str] = []
-        self._last_tool_called: Optional[str] = None
-        self._log_handler: Callable[[str], None] = lambda msg: print(msg)
+        self.tools = tools
+        self.end_detection = end_detection or self._default_end_detection
+        self.tool_detection = tool_detection or self._default_tool_detection
+        self.memory = memory_mgmt or MemoryManager()
+        self.llm = llm or MockLLM()
+        self.logger = logger or StreamingLogger()
+        self.parser = XMLToolParser()
 
-        # Built-in tools merged dengan user tools
-        self.tools = {
-            "ASK_USER": self._ask_user_builtin,
-            "TELL_USER": self._tell_user_builtin,
-            "SEARCH": self._search_builtin,
-            "WRITE_FILE": self._write_file_builtin,
-            "READ_FILE": self._read_file_builtin,
-            **(tools or {}),
-        }
+    def _default_end_detection(self, response: str) -> bool:
+        return "</TELL_USER>" in response or "done" in response.lower()
 
-        # Detection callbacks
-        self._end_detection_fn = end_detection
-        self._tool_detection_fn = tool_detection
-        self._memory_mgmt_fn = memory_management
+    def _default_tool_detection(self, response: str) -> bool:
+        return bool(re.search(r'<\w+>', response))
 
-    # ----- Built-in tools -------------------------------------------------
-
-    def _ask_user_builtin(self, question: str) -> str:
-        """Ask user via stdin."""
-        try:
-            return input(f"{question}\nYour response: ")
-        except EOFError:
-            return ""
-
-    def _tell_user_builtin(self, message: str) -> str:
-        """Tell user via log handler."""
-        self._log_handler(message)
-        return "Message delivered."
-
-    def _search_builtin(self, query: str) -> str:
-        """Mock search — returns placeholder."""
-        return f"[SEARCH RESULT] Mock results for: {query}"
-
-    def _write_file_builtin(self, params: str) -> str:
-        """Write file. Params format: path|content"""
-        try:
-            parts = params.split("|", 1)
-            if len(parts) != 2:
-                return "Error: format must be path|content"
-            path, content = parts
-            os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
-            with open(path, "w", encoding="utf-8") as f:
-                f.write(content)
-            return f"File written: {path}"
-        except Exception as e:
-            return f"Error: {e}"
-
-    def _read_file_builtin(self, path: str) -> str:
-        """Read file contents."""
-        try:
-            with open(path, "r", encoding="utf-8") as f:
-                return f.read()
-        except Exception as e:
-            return f"Error reading {path}: {e}"
-
-    # ----- Public API -----------------------------------------------------
-
-    def override_log_handler(self, fn: Callable[[str], None]) -> None:
-        self._log_handler = fn
-
-    def update_memory(self, text: str) -> None:
-        if self.memory_tracing:
-            self._memory_trace.append(self.memory)
-        if callable(self._memory_mgmt_fn):
-            result = self._memory_mgmt_fn(text)
-            if result is not None:
-                self.memory = result
-        else:
-            self.memory = text
-
-    def get_memory_trace(self) -> List[str]:
-        return self._memory_trace.copy()
-
-    def compose_request(self) -> str:
-        return self.manifesto + "\n\n" + self.memory
-
-    def llm_call(self, prompt: str) -> str:
-        """Mock LLM call — override untuk real LLM."""
-        # Simple heuristic responses untuk demo
-        p = prompt.lower()
-        if "search" in p or "find" in p:
-            return "<TOOL: SEARCH>query</TOOL>"
-        if "write" in p or "save" in p:
-            return "<TOOL: WRITE_FILE>path.txt|content</TOOL>"
-        if "task completed" in p or "done" in p or "selesai" in p:
-            return "Task completed successfully."
-        if "<tool:" in p or "tool:" in p:
-            return "I will use the appropriate tool to complete this task."
-        return f"[LLM response for prompt length {len(prompt)}]"
-
-    def detect_tool(self, text: str) -> Tuple[Optional[str], Optional[str]]:
-        if callable(self._tool_detection_fn):
-            return self._tool_detection_fn(text)
-        # Default: XML detection
-        pattern = r"<TOOL:\s*([A-Z_]+)>(.*?)</TOOL>"
-        match = re.search(pattern, text, re.DOTALL | re.IGNORECASE)
-        if match:
-            return match.group(1), match.group(2).strip()
-        return None, None
-
-    def should_end(self) -> bool:
-        if callable(self._end_detection_fn):
-            return self._end_detection_fn(self.manifesto, self.memory)
-        if self._last_tool_called is None:
-            return True
-        if "<TASK_COMPLETED>" in self.memory or "<DONE>" in self.memory:
-            return True
-        return False
-
-    def run(self, goal: Optional[str] = None) -> str:
-        """
-        Agent loop: plan → llm_call → detect tool → execute → update memory → check end.
-        """
-        if goal:
-            self.memory = f"Goal: {goal}\n"
-
-        while self.step_count < self.max_steps:
-            self.step_count += 1
-            self._last_tool_called = None
-
-            # 1. Compose request dan call LLM
-            request = self.compose_request()
-            response = self.llm_call(request)
-
-            # 2. Update memory dengan response
-            self.update_memory(self.memory + f"\nAgent: {response}")
-
-            # 3. Detect dan execute tool
-            tool_name, tool_args = self.detect_tool(response)
-            if tool_name:
-                tool_fn = self.tools.get(tool_name)
-                if tool_fn:
-                    self._last_tool_called = tool_name
-                    try:
-                        result = tool_fn(tool_args)
-                    except Exception as e:
-                        result = f"Tool error: {e}"
-                    self.update_memory(self.memory + f"\nTool ({tool_name}): {result}")
-                else:
-                    self.update_memory(self.memory + f"\nTool Not Found: {tool_name}")
-
-            # 4. Check end condition
-            if self.should_end():
+    def run(self, user_input: str, max_steps: int = 10) -> str:
+        self.memory.add("user", user_input)
+        self.logger.log(f"Agent {self.name} started with input: {user_input[:60]}...")
+        for step in range(max_steps):
+            context = self.memory.to_prompt()
+            prompt = self._build_prompt(context, user_input)
+            response = self.llm.generate(prompt, max_tokens=256)
+            self.memory.add("assistant", response)
+            self.logger.log(f"Step {step+1}: {response[:80]}...")
+            if self.end_detection(response):
+                self.logger.log("End detected. Stopping.")
                 break
+            if self.tool_detection(response):
+                tools_found = self.parser.parse(response)
+                for tool_name, raw_args in tools_found:
+                    if tool_name.upper() in ("SYSTEM", "USER", "ASSISTANT"):
+                        continue
+                    args = self.parser.parse_json_args(raw_args)
+                    result = self.tools.run(tool_name, args)
+                    self.memory.add("system", f"Tool {tool_name} result: {result}")
+                    self.logger.log(f"Executed {tool_name}: {result[:80]}...")
+        # Return last assistant message
+        for entry in reversed(self.memory.get()):
+            if entry["role"] == "assistant":
+                return entry["content"]
+        return "[No response]"
 
-        return self.memory
-
-
-# ---------------------------------------------------------------------------
-# 5.  AGENT FACTORY — discover agents dari directory
-# ---------------------------------------------------------------------------
-
-class AgentFactory:
-    """Discover dan load agents dari directory structure."""
-
-    @staticmethod
-    def discover_agents(agents_dir: str) -> List[Tuple[str, Optional[str]]]:
-        """Discover all agents in agents_dir."""
-        agents = []
-        if not os.path.isdir(agents_dir):
-            return agents
-        for item in sorted(os.listdir(agents_dir)):
-            agent_path = os.path.join(agents_dir, item)
-            if os.path.isdir(agent_path) and not item.startswith("__"):
-                agents.append((item, None))
-        return agents
-
-    @staticmethod
-    def load_agent_module(agent_dir: str) -> Optional[Type[MetaAgent]]:
-        """Load agent class dari agent_dir/agent.py"""
-        agent_py = os.path.join(agent_dir, "agent.py")
-        if not os.path.isfile(agent_py):
-            return None
-        try:
-            spec = importlib.util.spec_from_file_location("agent_module", agent_py)
-            if spec is None or spec.loader is None:
-                return None
-            module = importlib.util.module_from_spec(spec)
-            spec.loader.exec_module(module)
-            for name, obj in inspect.getmembers(module):
-                if inspect.isclass(obj) and issubclass(obj, MetaAgent) and obj is not MetaAgent:
-                    return obj
-        except Exception:
-            pass
-        return None
-
-    @staticmethod
-    def load_variables(agent_dir: str) -> VariableStore:
-        var_dir = os.path.join(agent_dir, "variables")
-        return VariableStore(var_dir)
-
+    def _build_prompt(self, context: str, user_input: str) -> str:
+        return (
+            f"<manifesto>\n{self.manifesto}\n</manifesto>\n"
+            f"<context>\n{context}\n</context>\n"
+            f"<user>\n{user_input}\n</user>\n"
+            f"<tools>\n{', '.join(self.tools.list())}\n</tools>\n"
+            f"<assistant>\n"
+        )
 
 # ---------------------------------------------------------------------------
-# 6.  AGENT OPTIMIZER — test N prompt variations
+# Agent Optimizer (variation testing framework)
 # ---------------------------------------------------------------------------
 
 class AgentOptimizer:
-    """
-    Optimize agent dengan testing N prompt variations.
-    Pattern dari matthiasgeihs/agent optimization system.
-    """
+    """Tries N prompt variations and scores results."""
 
-    def __init__(self, agent_class: Type[MetaAgent], variables: VariableStore) -> None:
-        self.agent_class = agent_class
-        self.variables = variables
-        self.results: List[Dict[str, Any]] = []
+    def __init__(self, llm: Optional[MockLLM] = None):
+        self.llm = llm or MockLLM()
+        self.variations: List[Dict[str, Any]] = []
 
-    def run_variation(self, manifesto: str, test_goal: str,
-                      score_fn: Optional[Callable[[str], float]] = None) -> Dict[str, Any]:
-        """Run one variation dan return result + score."""
-        agent = self.agent_class(manifesto=manifesto)
-        try:
-            result = agent.run(test_goal)
-            score = score_fn(result) if score_fn else len(result)
-            return {"manifesto": manifesto, "result": result, "score": score, "steps": agent.step_count}
-        except Exception as e:
-            return {"manifesto": manifesto, "error": str(e), "score": 0.0, "steps": 0}
+    def create_variations(self, base_prompt: str, n: int = 3) -> List[str]:
+        variations = [base_prompt]
+        for i in range(1, n):
+            # Simple variations: add style modifiers
+            modifiers = [
+                " Be concise.",
+                " Provide detailed reasoning.",
+                " Use bullet points.",
+            ]
+            variations.append(base_prompt + modifiers[i % len(modifiers)])
+        return variations
 
-    def optimize(self, base_manifesto: str, test_goal: str,
-                 variations: List[str],
-                 score_fn: Optional[Callable[[str], float]] = None) -> Dict[str, Any]:
-        """Test multiple manifesto variations dan return best."""
-        best: Optional[Dict[str, Any]] = None
-        for i, var in enumerate(variations):
-            print(f"Testing variation {i + 1}/{len(variations)}...")
-            result = self.run_variation(var, test_goal, score_fn)
-            self.results.append(result)
-            if best is None or result.get("score", 0) > best.get("score", 0):
-                best = result
-        return best or {}
+    def score(self, response: str) -> float:
+        # Simple scoring: length + completeness heuristics
+        score = 0.0
+        if len(response) > 20:
+            score += 0.3
+        if any(t in response for t in ["<", "{", "result", "answer"]):
+            score += 0.3
+        if len(response) < 500:
+            score += 0.2
+        # Penalize errors
+        if "error" in response.lower():
+            score -= 0.5
+        return max(0.0, min(1.0, score))
 
+    def optimize(self, base_prompt: str, n: int = 3) -> Tuple[str, float]:
+        best = (base_prompt, 0.0)
+        for var in self.create_variations(base_prompt, n):
+            response = self.llm.generate(var, max_tokens=256)
+            s = self.score(response)
+            self.variations.append({"prompt": var, "response": response, "score": s})
+            if s > best[1]:
+                best = (var, s)
+        return best
 
 # ---------------------------------------------------------------------------
-# 7.  EXAMPLE AGENTS (built-in)
+# Agent Factory (directory-based discovery)
+# ---------------------------------------------------------------------------
+
+class AgentFactory:
+    """Discover agents from directory structure: agents/<name>/agent.py + variables/"""
+
+    def __init__(self, base_dir: str = "agents"):
+        self.base_dir = base_dir
+
+    def discover(self) -> List[Dict[str, Any]]:
+        agents = []
+        if not os.path.isdir(self.base_dir):
+            return agents
+        for name in os.listdir(self.base_dir):
+            agent_dir = os.path.join(self.base_dir, name)
+            agent_file = os.path.join(agent_dir, "agent.py")
+            if os.path.isdir(agent_dir) and os.path.exists(agent_file):
+                vars_dir = os.path.join(agent_dir, "variables")
+                variables = VariableStore(vars_dir).list() if os.path.isdir(vars_dir) else []
+                agents.append({
+                    "name": name,
+                    "path": agent_file,
+                    "variables": variables,
+                })
+        return agents
+
+# ---------------------------------------------------------------------------
+# Example Agents (subclasses)
 # ---------------------------------------------------------------------------
 
 class ResearchAgent(MetaAgent):
-    """Agent untuk web research (mock)."""
-
-    def __init__(self, manifesto: str = "", memory: str = ""):
-        if not manifesto:
-            manifesto = (
-                "You are a research agent. You search for information and summarize findings.\n"
-                "Available tools: SEARCH, TELL_USER, ASK_USER, WRITE_FILE\n"
-                "Tool format: <TOOL: TOOL_NAME>arguments</TOOL>\n"
-                "End with <TASK_COMPLETED> when done."
-            )
-        super().__init__(manifesto=manifesto, memory=memory)
-
+    def __init__(self, tools: Optional[ToolRegistry] = None, llm: Optional[MockLLM] = None):
+        super().__init__(
+            name="ResearchAgent",
+            manifesto="You are a research agent. Use SEARCH to find information, then TELL_USER the summary.",
+            tools=tools or ToolRegistry(),
+            llm=llm
+        )
 
 class SummaryAgent(MetaAgent):
-    """Agent untuk summarizing text (mock)."""
-
-    def __init__(self, manifesto: str = "", memory: str = "", chunk_size: int = 1000):
-        self.chunk_size = chunk_size
-        if not manifesto:
-            manifesto = (
-                "You are a summary agent. You break large text into chunks and summarize each.\n"
-                "Available tools: TELL_USER, WRITE_FILE\n"
-                "Tool format: <TOOL: TOOL_NAME>arguments</TOOL>\n"
-                "End with <TASK_COMPLETED> when done."
-            )
-        super().__init__(manifesto=manifesto, memory=memory)
-
-    def chunk_text(self, text: str) -> List[str]:
-        sentences = re.split(r"(?<=[.!?])\s+(?=[A-Z])", text)
-        chunks: List[str] = []
-        current = ""
-        for sent in sentences:
-            if len(current) + len(sent) > self.chunk_size:
-                if current:
-                    chunks.append(current.strip())
-                current = sent
-            else:
-                current += " " + sent
-        if current:
-            chunks.append(current.strip())
-        return chunks if chunks else [text]
-
+    def __init__(self, tools: Optional[ToolRegistry] = None, llm: Optional[MockLLM] = None):
+        super().__init__(
+            name="SummaryAgent",
+            manifesto="You are a summary agent. READ_FILE then WRITE_FILE with a concise summary.",
+            tools=tools or ToolRegistry(),
+            llm=llm
+        )
 
 class CodeAgent(MetaAgent):
-    """Agent untuk generating / reviewing code (mock)."""
-
-    def __init__(self, manifesto: str = "", memory: str = ""):
-        if not manifesto:
-            manifesto = (
-                "You are a code agent. You write, review, and refactor code.\n"
-                "Available tools: WRITE_FILE, READ_FILE, TELL_USER\n"
-                "Tool format: <TOOL: TOOL_NAME>arguments</TOOL>\n"
-                "End with <TASK_COMPLETED> when done."
-            )
-        super().__init__(manifesto=manifesto, memory=memory)
-
-
-# ---------------------------------------------------------------------------
-# 8.  MAIN DEMO & TEST SUITE
-# ---------------------------------------------------------------------------
-
-def _test_streaming_logger() -> None:
-    import tempfile
-    with tempfile.NamedTemporaryFile(mode="w", suffix=".log", delete=False) as f:
-        path = f.name
-    try:
-        logger = StreamingLogger(path)
-        logger.write("Test line 1\n")
-        logger.write("Test line 2\n")
-        logger.close()
-        with open(path, "r") as f:
-            content = f.read()
-        assert "Test line 1" in content
-        assert "Test line 2" in content
-        print("  [OK] StreamingLogger")
-    finally:
-        os.unlink(path)
-
-
-def _test_variable_store() -> None:
-    import tempfile
-    with tempfile.TemporaryDirectory() as tmpdir:
-        vs = VariableStore(tmpdir)
-        vs.set("manifesto", "You are a test agent.")
-        assert "manifesto" in vs
-        assert vs.get("manifesto") == "You are a test agent."
-        print("  [OK] VariableStore")
-
-
-def _test_tool_registry() -> None:
-    reg = ToolRegistry()
-    reg.register("ECHO", lambda x: x)
-    assert reg.get("ECHO") is not None
-    assert "ECHO" in reg.list()
-    reg.unregister("ECHO")
-    assert reg.get("ECHO") is None
-    print("  [OK] ToolRegistry")
-
-
-def _test_meta_agent_loop() -> None:
-    agent = MetaAgent(
-        manifesto="You are a test agent. End with <TASK_COMPLETED>.",
-        max_steps=5,
-    )
-    # Override LLM untuk deterministic response
-    agent.llm_call = lambda p: "I am done. <TASK_COMPLETED>"
-    result = agent.run("Test goal")
-    assert "<TASK_COMPLETED>" in result
-    assert agent.step_count <= 5
-    print("  [OK] MetaAgent loop + end detection")
-
-
-def _test_meta_agent_tool_detection() -> None:
-    agent = MetaAgent(manifesto="Test")
-    tool, args = agent.detect_tool("Please <TOOL: SEARCH>query</TOOL> now")
-    assert tool == "SEARCH"
-    assert args == "query"
-    print("  [OK] Tool detection (XML)")
-
-
-def _test_research_agent() -> None:
-    agent = ResearchAgent()
-    agent.llm_call = lambda p: "<TOOL: SEARCH>test</TOOL>"
-    agent.run("Research test topic")
-    assert agent.step_count >= 1
-    print("  [OK] ResearchAgent")
-
-
-def _test_summary_agent() -> None:
-    agent = SummaryAgent()
-    chunks = agent.chunk_text("First sentence. Second sentence. Third one here.")
-    assert len(chunks) >= 1
-    print("  [OK] SummaryAgent chunking")
-
-
-def _test_code_agent() -> None:
-    agent = CodeAgent()
-    agent.llm_call = lambda p: "<TOOL: WRITE_FILE>test.txt|hello world</TOOL>"
-    agent.run("Write test file")
-    assert agent.step_count >= 1
-    print("  [OK] CodeAgent")
-
-
-def _test_agent_optimizer() -> None:
-    import tempfile
-    with tempfile.TemporaryDirectory() as tmpdir:
-        vs = VariableStore(tmpdir)
-        opt = AgentOptimizer(MetaAgent, vs)
-        best = opt.optimize(
-            base_manifesto="You are helpful.",
-            test_goal="Say hello",
-            variations=["You are helpful.", "You are super helpful!", "You are concise."],
-            score_fn=lambda r: 1.0 if "hello" in r.lower() else 0.5,
+    def __init__(self, tools: Optional[ToolRegistry] = None, llm: Optional[MockLLM] = None):
+        super().__init__(
+            name="CodeAgent",
+            manifesto="You are a code agent. SEARCH for best practices, then WRITE_FILE with code.",
+            tools=tools or ToolRegistry(),
+            llm=llm
         )
-        assert "manifesto" in best
-        print("  [OK] AgentOptimizer")
 
+# ---------------------------------------------------------------------------
+# Test Suite
+# ---------------------------------------------------------------------------
 
-def _test_memory_tracing() -> None:
-    agent = MetaAgent(
-        manifesto="Test",
-        memory_tracing=True,
-        max_steps=3,
-    )
-    agent.llm_call = lambda p: "Response."
-    agent.run("Goal")
-    trace = agent.get_memory_trace()
-    assert len(trace) >= 1
-    print("  [OK] Memory tracing")
+def _test_variable_store():
+    vs = VariableStore(base_dir="/tmp/test_variables")
+    vs.save("test", ["hello", "world"])
+    loaded = vs.load("test")
+    assert loaded == ["hello", "world"]
+    print("[PASS] variable store")
 
+def _test_streaming_logger():
+    logger = StreamingLogger(log_file="/tmp/test_agent.log")
+    logger.log("Test message")
+    assert os.path.exists("/tmp/test_agent.log")
+    print("[PASS] streaming logger")
 
-def _test_agent_factory_discover() -> None:
-    import tempfile
-    with tempfile.TemporaryDirectory() as tmpdir:
-        os.makedirs(os.path.join(tmpdir, "research_agent"))
-        os.makedirs(os.path.join(tmpdir, "code_agent"))
-        agents = AgentFactory.discover_agents(tmpdir)
-        names = [a[0] for a in agents]
-        assert "research_agent" in names
-        assert "code_agent" in names
-        print("  [OK] AgentFactory.discover")
+def _test_xml_tool_parser():
+    parser = XMLToolParser()
+    tools = parser.parse("<SEARCH>{\"query\": \"python\"}</SEARCH>")
+    assert tools[0][0] == "SEARCH"
+    tools2 = parser.parse("<TOOL: WRITE_FILE>{\"path\": \"a.txt\"}</TOOL>")
+    assert tools2[0][0] == "WRITE_FILE"
+    print("[PASS] xml tool parser")
 
+def _test_memory_manager():
+    mem = MemoryManager(compress=True, max_entries=5)
+    for i in range(6):
+        mem.add("user", f"msg {i}")
+    assert len(mem.get()) <= 5
+    print("[PASS] memory manager")
 
-def _demo() -> None:
-    print("=" * 60)
-    print("MAGNATRIX-OS Meta Agent Framework — Native Demo")
-    print("=" * 60)
+def _test_meta_agent():
+    tools = ToolRegistry()
+    agent = MetaAgent("Test", "Manifesto", tools)
+    result = agent.run("Do research on Python", max_steps=3)
+    assert result
+    print("[PASS] meta agent")
 
-    print("\n[Tests]")
-    _test_streaming_logger()
-    _test_variable_store()
-    _test_tool_registry()
-    _test_meta_agent_loop()
-    _test_meta_agent_tool_detection()
-    _test_research_agent()
-    _test_summary_agent()
-    _test_code_agent()
-    _test_agent_optimizer()
-    _test_memory_tracing()
-    _test_agent_factory_discover()
+def _test_agent_optimizer():
+    opt = AgentOptimizer()
+    best_prompt, score = opt.optimize("Summarize Python", n=3)
+    assert score >= 0.0
+    assert len(opt.variations) == 3
+    print("[PASS] agent optimizer")
 
-    print("\n[Agent Execution Demo]")
-    agent = MetaAgent(
-        manifesto=(
-            "You are a task completion agent.\n"
-            "Available tools: SEARCH, TELL_USER, WRITE_FILE\n"
-            "Use <TOOL: TOOL_NAME>args</TOOL> format.\n"
-            "End with <TASK_COMPLETED>."
-        ),
-        max_steps=5,
-    )
-    # Simulated deterministic LLM
-    responses = [
-        "I will search for information. <TOOL: SEARCH>MAGNATRIX OS</TOOL>",
-        "Found it. I will write a summary file. <TOOL: WRITE_FILE>summary.txt|MAGNATRIX-OS is an agentic OS.</TOOL>",
-        "All tasks complete. <TASK_COMPLETED>",
-    ]
-    idx = [0]
-    bridge = MockToUnifiedBridge()
-    def _real_llm(p: str) -> str:
-        try:
-            return bridge.generate(p)
-        except Exception:
-            # Fallback to mock responses for demo
-            r = responses[idx[0] % len(responses)]
-            idx[0] += 1
-            return r
-    agent.llm_call = _real_llm
+def _test_agent_factory():
+    factory = AgentFactory(base_dir="/tmp/test_agents")
+    os.makedirs("/tmp/test_agents/test_agent/variables", exist_ok=True)
+    open("/tmp/test_agents/test_agent/agent.py", "w").write("# agent")
+    agents = factory.discover()
+    assert len(agents) >= 1
+    print("[PASS] agent factory")
 
-    result = agent.run("Research MAGNATRIX-OS")
-    print(f"Steps: {agent.step_count}")
-    print(f"Last tool: {agent._last_tool_called}")
-    print(f"Memory trace length: {len(agent.get_memory_trace())}")
-
-    print("\n" + "=" * 60)
-    print("All tests passed. Demo complete.")
-    print("=" * 60)
-
+def _test_example_agents():
+    ra = ResearchAgent()
+    assert ra.name == "ResearchAgent"
+    ca = CodeAgent()
+    assert ca.name == "CodeAgent"
+    print("[PASS] example agents")
 
 if __name__ == "__main__":
-    _demo()
+    _test_variable_store()
+    _test_streaming_logger()
+    _test_xml_tool_parser()
+    _test_memory_manager()
+    _test_meta_agent()
+    _test_agent_optimizer()
+    _test_agent_factory()
+    _test_example_agents()
+    print("\n[OK] meta_agent_native.py — all 8 tests passed")

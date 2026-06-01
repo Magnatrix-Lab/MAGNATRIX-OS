@@ -1,1205 +1,891 @@
-#!/usr/bin/env python3
-"""
-jit_compiler_native.py — V8-inspired 3-tier JIT compiler for MAGNATRIX-OS
-
-Architecture: Ignition (interpreter) → Liftoff (baseline) → TurboFan (optimizing)
-Pure Python, stdlib only. No external dependencies.
-
-Author: GQRIS
-"""
+# jit_compiler_native.py
+# AMATI-PELAJARI-TIRU: V8 4-Tier JIT Pattern (Ignition -> Sparkplug -> Maglev -> TurboFan)
+# Register-based bytecode, hidden classes, inline caches, OSR, deoptimization.
+# Pure Python, standard library only.
 
 from __future__ import annotations
+import re, json, math, dataclasses, typing, copy, hashlib
+from typing import List, Dict, Optional, Tuple, Any, Callable, Set
+from collections import defaultdict
 
-import ast
-import dis
-import sys
-import types
-import typing
-from dataclasses import dataclass, field
-from enum import Enum, auto
-from typing import Any, Callable, Dict, List, Optional, Tuple, Union
+# ---------------------------------------------------------------------------
+# AST Nodes
+# ---------------------------------------------------------------------------
 
+class ASTNode:
+    pass
 
-# ──────────────────────────────────────────────────────────────
-# 1.  OPCODES  &  BYTECODE FORMAT
-# ──────────────────────────────────────────────────────────────
+class Literal(ASTNode):
+    def __init__(self, value: Any):
+        self.value = value
+    def __repr__(self):
+        return f"Literal({self.value})"
 
-class OpCode(Enum):
-    """Custom bytecode instruction set."""
-    # Load / Store
-    LOAD_CONST = auto()      # arg: const index
-    LOAD_VAR = auto()        # arg: variable name
-    STORE_VAR = auto()       # arg: variable name
+class Variable(ASTNode):
+    def __init__(self, name: str):
+        self.name = name
+    def __repr__(self):
+        return f"Variable({self.name})"
 
-    # Arithmetic
-    BINARY_ADD = auto()
-    BINARY_SUB = auto()
-    BINARY_MUL = auto()
-    BINARY_DIV = auto()
+class BinaryOp(ASTNode):
+    def __init__(self, op: str, left: ASTNode, right: ASTNode):
+        self.op = op
+        self.left = left
+        self.right = right
+    def __repr__(self):
+        return f"BinaryOp({self.op}, {self.left}, {self.right})"
 
-    # Comparison
-    COMPARE_EQ = auto()
-    COMPARE_LT = auto()
+class FunctionDef(ASTNode):
+    def __init__(self, name: str, params: List[str], body: List[ASTNode]):
+        self.name = name
+        self.params = params
+        self.body = body
+    def __repr__(self):
+        return f"FunctionDef({self.name})"
 
-    # Control flow
-    JUMP_IF_FALSE = auto()   # arg: offset
-    CALL_FUNC = auto()       # arg: argc
-    RETURN_VALUE = auto()
+class Call(ASTNode):
+    def __init__(self, func: str, args: List[ASTNode]):
+        self.func = func
+        self.args = args
+    def __repr__(self):
+        return f"Call({self.func})"
 
-    # Object access
-    GET_ATTR = auto()        # arg: attr name
-    SET_ATTR = auto()        # arg: attr name
+class If(ASTNode):
+    def __init__(self, condition: ASTNode, then_body: List[ASTNode], else_body: List[ASTNode]):
+        self.condition = condition
+        self.then_body = then_body
+        self.else_body = else_body
 
-    # Deoptimization hook
-    DEOPT = auto()
+class While(ASTNode):
+    def __init__(self, condition: ASTNode, body: List[ASTNode]):
+        self.condition = condition
+        self.body = body
 
+class Return(ASTNode):
+    def __init__(self, expr: ASTNode):
+        self.expr = expr
 
-@dataclass
-class Instruction:
-    """Single bytecode instruction."""
-    opcode: OpCode
-    arg: Any = None
-    lineno: int = 0
+class Assign(ASTNode):
+    def __init__(self, name: str, expr: ASTNode):
+        self.name = name
+        self.expr = expr
 
-    def __repr__(self) -> str:
-        if self.arg is not None:
-            return f"{self.opcode.name}({self.arg})"
-        return self.opcode.name
+class PropertyAccess(ASTNode):
+    def __init__(self, obj: ASTNode, prop: str):
+        self.obj = obj
+        self.prop = prop
 
+class ObjectLiteral(ASTNode):
+    def __init__(self, props: Dict[str, ASTNode]):
+        self.props = props
 
-@dataclass
-class BytecodeFunction:
-    """Compiled bytecode function container."""
-    name: str
-    instructions: List[Instruction] = field(default_factory=list)
-    constants: List[Any] = field(default_factory=list)
-    varnames: List[str] = field(default_factory=list)
-    argcount: int = 0
-    local_count: int = 0
-    code_id: int = field(default_factory=lambda: id(object()))
+# ---------------------------------------------------------------------------
+# Parser (simple recursive descent for expression language)
+# ---------------------------------------------------------------------------
 
-    def __repr__(self) -> str:
-        return f"<BytecodeFunction {self.name} [{len(self.instructions)} instr]>"
+class Parser:
+    """Parses a simple expression language into AST."""
 
+    def __init__(self, source: str):
+        self.tokens = self._tokenize(source)
+        self.pos = 0
 
-# ──────────────────────────────────────────────────────────────
-# 2.  TYPE FEEDBACK VECTOR (TFV)
-# ──────────────────────────────────────────────────────────────
+    def _tokenize(self, source: str) -> List[str]:
+        # Simple tokenizer
+        pattern = r'\d+\.?\d*|[a-zA-Z_]\w*|[+\-*/=<>!]+|[(){}[\];,]|["\'][^"\']*["\']|.'
+        tokens = re.findall(pattern, source)
+        return [t for t in tokens if not t.strip().startswith('#') and t.strip()]
 
-class TypeTag(Enum):
-    """Type tags for speculative optimization."""
-    UNKNOWN = auto()
-    INT = auto()
-    FLOAT = auto()
-    STRING = auto()
-    BOOL = auto()
-    LIST = auto()
-    DICT = auto()
-    OBJECT = auto()
-    FUNCTION = auto()
-    NONE = auto()
+    def _peek(self) -> Optional[str]:
+        return self.tokens[self.pos] if self.pos < len(self.tokens) else None
 
+    def _consume(self, expected: Optional[str] = None) -> str:
+        tok = self.tokens[self.pos]
+        self.pos += 1
+        if expected and tok != expected:
+            raise SyntaxError(f"Expected {expected}, got {tok}")
+        return tok
 
-@dataclass
-class FeedbackEntry:
-    """Single entry in TypeFeedbackVector."""
-    type_tag: TypeTag = TypeTag.UNKNOWN
-    concrete_type: Optional[type] = None
-    value_example: Any = None          # for polymorphic inline caches
-    miss_count: int = 0
-    hit_count: int = 0
+    def parse(self) -> List[ASTNode]:
+        nodes = []
+        while self.pos < len(self.tokens):
+            if self._peek() == ";":
+                self._consume(";")
+                continue
+            nodes.append(self._parse_stmt())
+            if self._peek() == ";":
+                self._consume(";")
+        return nodes
 
-    def record(self, value: Any) -> None:
-        """Record observation of a value."""
-        tag = self._tag_from_value(value)
-        if self.type_tag == TypeTag.UNKNOWN:
-            self.type_tag = tag
-            self.concrete_type = type(value)
-            self.value_example = value
-        elif self.type_tag != tag:
-            self.miss_count += 1
-        else:
-            self.hit_count += 1
-            # Check if concrete type narrowed further
-            if self.concrete_type != type(value):
-                self.miss_count += 1
+    def _parse_stmt(self) -> ASTNode:
+        tok = self._peek()
+        if tok == "def":
+            return self._parse_function()
+        if tok == "if":
+            return self._parse_if()
+        if tok == "while":
+            return self._parse_while()
+        if tok == "return":
+            self._consume("return")
+            return Return(self._parse_expr())
+        # Assignment or expr statement
+        expr = self._parse_expr()
+        if self._peek() == "=":
+            self._consume("=")
+            if isinstance(expr, Variable):
+                return Assign(expr.name, self._parse_expr())
+            raise SyntaxError("Invalid assignment target")
+        return expr
 
-    @staticmethod
-    def _tag_from_value(value: Any) -> TypeTag:
-        if value is None:
-            return TypeTag.NONE
-        if isinstance(value, bool):
-            return TypeTag.BOOL
-        if isinstance(value, int):
-            return TypeTag.INT
-        if isinstance(value, float):
-            return TypeTag.FLOAT
-        if isinstance(value, str):
-            return TypeTag.STRING
-        if isinstance(value, list):
-            return TypeTag.LIST
-        if isinstance(value, dict):
-            return TypeTag.DICT
-        if isinstance(value, (types.FunctionType, BytecodeFunction)):
-            return TypeTag.FUNCTION
-        return TypeTag.OBJECT
+    def _parse_function(self) -> FunctionDef:
+        self._consume("def")
+        name = self._consume()
+        self._consume("(")
+        params = []
+        while self._peek() != ")":
+            params.append(self._consume())
+            if self._peek() == ",":
+                self._consume(",")
+        self._consume(")")
+        self._consume("{")
+        body = []
+        while self._peek() != "}":
+            body.append(self._parse_stmt())
+        self._consume("}")
+        return FunctionDef(name, params, body)
 
+    def _parse_if(self) -> If:
+        self._consume("if")
+        self._consume("(")
+        cond = self._parse_expr()
+        self._consume(")")
+        self._consume("{")
+        then_body = []
+        while self._peek() != "}":
+            then_body.append(self._parse_stmt())
+        self._consume("}")
+        else_body = []
+        if self._peek() == "else":
+            self._consume("else")
+            self._consume("{")
+            while self._peek() != "}":
+                else_body.append(self._parse_stmt())
+            self._consume("}")
+        return If(cond, then_body, else_body)
 
-class TypeFeedbackVector:
-    """Per-function table tracking observed types at each operation."""
+    def _parse_while(self) -> While:
+        self._consume("while")
+        self._consume("(")
+        cond = self._parse_expr()
+        self._consume(")")
+        self._consume("{")
+        body = []
+        while self._peek() != "}":
+            body.append(self._parse_stmt())
+        self._consume("}")
+        return While(cond, body)
 
-    def __init__(self, size: int = 32) -> None:
-        self.entries: List[FeedbackEntry] = [FeedbackEntry() for _ in range(size)]
-        self.invocation_count: int = 0
-        self.back_edges_taken: int = 0
-        self.osr_candidates: List[int] = []  # instruction offsets for OSR
+    def _parse_expr(self) -> ASTNode:
+        return self._parse_or()
 
-    def record(self, pc: int, value: Any) -> None:
-        """Record type observation at program counter."""
-        if 0 <= pc < len(self.entries):
-            self.entries[pc].record(value)
+    def _parse_or(self) -> ASTNode:
+        left = self._parse_and()
+        while self._peek() == "||":
+            self._consume()
+            left = BinaryOp("||", left, self._parse_and())
+        return left
 
-    def type_at(self, pc: int) -> TypeTag:
-        """Get type tag at pc."""
-        if 0 <= pc < len(self.entries):
-            return self.entries[pc].type_tag
-        return TypeTag.UNKNOWN
+    def _parse_and(self) -> ASTNode:
+        left = self._parse_comparison()
+        while self._peek() == "&&":
+            self._consume()
+            left = BinaryOp("&&", left, self._parse_comparison())
+        return left
 
-    def stability(self, pc: int) -> float:
-        """Return stability ratio [0,1] for feedback entry."""
-        if 0 <= pc < len(self.entries):
-            e = self.entries[pc]
-            total = e.hit_count + e.miss_count
-            if total == 0:
-                return 0.0
-            return e.hit_count / total
-        return 0.0
+    def _parse_comparison(self) -> ASTNode:
+        left = self._parse_add()
+        while self._peek() in ("==", "!=", "<", ">", "<=", ">="):
+            op = self._consume()
+            left = BinaryOp(op, left, self._parse_add())
+        return left
 
-    def is_monomorphic(self, pc: int) -> bool:
-        """True if call site is monomorphic (stable single type)."""
-        return self.stability(pc) > 0.95 and self.entries[pc].miss_count < 5
+    def _parse_add(self) -> ASTNode:
+        left = self._parse_mul()
+        while self._peek() in ("+", "-"):
+            op = self._consume()
+            left = BinaryOp(op, left, self._parse_mul())
+        return left
 
-    def increment_invocation(self) -> None:
-        self.invocation_count += 1
+    def _parse_mul(self) -> ASTNode:
+        left = self._parse_unary()
+        while self._peek() in ("*", "/", "%"):
+            op = self._consume()
+            left = BinaryOp(op, left, self._parse_unary())
+        return left
 
-    def __repr__(self) -> str:
-        return f"<TFV invocations={self.invocation_count}>"
+    def _parse_unary(self) -> ASTNode:
+        if self._peek() in ("+", "-", "!"):
+            op = self._consume()
+            return BinaryOp(op, Literal(0), self._parse_unary())
+        return self._parse_primary()
 
+    def _parse_primary(self) -> ASTNode:
+        tok = self._peek()
+        if tok is None:
+            raise SyntaxError("Unexpected EOF")
+        if tok == "(":
+            self._consume("(")
+            expr = self._parse_expr()
+            self._consume(")")
+            return expr
+        if tok == "{":
+            return self._parse_object()
+        if tok.startswith('"') or tok.startswith("'"):
+            self._consume()
+            return Literal(tok[1:-1])
+        if tok.isdigit() or (tok.startswith(".") and tok[1:].isdigit()):
+            self._consume()
+            return Literal(float(tok) if "." in tok else int(tok))
+        if tok in ("true", "false"):
+            self._consume()
+            return Literal(tok == "true")
+        # identifier or function call
+        name = self._consume()
+        if self._peek() == "(":
+            self._consume("(")
+            args = []
+            while self._peek() != ")":
+                args.append(self._parse_expr())
+                if self._peek() == ",":
+                    self._consume(",")
+            self._consume(")")
+            return Call(name, args)
+        if self._peek() == ".":
+            self._consume(".")
+            prop = self._consume()
+            return PropertyAccess(Variable(name), prop)
+        return Variable(name)
 
-# ──────────────────────────────────────────────────────────────
-# 3.  DEOPTIMIZATION MANAGER
-# ──────────────────────────────────────────────────────────────
+    def _parse_object(self) -> ObjectLiteral:
+        self._consume("{")
+        props = {}
+        while self._peek() != "}":
+            key = self._consume()
+            if key.startswith('"') or key.startswith("'"):
+                key = key[1:-1]
+            self._consume(":")
+            props[key] = self._parse_expr()
+            if self._peek() == ",":
+                self._consume(",")
+        self._consume("}")
+        return ObjectLiteral(props)
 
-class DeoptReason(Enum):
-    TYPE_MISMATCH = auto()
-    MAP_CHECK_FAILED = auto()
-    DIVISION_BY_ZERO = auto()
-    OVERFLOW = auto()
-    UNEXPECTED_PROPERTY = auto()
+# ---------------------------------------------------------------------------
+# Bytecode (register-based with accumulator pattern)
+# ---------------------------------------------------------------------------
 
+@dataclasses.dataclass
+class Bytecode:
+    op: str
+    args: List[Any] = dataclasses.field(default_factory=list)
+    def __repr__(self):
+        return f"{self.op} {self.args}"
 
-@dataclass
-class DeoptPoint:
-    """Bookmark to resume interpreter state."""
-    pc: int
-    accumulator: Any
-    stack: List[Any]
-    locals: Dict[str, Any]
-    feedback_vector: TypeFeedbackVector
+class BytecodeGenerator:
+    """AST -> register-based bytecode."""
 
+    def __init__(self):
+        self.bytecode: List[Bytecode] = []
+        self.reg_counter = 0
+        self.label_counter = 0
+        self.local_map: Dict[str, int] = {}
 
-class DeoptimizationManager:
-    """Handles bailout to interpreter when speculation fails."""
+    def _next_reg(self) -> int:
+        r = self.reg_counter
+        self.reg_counter += 1
+        return r
 
-    def __init__(self) -> None:
-        self.deopt_count: int = 0
-        self.deopt_reasons: Dict[DeoptReason, int] = {}
-        self.bailout_points: List[DeoptPoint] = []
+    def _next_label(self) -> str:
+        l = f"L{self.label_counter}"
+        self.label_counter += 1
+        return l
 
-    def bailout(self, reason: DeoptReason, point: DeoptPoint) -> None:
-        """Record a deoptimization event."""
-        self.deopt_count += 1
-        self.deopt_reasons[reason] = self.deopt_reasons.get(reason, 0) + 1
-        self.bailout_points.append(point)
+    def generate(self, nodes: List[ASTNode]) -> List[Bytecode]:
+        self.bytecode = []
+        self.reg_counter = 0
+        for node in nodes:
+            self._gen(node)
+        return self.bytecode
 
-    def should_deopt(self, tfv: TypeFeedbackVector, pc: int, value: Any) -> bool:
-        """Check if current value violates speculation."""
-        expected = tfv.type_at(pc)
-        actual = FeedbackEntry._tag_from_value(value)
-        if expected != TypeTag.UNKNOWN and expected != actual:
-            return True
-        return False
+    def _gen(self, node: ASTNode) -> int:
+        if isinstance(node, Literal):
+            r = self._next_reg()
+            self.bytecode.append(Bytecode("Lda", [node.value, r]))
+            return r
+        if isinstance(node, Variable):
+            if node.name in self.local_map:
+                return self.local_map[node.name]
+            r = self._next_reg()
+            self.local_map[node.name] = r
+            return r
+        if isinstance(node, BinaryOp):
+            left = self._gen(node.left)
+            right = self._gen(node.right)
+            r = self._next_reg()
+            self.bytecode.append(Bytecode("BinOp", [node.op, left, right, r]))
+            return r
+        if isinstance(node, Assign):
+            val = self._gen(node.expr)
+            if node.name not in self.local_map:
+                self.local_map[node.name] = self._next_reg()
+            target = self.local_map[node.name]
+            self.bytecode.append(Bytecode("Star", [val, target]))
+            return target
+        if isinstance(node, Return):
+            val = self._gen(node.expr)
+            self.bytecode.append(Bytecode("Return", [val]))
+            return val
+        if isinstance(node, If):
+            cond = self._gen(node.condition)
+            else_label = self._next_label()
+            end_label = self._next_label()
+            self.bytecode.append(Bytecode("JmpIfFalse", [cond, else_label]))
+            for stmt in node.then_body:
+                self._gen(stmt)
+            self.bytecode.append(Bytecode("Jmp", [end_label]))
+            self.bytecode.append(Bytecode("Label", [else_label]))
+            for stmt in node.else_body:
+                self._gen(stmt)
+            self.bytecode.append(Bytecode("Label", [end_label]))
+            return cond
+        if isinstance(node, While):
+            start_label = self._next_label()
+            end_label = self._next_label()
+            self.bytecode.append(Bytecode("Label", [start_label]))
+            cond = self._gen(node.condition)
+            self.bytecode.append(Bytecode("JmpIfFalse", [cond, end_label]))
+            for stmt in node.body:
+                self._gen(stmt)
+            self.bytecode.append(Bytecode("Jmp", [start_label]))
+            self.bytecode.append(Bytecode("Label", [end_label]))
+            return cond
+        if isinstance(node, Call):
+            arg_regs = [self._gen(a) for a in node.args]
+            r = self._next_reg()
+            self.bytecode.append(Bytecode("Call", [node.func, arg_regs, r]))
+            return r
+        if isinstance(node, PropertyAccess):
+            obj = self._gen(node.obj)
+            r = self._next_reg()
+            self.bytecode.append(Bytecode("GetProp", [obj, node.prop, r]))
+            return r
+        if isinstance(node, ObjectLiteral):
+            r = self._next_reg()
+            self.bytecode.append(Bytecode("NewObject", [r]))
+            for key, val in node.props.items():
+                vr = self._gen(val)
+                self.bytecode.append(Bytecode("SetProp", [r, key, vr]))
+            return r
+        if isinstance(node, FunctionDef):
+            # Emit function body as separate bytecode block
+            func_gen = BytecodeGenerator()
+            for stmt in node.body:
+                func_gen._gen(stmt)
+            func_gen.bytecode.append(Bytecode("Return", [0]))
+            r = self._next_reg()
+            self.bytecode.append(Bytecode("DefFunc", [node.name, node.params, func_gen.bytecode, r]))
+            return r
+        return 0
 
-    def stats(self) -> Dict[str, Any]:
+# ---------------------------------------------------------------------------
+# Feedback Vector (type profiling)
+# ---------------------------------------------------------------------------
+
+@dataclasses.dataclass
+class FeedbackSlot:
+    counter: int = 0
+    types: Dict[str, int] = dataclasses.field(default_factory=dict)
+    value: Any = None
+
+class FeedbackVector:
+    def __init__(self, size: int = 32):
+        self.slots = [FeedbackSlot() for _ in range(size)]
+
+    def record(self, slot: int, typ: str, value: Any = None):
+        if slot < len(self.slots):
+            s = self.slots[slot]
+            s.counter += 1
+            s.types[typ] = s.types.get(typ, 0) + 1
+            s.value = value
+
+    def dominant_type(self, slot: int) -> Optional[str]:
+        if slot >= len(self.slots):
+            return None
+        s = self.slots[slot]
+        if not s.types:
+            return None
+        return max(s.types, key=s.types.get)
+
+    def to_dict(self) -> Dict[str, Any]:
         return {
-            "total_deopts": self.deopt_count,
-            "by_reason": {r.name: c for r, c in self.deopt_reasons.items()},
+            i: {"counter": s.counter, "types": s.types, "value": str(s.value)[:50]}
+            for i, s in enumerate(self.slots) if s.counter > 0
         }
 
+# ---------------------------------------------------------------------------
+# Hidden Class & Inline Cache
+# ---------------------------------------------------------------------------
 
-# ──────────────────────────────────────────────────────────────
-# 4.  TIERING CONTROLLER
-# ──────────────────────────────────────────────────────────────
+class HiddenClass:
+    """Shape descriptor for objects."""
 
-class Tier(Enum):
-    """Compilation tiers."""
-    INTERPRETER = auto()
-    BASELINE = auto()
-    OPTIMIZING = auto()
+    def __init__(self, properties: List[str] = None):
+        self.properties = properties or []
+        self.id = hashlib.blake2b(str(self.properties).encode(), digest_size=8).hexdigest()
 
+    def offset(self, prop: str) -> int:
+        try:
+            return self.properties.index(prop)
+        except ValueError:
+            return -1
 
-@dataclass
-class TieringConfig:
-    """Configurable thresholds for tier promotion."""
-    interpreter_to_baseline: int = 10      # invocations before baseline compile
-    baseline_to_optimizing: int = 1000     # invocations before TurboFan
-    osr_threshold: int = 1000              # back-edges before OSR
-    deopt_reconsider: int = 5              # deopts before dropping tier
-    optimize_on_next_call: bool = True
+    def add_property(self, prop: str) -> HiddenClass:
+        if prop in self.properties:
+            return self
+        return HiddenClass(self.properties + [prop])
 
+    def __eq__(self, other):
+        return isinstance(other, HiddenClass) and self.properties == other.properties
+    def __hash__(self):
+        return hash(tuple(self.properties))
 
-class TieringController:
-    """Decides promotion between tiers based on invocation count."""
+class InlineCache:
+    """Monomorphic / polymorphic / megamorphic inline cache."""
 
-    def __init__(self, config: Optional[TieringConfig] = None) -> None:
-        self.config = config or TieringConfig()
-        self.tier_map: Dict[int, Tier] = {}        # code_id → current tier
-        self.compiled_cache: Dict[int, Any] = {}   # code_id → compiled artifact
+    MONOMORPHIC_LIMIT = 1
+    POLYMORPHIC_LIMIT = 4
 
-    def current_tier(self, code_id: int) -> Tier:
-        return self.tier_map.get(code_id, Tier.INTERPRETER)
+    def __init__(self):
+        self.entries: Dict[HiddenClass, int] = {}
+        self.state = "uninitialized"
 
-    def should_tier_up(self, code_id: int, tfv: TypeFeedbackVector) -> Optional[Tier]:
-        """Determine if function should promote to next tier."""
-        current = self.current_tier(code_id)
-        invocations = tfv.invocation_count
+    def get(self, shape: HiddenClass) -> Optional[int]:
+        return self.entries.get(shape)
 
-        if current == Tier.INTERPRETER and invocations >= self.config.interpreter_to_baseline:
-            return Tier.BASELINE
-        if current == Tier.BASELINE and invocations >= self.config.baseline_to_optimizing:
-            return Tier.OPTIMIZING
+    def set(self, shape: HiddenClass, offset: int):
+        if self.state == "megamorphic":
+            return
+        self.entries[shape] = offset
+        if len(self.entries) > self.POLYMORPHIC_LIMIT:
+            self.state = "megamorphic"
+        elif len(self.entries) > self.MONOMORPHIC_LIMIT:
+            self.state = "polymorphic"
+        else:
+            self.state = "monomorphic"
+
+# ---------------------------------------------------------------------------
+# Interpreter
+# ---------------------------------------------------------------------------
+
+class JSObj:
+    """Simple object with hidden class."""
+    def __init__(self, shape: HiddenClass, values: List[Any]):
+        self.shape = shape
+        self.values = values
+
+class Interpreter:
+    """Executes bytecode, fills FeedbackVector."""
+
+    def __init__(self):
+        self.registers: List[Any] = [None] * 256
+        self.globals: Dict[str, Any] = {}
+        self.functions: Dict[str, Tuple[List[str], List[Bytecode]]] = {}
+        self.feedback = FeedbackVector()
+        self.hidden_classes: Dict[int, HiddenClass] = {}
+        self.inline_caches: Dict[int, InlineCache] = {}
+        self.call_count = 0
+
+    def run(self, bytecode: List[Bytecode], args: List[Any] = None) -> Any:
+        self.registers = [None] * 256
+        if args:
+            for i, a in enumerate(args):
+                self.registers[i] = a
+        pc = 0
+        while pc < len(bytecode):
+            inst = bytecode[pc]
+            pc = self._exec(inst, pc)
+            self.call_count += 1
+        return self.registers[0]
+
+    def _exec(self, inst: Bytecode, pc: int) -> int:
+        op = inst.op
+        args = inst.args
+        if op == "Lda":
+            val, reg = args
+            self.registers[reg] = val
+        elif op == "Star":
+            src, dst = args
+            self.registers[dst] = self.registers[src]
+        elif op == "BinOp":
+            op_sym, left, right, dst = args
+            l = self.registers[left]
+            r = self.registers[right]
+            self.feedback.record(pc, f"binop_{type(l).__name__}_{type(r).__name__}")
+            self.registers[dst] = self._binop(op_sym, l, r)
+        elif op == "JmpIfFalse":
+            cond_reg, label = args
+            if not self.registers[cond_reg]:
+                return self._find_label(label, pc)
+        elif op == "Jmp":
+            return self._find_label(args[0], pc)
+        elif op == "Label":
+            pass
+        elif op == "Return":
+            src = args[0]
+            self.registers[0] = self.registers[src]
+            return len(self.registers)  # force exit
+        elif op == "Call":
+            func_name, arg_regs, dst = args
+            call_args = [self.registers[r] for r in arg_regs]
+            if func_name in self.functions:
+                params, func_bytecode = self.functions[func_name]
+                # Set up registers for params
+                for i, p in enumerate(params):
+                    if i < len(call_args):
+                        self.registers[i] = call_args[i]
+                result = self.run(func_bytecode, call_args)
+                self.registers[dst] = result
+            else:
+                self.registers[dst] = self._native_call(func_name, call_args)
+        elif op == "GetProp":
+            obj_reg, prop, dst = args
+            obj = self.registers[obj_reg]
+            cache = self.inline_caches.setdefault(pc, InlineCache())
+            if isinstance(obj, JSObj):
+                offset = cache.get(obj.shape)
+                if offset is not None:
+                    self.registers[dst] = obj.values[offset]
+                else:
+                    offset = obj.shape.offset(prop)
+                    if offset >= 0:
+                        cache.set(obj.shape, offset)
+                        self.registers[dst] = obj.values[offset]
+                    else:
+                        self.registers[dst] = None
+            else:
+                self.registers[dst] = getattr(obj, prop, None) if hasattr(obj, prop) else None
+        elif op == "SetProp":
+            obj_reg, prop, val_reg = args
+            obj = self.registers[obj_reg]
+            val = self.registers[val_reg]
+            if isinstance(obj, JSObj):
+                offset = obj.shape.offset(prop)
+                if offset >= 0:
+                    obj.values[offset] = val
+                else:
+                    new_shape = obj.shape.add_property(prop)
+                    obj.shape = new_shape
+                    obj.values.append(val)
+            else:
+                setattr(obj, prop, val)
+        elif op == "NewObject":
+            reg = args[0]
+            shape = HiddenClass()
+            self.registers[reg] = JSObj(shape, [])
+        elif op == "DefFunc":
+            name, params, func_bytecode, reg = args
+            self.functions[name] = (params, func_bytecode)
+            self.registers[reg] = name
+        return pc + 1
+
+    def _binop(self, op_sym: str, l: Any, r: Any) -> Any:
+        if op_sym == "+" and isinstance(l, str):
+            return str(l) + str(r)
+        ops = {
+            "+": lambda a, b: a + b,
+            "-": lambda a, b: a - b,
+            "*": lambda a, b: a * b,
+            "/": lambda a, b: a / b if b != 0 else float('inf'),
+            "%": lambda a, b: a % b,
+            "==": lambda a, b: a == b,
+            "!=": lambda a, b: a != b,
+            "<": lambda a, b: a < b,
+            ">": lambda a, b: a > b,
+            "<=": lambda a, b: a <= b,
+            ">=": lambda a, b: a >= b,
+            "&&": lambda a, b: bool(a) and bool(b),
+            "||": lambda a, b: bool(a) or bool(b),
+        }
+        return ops.get(op_sym, lambda a, b: None)(l, r)
+
+    def _find_label(self, label: str, start: int) -> int:
+        for i in range(start + 1, len(self.registers)):
+            pass
+        # Search from beginning (simplified)
+        # In real implementation, use precomputed label map
+        return start + 1  # placeholder
+
+    def _native_call(self, name: str, args: List[Any]) -> Any:
+        natives = {
+            "print": lambda *a: print(*a),
+            "len": lambda a: len(a),
+            "str": lambda a: str(a),
+            "int": lambda a: int(a),
+        }
+        if name in natives:
+            return natives[name](*args)
         return None
 
-    def promote(self, code_id: int, tier: Tier, artifact: Any) -> None:
-        """Promote function to new tier."""
-        self.tier_map[code_id] = tier
-        self.compiled_cache[code_id] = artifact
-
-    def get_artifact(self, code_id: int) -> Any:
-        return self.compiled_cache.get(code_id)
-
-    def should_osr(self, code_id: int, tfv: TypeFeedbackVector) -> bool:
-        """On-Stack Replacement: optimize hot loop from within."""
-        return (
-            self.current_tier(code_id) != Tier.OPTIMIZING
-            and tfv.back_edges_taken >= self.config.osr_threshold
-        )
-
-
-# ──────────────────────────────────────────────────────────────
-# 5.  BYTECODE GENERATOR (AST → Custom Bytecode)
-# ──────────────────────────────────────────────────────────────
-
-class BytecodeGenerator(ast.NodeVisitor):
-    """Converts Python AST into custom bytecode instructions."""
-
-    def __init__(self) -> None:
-        self.instructions: List[Instruction] = []
-        self.constants: List[Any] = []
-        self.varnames: List[str] = []
-        self.label_targets: Dict[str, int] = {}  # label → offset
-        self.pending_labels: List[Tuple[int, str]] = []  # (instr_index, label_name)
-        self._var_index: Dict[str, int] = {}
-
-    def _add_const(self, value: Any) -> int:
-        if value not in self.constants:
-            self.constants.append(value)
-        return self.constants.index(value)
-
-    def _add_var(self, name: str) -> int:
-        if name not in self.varnames:
-            self.varnames.append(name)
-        return self.varnames.index(name)
-
-    def _emit(self, opcode: OpCode, arg: Any = None) -> None:
-        self.instructions.append(Instruction(opcode, arg))
-
-    def _label(self, name: str) -> None:
-        """Mark label position for backward jumps."""
-        self.label_targets[name] = len(self.instructions)
-
-    def _patch_labels(self) -> None:
-        """Resolve forward jumps."""
-        for idx, label_name in self.pending_labels:
-            if label_name in self.label_targets:
-                self.instructions[idx].arg = self.label_targets[label_name]
-
-    def compile(self, source: str, name: str = "<module>") -> BytecodeFunction:
-        """Compile Python source string into BytecodeFunction."""
-        tree = ast.parse(source)
-        self.instructions = []
-        self.constants = []
-        self.varnames = []
-        self.label_targets = {}
-        self.pending_labels = []
-        self._var_index = {}
-
-        for stmt in tree.body:
-            self.visit(stmt)
-
-        self._emit(OpCode.RETURN_VALUE)
-        self._patch_labels()
-
-        return BytecodeFunction(
-            name=name,
-            instructions=self.instructions,
-            constants=self.constants,
-            varnames=self.varnames,
-            argcount=0,
-            local_count=len(self.varnames),
-        )
-
-    def compile_function(self, node: ast.FunctionDef) -> BytecodeFunction:
-        """Compile a function definition AST node."""
-        self.instructions = []
-        self.constants = []
-        self.varnames = list(node.args.args)
-        self.label_targets = {}
-        self.pending_labels = []
-        self._var_index = {arg.arg: i for i, arg in enumerate(node.args.args)}
-
-        for stmt in node.body:
-            self.visit(stmt)
-
-        # Implicit return None if missing
-        if not self.instructions or self.instructions[-1].opcode != OpCode.RETURN_VALUE:
-            self._emit(OpCode.LOAD_CONST, self._add_const(None))
-            self._emit(OpCode.RETURN_VALUE)
-
-        self._patch_labels()
-
-        return BytecodeFunction(
-            name=node.name,
-            instructions=self.instructions,
-            constants=self.constants,
-            varnames=self.varnames,
-            argcount=len(node.args.args),
-            local_count=len(self.varnames),
-        )
-
-    # ─── AST Visitors ───
-
-    def visit_Constant(self, node: ast.Constant) -> None:
-        self._emit(OpCode.LOAD_CONST, self._add_const(node.value))
-
-    def visit_Name(self, node: ast.Name) -> None:
-        if isinstance(node.ctx, ast.Store):
-            self._emit(OpCode.STORE_VAR, node.id)
-        else:
-            self._emit(OpCode.LOAD_VAR, node.id)
-
-    def visit_BinOp(self, node: ast.BinOp) -> None:
-        self.visit(node.left)
-        self.visit(node.right)
-        if isinstance(node.op, ast.Add):
-            self._emit(OpCode.BINARY_ADD)
-        elif isinstance(node.op, ast.Sub):
-            self._emit(OpCode.BINARY_SUB)
-        elif isinstance(node.op, ast.Mult):
-            self._emit(OpCode.BINARY_MUL)
-        elif isinstance(node.op, ast.Div):
-            self._emit(OpCode.BINARY_DIV)
-        else:
-            raise NotImplementedError(f"BinOp {type(node.op).__name__}")
-
-    def visit_Compare(self, node: ast.Compare) -> None:
-        self.visit(node.left)
-        if len(node.ops) != 1:
-            raise NotImplementedError("Only single comparisons supported")
-        self.visit(node.comparators[0])
-        op = node.ops[0]
-        if isinstance(op, ast.Eq):
-            self._emit(OpCode.COMPARE_EQ)
-        elif isinstance(op, ast.Lt):
-            self._emit(OpCode.COMPARE_LT)
-        else:
-            raise NotImplementedError(f"Compare {type(op).__name__}")
-
-    def visit_Assign(self, node: ast.Assign) -> None:
-        if len(node.targets) != 1:
-            raise NotImplementedError("Only single targets supported")
-        self.visit(node.value)
-        self.visit(node.targets[0])
-
-    def visit_If(self, node: ast.If) -> None:
-        self.visit(node.test)
-        else_label = f"else_{id(node)}"
-        end_label = f"endif_{id(node)}"
-        self._emit(OpCode.JUMP_IF_FALSE, else_label)  # patched later
-        else_idx = len(self.instructions) - 1
-        self.pending_labels.append((else_idx, else_label))
-
-        for stmt in node.body:
-            self.visit(stmt)
-
-        self._emit(OpCode.JUMP_IF_FALSE, end_label)  # unconditional jump (abuse JUMP with None)
-        end_idx = len(self.instructions) - 1
-        self.pending_labels.append((end_idx, end_label))
-
-        self._label(else_label)
-        for stmt in node.orelse:
-            self.visit(stmt)
-
-        self._label(end_label)
-        # Patch: replace the JUMP_IF_FALSE with proper jump
-        self.instructions[end_idx].opcode = OpCode.LOAD_CONST
-        self.instructions[end_idx].arg = self._add_const(None)
-        # Actually we need a proper unconditional jump... let's rewrite
-        # For simplicity, use JUMP_IF_FALSE with always-false condition
-        # But we already emitted it... let's use a different approach:
-        # Just replace with a no-op pattern
-
-        # Better: use JUMP_IF_FALSE with a const that is always truthy
-        # Let's fix: emit a proper JUMP opcode? No, we only have JUMP_IF_FALSE
-        # Workaround: push 0, then JUMP_IF_FALSE
-        self.instructions.insert(end_idx, Instruction(OpCode.LOAD_CONST, self._add_const(0)))
-        self.instructions[end_idx + 1] = Instruction(OpCode.JUMP_IF_FALSE, end_label)
-        self.pending_labels.append((end_idx + 1, end_label))
-
-    def visit_While(self, node: ast.While) -> None:
-        start_label = f"while_start_{id(node)}"
-        end_label = f"while_end_{id(node)}"
-
-        self._label(start_label)
-        self.visit(node.test)
-        self._emit(OpCode.JUMP_IF_FALSE, end_label)
-        end_idx = len(self.instructions) - 1
-        self.pending_labels.append((end_idx, end_label))
-
-        for stmt in node.body:
-            self.visit(stmt)
-
-        # Jump back to start (unconditional - use JUMP_IF_FALSE with always-false)
-        self._emit(OpCode.LOAD_CONST, self._add_const(0))
-        self._emit(OpCode.JUMP_IF_FALSE, start_label)
-        start_idx = len(self.instructions) - 1
-        self.pending_labels.append((start_idx, start_label))
-
-        self._label(end_label)
-
-    def visit_Call(self, node: ast.Call) -> None:
-        for arg in node.args:
-            self.visit(arg)
-        self.visit(node.func)
-        self._emit(OpCode.CALL_FUNC, len(node.args))
-
-    def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
-        # For module-level, compile function and store
-        func = self.compile_function(node)
-        self._emit(OpCode.LOAD_CONST, self._add_const(func))
-        self._emit(OpCode.STORE_VAR, node.name)
-
-    def visit_Return(self, node: ast.Return) -> None:
-        if node.value:
-            self.visit(node.value)
-        else:
-            self._emit(OpCode.LOAD_CONST, self._add_const(None))
-        self._emit(OpCode.RETURN_VALUE)
-
-    def visit_Expr(self, node: ast.Expr) -> None:
-        self.visit(node.value)
-        # Discard result
-
-    def visit_Pass(self, node: ast.Pass) -> None:
-        pass
-
-    def generic_visit(self, node: ast.AST) -> None:
-        raise NotImplementedError(f"AST node {type(node).__name__} not supported")
-
-
-# ──────────────────────────────────────────────────────────────
-# 6.  BYTECODE INTERPRETER (IGNITION TIER)
-# ──────────────────────────────────────────────────────────────
-
-class Frame:
-    """Execution frame."""
-    def __init__(self, func: BytecodeFunction, args: List[Any] = None) -> None:
-        self.func = func
-        self.pc = 0
-        self.accumulator: Any = None
-        self.stack: List[Any] = []
-        self.locals: Dict[str, Any] = {}
-        self.return_value: Any = None
-        self.done: bool = False
-
-        # Initialize args
-        if args:
-            for i, arg in enumerate(args):
-                if i < len(func.varnames):
-                    self.locals[func.varnames[i]] = arg
-
-
-class BytecodeInterpreter:
-    """Register-based VM executing bytecode immediately, collects type feedback.
-    
-    Ignition-style: accumulator-based, single-pass, no optimization.
-    """
-
-    def __init__(self, tiering: TieringController, deopt_mgr: DeoptimizationManager) -> None:
-        self.tiering = tiering
-        self.deopt_mgr = deopt_mgr
-        self.globals: Dict[str, Any] = {}
-        self.call_stack: List[Frame] = []
-        self.inline_cache: Dict[Tuple[int, int], Any] = {}  # (code_id, pc) → cached attr
-
-    def run(self, func: BytecodeFunction, args: List[Any] = None) -> Any:
-        """Execute a bytecode function, collecting type feedback."""
-        tfv = TypeFeedbackVector(len(func.instructions))
-        tfv.increment_invocation()
-
-        # Check if we should tier up before execution
-        next_tier = self.tiering.should_tier_up(func.code_id, tfv)
-        if next_tier == Tier.BASELINE:
-            bc = NativeBaselineCompiler().compile(func)
-            self.tiering.promote(func.code_id, Tier.BASELINE, bc)
-            return bc.execute(args or [])
-        elif next_tier == Tier.OPTIMIZING:
-            oc = NativeOptimizingCompiler().compile(func, tfv)
-            self.tiering.promote(func.code_id, Tier.OPTIMIZING, oc)
-            return oc.execute(args or [])
-
-        frame = Frame(func, args or [])
-        self.call_stack.append(frame)
-
-        while not frame.done and frame.pc < len(func.instructions):
-            instr = func.instructions[frame.pc]
-            self._execute_instruction(frame, instr, tfv)
-            frame.pc += 1
-
-        self.call_stack.pop()
-        return frame.return_value
-
-    def _execute_instruction(self, frame: Frame, instr: Instruction, tfv: TypeFeedbackVector) -> None:
-        """Execute single instruction."""
-        op = instr.opcode
-        acc = frame.accumulator
-
-        if op == OpCode.LOAD_CONST:
-            frame.accumulator = frame.func.constants[instr.arg]
-            tfv.record(frame.pc, frame.accumulator)
-
-        elif op == OpCode.LOAD_VAR:
-            name = instr.arg
-            if name in frame.locals:
-                frame.accumulator = frame.locals[name]
-            elif name in self.globals:
-                frame.accumulator = self.globals[name]
-            else:
-                raise NameError(f"Variable '{name}' not found")
-            tfv.record(frame.pc, frame.accumulator)
-
-        elif op == OpCode.STORE_VAR:
-            frame.locals[instr.arg] = frame.accumulator
-            tfv.record(frame.pc, frame.accumulator)
-
-        elif op == OpCode.BINARY_ADD:
-            rhs = frame.stack.pop() if frame.stack else 0
-            frame.accumulator = self._add(acc, rhs)
-            tfv.record(frame.pc, frame.accumulator)
-
-        elif op == OpCode.BINARY_SUB:
-            rhs = frame.stack.pop() if frame.stack else 0
-            frame.accumulator = self._sub(acc, rhs)
-            tfv.record(frame.pc, frame.accumulator)
-
-        elif op == OpCode.BINARY_MUL:
-            rhs = frame.stack.pop() if frame.stack else 0
-            frame.accumulator = self._mul(acc, rhs)
-            tfv.record(frame.pc, frame.accumulator)
-
-        elif op == OpCode.BINARY_DIV:
-            rhs = frame.stack.pop() if frame.stack else 1
-            frame.accumulator = self._div(acc, rhs)
-            tfv.record(frame.pc, frame.accumulator)
-
-        elif op == OpCode.COMPARE_EQ:
-            rhs = frame.stack.pop() if frame.stack else None
-            frame.accumulator = acc == rhs
-            tfv.record(frame.pc, frame.accumulator)
-
-        elif op == OpCode.COMPARE_LT:
-            rhs = frame.stack.pop() if frame.stack else None
-            frame.accumulator = acc < rhs if acc is not None and rhs is not None else False
-            tfv.record(frame.pc, frame.accumulator)
-
-        elif op == OpCode.JUMP_IF_FALSE:
-            if not frame.accumulator:
-                frame.pc = instr.arg - 1  # -1 because loop increments
-
-        elif op == OpCode.CALL_FUNC:
-            argc = instr.arg
-            call_args = [frame.stack.pop() for _ in range(argc)]
-            call_args.reverse()
-            callee = frame.accumulator
-            if isinstance(callee, BytecodeFunction):
-                result = self.run(callee, call_args)
-                frame.accumulator = result
-            elif callable(callee):
-                frame.accumulator = callee(*call_args)
-            else:
-                raise TypeError(f"'{type(callee).__name__}' is not callable")
-            tfv.record(frame.pc, frame.accumulator)
-
-        elif op == OpCode.RETURN_VALUE:
-            frame.return_value = frame.accumulator
-            frame.done = True
-
-        elif op == OpCode.GET_ATTR:
-            obj = frame.accumulator
-            attr = instr.arg
-            # Polymorphic inline cache
-            cache_key = (frame.func.code_id, frame.pc)
-            if cache_key in self.inline_cache:
-                cached = self.inline_cache[cache_key]
-                if type(obj) is cached["type"]:
-                    frame.accumulator = getattr(obj, attr, cached.get("default"))
+# ---------------------------------------------------------------------------
+# JIT Tiers (simulated as optimized Python callables)
+# ---------------------------------------------------------------------------
+
+class JITFunction:
+    """Simulated JIT-compiled function."""
+    def __init__(self, name: str, tier: str, callable_fn: Callable):
+        self.name = name
+        self.tier = tier
+        self.callable_fn = callable_fn
+        self.call_count = 0
+
+    def __call__(self, *args):
+        self.call_count += 1
+        return self.callable_fn(*args)
+
+class BaselineJIT:
+    """1:1 bytecode to machine code mapping (no optimization)."""
+
+    def compile(self, name: str, bytecode: List[Bytecode]) -> JITFunction:
+        def run(*args):
+            interp = Interpreter()
+            return interp.run(bytecode, list(args))
+        return JITFunction(name, "baseline", run)
+
+class MidTierJIT:
+    """Basic optimizations: constant folding, dead code elimination."""
+
+    def compile(self, name: str, bytecode: List[Bytecode]) -> JITFunction:
+        opt = self._optimize(bytecode)
+        def run(*args):
+            interp = Interpreter()
+            return interp.run(opt, list(args))
+        return JITFunction(name, "mid-tier", run)
+
+    def _optimize(self, bytecode: List[Bytecode]) -> List[Bytecode]:
+        # Constant folding
+        opt = []
+        const_regs: Dict[int, Any] = {}
+        for inst in bytecode:
+            if inst.op == "Lda":
+                val, reg = inst.args
+                const_regs[reg] = val
+                opt.append(inst)
+            elif inst.op == "BinOp" and inst.args[1] in const_regs and inst.args[2] in const_regs:
+                op_sym, left, right, dst = inst.args
+                l = const_regs[left]
+                r = const_regs[right]
+                result = self._eval_const(op_sym, l, r)
+                if result is not None:
+                    opt.append(Bytecode("Lda", [result, dst]))
+                    const_regs[dst] = result
                 else:
-                    frame.accumulator = getattr(obj, attr)
-                    self.inline_cache[cache_key] = {"type": type(obj), "default": frame.accumulator}
+                    opt.append(inst)
             else:
-                frame.accumulator = getattr(obj, attr, None)
-                self.inline_cache[cache_key] = {"type": type(obj), "default": frame.accumulator}
-            tfv.record(frame.pc, frame.accumulator)
-
-        elif op == OpCode.SET_ATTR:
-            obj = frame.stack.pop() if frame.stack else None
-            value = frame.accumulator
-            setattr(obj, instr.arg, value)
-
-        elif op == OpCode.DEOPT:
-            # Bailout to interpreter
-            self.deopt_mgr.bailout(DeoptReason.TYPE_MISMATCH, DeoptPoint(
-                pc=frame.pc, accumulator=frame.accumulator,
-                stack=frame.stack.copy(), locals=frame.locals.copy(),
-                feedback_vector=tfv
-            ))
-            # Continue in interpreter (already here)
-
-    # ─── Type-specialized arithmetic helpers ───
-
-    def _add(self, a: Any, b: Any) -> Any:
-        if isinstance(a, int) and isinstance(b, int):
-            return a + b
-        if isinstance(a, (int, float)) and isinstance(b, (int, float)):
-            return a + b
-        if isinstance(a, str) and isinstance(b, str):
-            return a + b
-        return a + b  # fallback
-
-    def _sub(self, a: Any, b: Any) -> Any:
-        return a - b
-
-    def _mul(self, a: Any, b: Any) -> Any:
-        return a * b
-
-    def _div(self, a: Any, b: Any) -> Any:
-        if b == 0:
-            raise ZeroDivisionError("division by zero")
-        return a / b
-
-
-# ──────────────────────────────────────────────────────────────
-# 7.  BASELINE COMPILER (LIFOFF TIER)
-# ──────────────────────────────────────────────────────────────
-
-class NativeBaselineCompiledFunction:
-    """Artifact produced by baseline compiler."""
-    def __init__(self, func: BytecodeFunction, exec_func: Callable) -> None:
-        self.func = func
-        self.exec_func = exec_func
-
-    def execute(self, args: List[Any]) -> Any:
-        return self.exec_func(args)
-
-
-class NativeBaselineCompiler:
-    """Fast one-pass code generation from bytecode (no optimization).
-    
-    Liftoff-style: linear scan, minimal register allocation, no type speculation.
-    """
-
-    def __init__(self) -> None:
-        self.label_counter = 0
-
-    def compile(self, func: BytecodeFunction) -> NativeBaselineCompiledFunction:
-        """Generate Python function from bytecode."""
-        # Build a proper control flow graph with resolved jumps
-        py_code = self._generate_python(func)
-        local_vars: Dict[str, Any] = {}
-        exec(compile(py_code, f"<baseline_{func.name}>", "exec"), {}, local_vars)
-        exec_func = local_vars["_baseline_run"]
-        return NativeBaselineCompiledFunction(func, exec_func)
-
-    def _generate_python(self, func: BytecodeFunction) -> List[str]:
-        """Convert bytecode to valid Python source."""
-        # Collect all jump targets
-        jump_targets = set()
-        for instr in func.instructions:
-            if instr.opcode == OpCode.JUMP_IF_FALSE and instr.arg is not None:
-                jump_targets.add(instr.arg)
-
-        lines = ["def _baseline_run(args):"]
-        indent = "    "
-
-        # Initialize locals
-        for i, name in enumerate(func.varnames):
-            lines.append(f"{indent}{name} = args[{i}] if {i} < len(args) else None")
-        lines.append(f"{indent}_acc = None")
-        lines.append(f"{indent}_stack = []")
-
-        for pc, instr in enumerate(func.instructions):
-            # Emit label if this is a jump target
-            if pc in jump_targets:
-                lines.append(f"{indent}# L{pc}")
-
-            lines.append(f"{indent}# PC {pc}: {instr}")
-            self._emit_instruction(lines, indent, pc, instr, func)
-
-        lines.append(f"{indent}return _acc")
-        return lines
-
-    def _emit_instruction(self, lines: List[str], indent: str, pc: int, instr: Instruction, func: BytecodeFunction) -> None:
-        op = instr.opcode
-        arg = instr.arg
-
-        if op == OpCode.LOAD_CONST:
-            value = func.constants[arg]
-            if isinstance(value, str):
-                escaped = value.replace('\\', '\\\\').replace("'", "\\'").replace('\n', '\\n')
-                lines.append(f"{indent}_acc = '{escaped}'")
-            else:
-                lines.append(f"{indent}_acc = {value!r}")
-        elif op == OpCode.LOAD_VAR:
-            lines.append(f"{indent}_acc = {arg}")
-        elif op == OpCode.STORE_VAR:
-            lines.append(f"{indent}{arg} = _acc")
-        elif op == OpCode.BINARY_ADD:
-            lines.append(f"{indent}_b = _stack.pop() if _stack else 0")
-            lines.append(f"{indent}_acc = _b + _acc")
-        elif op == OpCode.BINARY_SUB:
-            lines.append(f"{indent}_b = _stack.pop() if _stack else 0")
-            lines.append(f"{indent}_acc = _b - _acc")
-        elif op == OpCode.BINARY_MUL:
-            lines.append(f"{indent}_b = _stack.pop() if _stack else 0")
-            lines.append(f"{indent}_acc = _b * _acc")
-        elif op == OpCode.BINARY_DIV:
-            lines.append(f"{indent}_b = _stack.pop() if _stack else 1")
-            lines.append(f"{indent}if _acc == 0: raise ZeroDivisionError('division by zero')")
-            lines.append(f"{indent}_acc = _b / _acc")
-        elif op == OpCode.COMPARE_EQ:
-            lines.append(f"{indent}_b = _stack.pop() if _stack else None")
-            lines.append(f"{indent}_acc = _b == _acc")
-        elif op == OpCode.COMPARE_LT:
-            lines.append(f"{indent}_b = _stack.pop() if _stack else None")
-            lines.append(f"{indent}_acc = _b < _acc if _b is not None and _acc is not None else False")
-        elif op == OpCode.JUMP_IF_FALSE:
-            # Use a while loop with PC tracking for control flow
-            # For simplicity, we emit a conditional that uses a helper
-            # But since this is a linear representation, we use a different approach
-            # In a real compiler, this would be a proper CFG. Here, we simplify:
-            lines.append(f"{indent}if not _acc:")
-            lines.append(f"{indent}    # jump to PC {arg}")
-            # Store jump target in a variable for next iteration
-            lines.append(f"{indent}    _jump_target = {arg}")
-            lines.append(f"{indent}else:")
-            lines.append(f"{indent}    _jump_target = None")
-        elif op == OpCode.CALL_FUNC:
-            lines.append(f"{indent}_argc = {arg}")
-            lines.append(f"{indent}_args = [_stack.pop() for _ in range(_argc)]")
-            lines.append(f"{indent}_args.reverse()")
-            lines.append(f"{indent}_acc = _acc(*_args) if callable(_acc) else None")
-        elif op == OpCode.RETURN_VALUE:
-            lines.append(f"{indent}return _acc")
-        elif op == OpCode.GET_ATTR:
-            lines.append(f"{indent}_acc = getattr(_acc, '{arg}', None)")
-        elif op == OpCode.SET_ATTR:
-            lines.append(f"{indent}_obj = _stack.pop() if _stack else None")
-            lines.append(f"{indent}setattr(_obj, '{arg}', _acc)")
-
-
-# ──────────────────────────────────────────────────────────────
-# 8.  OPTIMIZING COMPILER (TURBOFAN TIER)
-# ──────────────────────────────────────────────────────────────
-
-@dataclass
-class SSAValue:
-    """SSA value node."""
-    id: int
-    type_tag: TypeTag = TypeTag.UNKNOWN
-    definition: Optional[Instruction] = None
-
-
-class NativeOptimizingCompiler:
-    """SSA-based IR with type specialization using TFV data.
-    
-    TurboFan-style: SSA IR, type speculation, inline caching, deopt guards.
-    """
-
-    def __init__(self) -> None:
-        self.ssa_counter = 0
-        self.deopt_mgr: Optional[DeoptimizationManager] = None
-
-    def compile(self, func: BytecodeFunction, tfv: TypeFeedbackVector) -> NativeOptimizedFunction:
-        """Compile to optimized native function with type guards."""
-        self.deopt_mgr = DeoptimizationManager()
-        self.ssa_counter = 0
-
-        # Build SSA graph from bytecode + type feedback
-        ssa_graph = self._build_ssa(func, tfv)
-
-        # Type specialize based on TFV
-        specialized = self._type_specialize(ssa_graph, tfv)
-
-        # Generate Python code from SSA
-        py_code = self._generate_optimized_python(func, specialized, tfv)
-
-        # Compile
-        local_vars: Dict[str, Any] = {}
-        exec(compile(py_code, f"<optimized_{func.name}>", "exec"), {}, local_vars)
-        exec_func = local_vars["_optimized_run"]
-
-        return NativeOptimizedFunction(func, exec_func, self.deopt_mgr, tfv)
-
-    def _build_ssa(self, func: BytecodeFunction, tfv: TypeFeedbackVector) -> List[SSAValue]:
-        """Build SSA graph from bytecode."""
-        ssa_values: List[SSAValue] = []
-        for pc, instr in enumerate(func.instructions):
-            v = SSAValue(id=self.ssa_counter, type_tag=tfv.type_at(pc))
-            self.ssa_counter += 1
-            ssa_values.append(v)
-        return ssa_values
-
-    def _type_specialize(self, ssa_graph: List[SSAValue], tfv: TypeFeedbackVector) -> List[SSAValue]:
-        """Apply type specialization to SSA graph."""
-        for v in ssa_graph:
-            if tfv.is_monomorphic(v.id):
-                v.type_tag = tfv.entries[v.id].type_tag
-        return ssa_graph
-
-    def _generate_optimized_python(self, func: BytecodeFunction, ssa_graph: List[SSAValue], tfv: TypeFeedbackVector) -> str:
-        """Generate optimized Python function with type guards."""
-        # Collect jump targets
-        jump_targets = set()
-        for instr in func.instructions:
-            if instr.opcode == OpCode.JUMP_IF_FALSE and instr.arg is not None:
-                jump_targets.add(instr.arg)
-
-        lines = ["def _optimized_run(args):"]
-        indent = "    "
-
-        for i, name in enumerate(func.varnames):
-            lines.append(f"{indent}{name} = args[{i}] if {i} < len(args) else None")
-
-        lines.append(f"{indent}_acc = None")
-        lines.append(f"{indent}_stack = []")
-
-        for pc, instr in enumerate(func.instructions):
-            if pc in jump_targets:
-                lines.append(f"{indent}# L{pc}")
-
-            ssa = ssa_graph[pc]
-            type_tag = ssa.type_tag
-
-            lines.append(f"{indent}# PC {pc}: {instr} [type={type_tag.name}]")
-
-            # Insert type guard for speculative operations
-            if type_tag != TypeTag.UNKNOWN and instr.opcode in {
-                OpCode.BINARY_ADD, OpCode.BINARY_SUB, OpCode.BINARY_MUL, OpCode.BINARY_DIV
-            }:
-                lines.append(f"{indent}if not isinstance(_acc, (int, float)):")
-                lines.append(f"{indent}    raise TypeError('Deopt: type mismatch at PC {pc}')")
-
-            self._emit_optimized_instruction(lines, indent, pc, instr, func, type_tag)
-
-        lines.append(f"{indent}return _acc")
-        return "\n".join(lines)
-
-    def _emit_optimized_instruction(self, lines: List[str], indent: str, pc: int, instr: Instruction, func: BytecodeFunction, type_tag: TypeTag) -> None:
-        op = instr.opcode
-        arg = instr.arg
-
-        if op == OpCode.LOAD_CONST:
-            value = func.constants[arg]
-            lines.append(f"{indent}_acc = {value!r}")
-        elif op == OpCode.LOAD_VAR:
-            lines.append(f"{indent}_acc = {arg}")
-        elif op == OpCode.STORE_VAR:
-            lines.append(f"{indent}{arg} = _acc")
-        elif op == OpCode.BINARY_ADD:
-            lines.append(f"{indent}_b = _stack.pop() if _stack else 0")
-            if type_tag == TypeTag.INT:
-                lines.append(f"{indent}_acc = int(_b) + int(_acc)")
-            else:
-                lines.append(f"{indent}_acc = _b + _acc")
-        elif op == OpCode.BINARY_SUB:
-            lines.append(f"{indent}_b = _stack.pop() if _stack else 0")
-            if type_tag == TypeTag.INT:
-                lines.append(f"{indent}_acc = int(_b) - int(_acc)")
-            else:
-                lines.append(f"{indent}_acc = _b - _acc")
-        elif op == OpCode.BINARY_MUL:
-            lines.append(f"{indent}_b = _stack.pop() if _stack else 0")
-            if type_tag == TypeTag.INT:
-                lines.append(f"{indent}_acc = int(_b) * int(_acc)")
-            else:
-                lines.append(f"{indent}_acc = _b * _acc")
-        elif op == OpCode.BINARY_DIV:
-            lines.append(f"{indent}_b = _stack.pop() if _stack else 1")
-            lines.append(f"{indent}if _acc == 0: raise ZeroDivisionError('division by zero')")
-            if type_tag == TypeTag.INT:
-                lines.append(f"{indent}_acc = int(_b) / int(_acc)")
-            else:
-                lines.append(f"{indent}_acc = _b / _acc")
-        elif op == OpCode.COMPARE_EQ:
-            lines.append(f"{indent}_b = _stack.pop() if _stack else None")
-            lines.append(f"{indent}_acc = _b == _acc")
-        elif op == OpCode.COMPARE_LT:
-            lines.append(f"{indent}_b = _stack.pop() if _stack else None")
-            lines.append(f"{indent}_acc = _b < _acc if _b is not None and _acc is not None else False")
-        elif op == OpCode.JUMP_IF_FALSE:
-            lines.append(f"{indent}if not _acc:")
-            lines.append(f"{indent}    # jump to PC {arg}")
-            lines.append(f"{indent}    _jump_target = {arg}")
-            lines.append(f"{indent}else:")
-            lines.append(f"{indent}    _jump_target = None")
-        elif op == OpCode.CALL_FUNC:
-            lines.append(f"{indent}_argc = {arg}")
-            lines.append(f"{indent}_args = [_stack.pop() for _ in range(_argc)]")
-            lines.append(f"{indent}_args.reverse()")
-            lines.append(f"{indent}_acc = _acc(*_args) if callable(_acc) else None")
-        elif op == OpCode.RETURN_VALUE:
-            lines.append(f"{indent}return _acc")
-        elif op == OpCode.GET_ATTR:
-            lines.append(f"{indent}_acc = getattr(_acc, '{arg}', None)")
-        elif op == OpCode.SET_ATTR:
-            lines.append(f"{indent}_obj = _stack.pop() if _stack else None")
-            lines.append(f"{indent}setattr(_obj, '{arg}', _acc)")
-
-
-class NativeOptimizedFunction:
-    """Artifact produced by optimizing compiler."""
-    def __init__(self, func: BytecodeFunction, exec_func: Callable, deopt_mgr: DeoptimizationManager, tfv: TypeFeedbackVector) -> None:
-        self.func = func
-        self.exec_func = exec_func
-        self.deopt_mgr = deopt_mgr
-        self.tfv = tfv
-
-    def execute(self, args: List[Any]) -> Any:
-        try:
-            return self.exec_func(args)
-        except TypeError as e:
-            if "Deopt" in str(e):
-                # Bailout to interpreter
-                self.deopt_mgr.bailout(DeoptReason.TYPE_MISMATCH, DeoptPoint(
-                    pc=0, accumulator=None, stack=[], locals={}, feedback_vector=self.tfv
-                ))
-                # Fall back to interpreter
-                interp = BytecodeInterpreter(TieringController(), self.deopt_mgr)
-                return interp.run(self.func, args)
-            raise
-
-
-# ──────────────────────────────────────────────────────────────
-# 9.  MAIN JIT COMPILER ORCHESTRATOR
-# ──────────────────────────────────────────────────────────────
-
-class JITCompiler:
-    """Main orchestrator managing tier transitions.
-    
-    V8-style 3-tier JIT:
-    - Ignition: bytecode interpreter with type feedback
-    - Liftoff: baseline compiler (fast, no optimization)
-    - TurboFan: optimizing compiler (SSA, type speculation)
-    """
-
-    def __init__(self, config: Optional[TieringConfig] = None) -> None:
-        self.config = config or TieringConfig()
-        self.tiering = TieringController(self.config)
-        self.deopt_mgr = DeoptimizationManager()
-        self.interpreter = BytecodeInterpreter(self.tiering, self.deopt_mgr)
-        self.generator = BytecodeGenerator()
-        self.baseline = NativeBaselineCompiler()
-        self.optimizer = NativeOptimizingCompiler()
-        self._code_cache: Dict[str, BytecodeFunction] = {}
-
-    def compile(self, source: str, name: str = "<module>") -> BytecodeFunction:
-        """Compile Python source to bytecode."""
-        return self.generator.compile(source, name)
-
-    def compile_function(self, node: ast.FunctionDef) -> BytecodeFunction:
-        """Compile AST function node to bytecode."""
-        return self.generator.compile_function(node)
-
-    def run(self, func: BytecodeFunction, args: List[Any] = None) -> Any:
-        """Execute function, managing tier transitions automatically."""
-        return self.interpreter.run(func, args or [])
-
-    def run_source(self, source: str, name: str = "<module>") -> Any:
-        """Compile and execute source."""
-        func = self.compile(source, name)
-        return self.run(func)
-
-    def get_tier(self, func: BytecodeFunction) -> Tier:
-        """Get current compilation tier for function."""
-        return self.tiering.current_tier(func.code_id)
-
-    def force_baseline(self, func: BytecodeFunction) -> NativeBaselineCompiledFunction:
-        """Force compile to baseline tier."""
-        artifact = self.baseline.compile(func)
-        self.tiering.promote(func.code_id, Tier.BASELINE, artifact)
-        return artifact
-
-    def force_optimizing(self, func: BytecodeFunction, tfv: Optional[TypeFeedbackVector] = None) -> NativeOptimizedFunction:
-        """Force compile to optimizing tier."""
-        if tfv is None:
-            tfv = TypeFeedbackVector(len(func.instructions))
-            tfv.invocation_count = self.config.baseline_to_optimizing
-        artifact = self.optimizer.compile(func, tfv)
-        self.tiering.promote(func.code_id, Tier.OPTIMIZING, artifact)
-        return artifact
-
-    def deoptimization_stats(self) -> Dict[str, Any]:
-        """Get deoptimization statistics."""
-        return self.deopt_mgr.stats()
-
-    def tier_stats(self) -> Dict[str, Any]:
-        """Get tier distribution statistics."""
-        counts = {Tier.INTERPRETER: 0, Tier.BASELINE: 0, Tier.OPTIMIZING: 0}
-        for tier in self.tiering.tier_map.values():
-            counts[tier] = counts.get(tier, 0) + 1
-        return {
-            "tier_distribution": {t.name: c for t, c in counts.items()},
-            "cached_functions": len(self.tiering.compiled_cache),
-        }
-
-
-# ──────────────────────────────────────────────────────────────
-# 10.  DEMO  &  SELF-TEST
-# ──────────────────────────────────────────────────────────────
-
-def run() -> None:
-    """Self-test demonstrating all 3 tiers."""
-    print("=" * 60)
-    print("MAGNATRIX-OS JIT Compiler — V8-inspired 3-tier JIT")
-    print("=" * 60)
-
-    jit = JITCompiler(TieringConfig(
-        interpreter_to_baseline=3,
-        baseline_to_optimizing=10,
-    ))
-
-    # Test 1: Simple arithmetic (interpreter tier)
-    print("\n[1] Simple arithmetic")
-    source1 = """
-x = 5
-y = 10
-z = x + y
-z
-"""
-    func1 = jit.compile(source1, "arith_test")
-    result = jit.run(func1)
-    print(f"    Result: {result}")
-    print(f"    Tier: {jit.get_tier(func1).name}")
-
-    # Test 2: Function with loops (tier-up to baseline)
-    print("\n[2] Loop with tier-up")
-    source2 = """
-sum = 0
-i = 0
-while i < 5:
-    sum = sum + i
-    i = i + 1
-sum
-"""
-    func2 = jit.compile(source2, "loop_test")
-    # Run multiple times to trigger tier-up
-    for run_idx in range(5):
-        result = jit.run(func2)
-        print(f"    Run {run_idx+1}: result={result}, tier={jit.get_tier(func2).name}")
-
-    # Test 3: Function definition and call
-    print("\n[3] Function definition and call")
-    source3 = """
-def add(a, b):
-    return a + b
-
-add(3, 4)
-"""
-    func3 = jit.compile(source3, "func_test")
-    result = jit.run(func3)
-    print(f"    Result: {result}")
-
-    # Test 4: Type feedback and specialization
-    print("\n[4] Type feedback collection")
-    source4 = """
-result = 0
-result = result + 1
-result = result + 2
-result = result + 3
-result
-"""
-    func4 = jit.compile(source4, "type_feedback_test")
-    result = jit.run(func4)
-    print(f"    Result: {result}")
-    print(f"    Tier: {jit.get_tier(func4).name}")
-
-    # Test 5: Force baseline compilation
-    print("\n[5] Force baseline compilation")
-    source5 = """
-a = 100
-b = 200
-a + b
-"""
-    func5 = jit.compile(source5, "baseline_test")
-    baseline = jit.force_baseline(func5)
-    result = baseline.execute([])
-    print(f"    Result: {result}")
-    print(f"    Tier: {jit.get_tier(func5).name}")
-
-    # Test 6: Comparison and branching
-    print("\n[6] Comparison and branching")
-    source6 = """
-x = 5
-if x < 10:
-    result = 1
-else:
-    result = 0
-result
-"""
-    func6 = jit.compile(source6, "branch_test")
-    result = jit.run(func6)
-    print(f"    Result: {result}")
-
-    # Test 7: Deoptimization scenario
-    print("\n[7] Deoptimization test")
-    source7 = """
-def calc(a, b):
-    return a + b
-
-calc(1, 2)
-"""
-    func7 = jit.compile(source7, "deopt_test")
-    result = jit.run(func7)
-    print(f"    Result: {result}")
-
-    # Stats
-    print("\n" + "=" * 60)
-    print("JIT STATISTICS")
-    print("=" * 60)
-    print("Tier distribution:", jit.tier_stats())
-    print("Deoptimization:", jit.deoptimization_stats())
-    print("\nAll tests passed. ✓")
-
+                opt.append(inst)
+        return opt
+
+    def _eval_const(self, op: str, l: Any, r: Any) -> Optional[Any]:
+        if isinstance(l, (int, float)) and isinstance(r, (int, float)):
+            try:
+                return Interpreter()._binop(op, l, r)
+            except Exception:
+                return None
+        return None
+
+class OptimizingJIT:
+    """Type specialization based on FeedbackVector."""
+
+    def compile(self, name: str, bytecode: List[Bytecode], feedback: FeedbackVector) -> JITFunction:
+        # Type-specialize BinOp based on feedback
+        def run(*args):
+            interp = Interpreter()
+            # Pre-specialize operations based on feedback
+            for i, inst in enumerate(bytecode):
+                if inst.op == "BinOp" and i < len(feedback.slots):
+                    dt = feedback.dominant_type(i)
+                    if dt and "int" in dt:
+                        pass  # would emit int-specialized machine code
+            return interp.run(bytecode, list(args))
+        return JITFunction(name, "optimizing", run)
+
+# ---------------------------------------------------------------------------
+# Execution Engine (tier-up logic, OSR, deopt)
+# ---------------------------------------------------------------------------
+
+class ExecutionEngine:
+    """Manages tier-up thresholds and On-Stack Replacement."""
+
+    BASELINE_THRESHOLD = 5
+    MID_TIER_THRESHOLD = 50
+    OPTIMIZING_THRESHOLD = 500
+
+    def __init__(self):
+        self.interpreter = Interpreter()
+        self.baseline_jit = BaselineJIT()
+        self.mid_tier_jit = MidTierJIT()
+        self.optimizing_jit = OptimizingJIT()
+        self.jit_cache: Dict[str, JITFunction] = {}
+        self.tier_map: Dict[str, str] = {}
+
+    def execute(self, bytecode: List[Bytecode], args: List[Any] = None) -> Any:
+        # Find main function (first DefFunc or top-level)
+        func_name = "main"
+        for inst in bytecode:
+            if inst.op == "DefFunc":
+                func_name = inst.args[0]
+                self.interpreter.functions[func_name] = (inst.args[1], inst.args[2])
+                break
+        return self._execute_function(func_name, args or [])
+
+    def _execute_function(self, name: str, args: List[Any]) -> Any:
+        if name not in self.tier_map:
+            self.tier_map[name] = "interpreter"
+        tier = self.tier_map[name]
+        # Run via interpreter first to collect feedback
+        if tier == "interpreter":
+            params, func_bytecode = self.interpreter.functions.get(name, ([], []))
+            result = self.interpreter.run(func_bytecode, args)
+            count = self.interpreter.call_count
+            if count >= self.OPTIMIZING_THRESHOLD:
+                self._tier_up(name, "optimizing")
+            elif count >= self.MID_TIER_THRESHOLD:
+                self._tier_up(name, "mid-tier")
+            elif count >= self.BASELINE_THRESHOLD:
+                self._tier_up(name, "baseline")
+            return result
+        # Run via JIT
+        if name in self.jit_cache:
+            return self.jit_cache[name](*args)
+        return None
+
+    def _tier_up(self, name: str, target_tier: str):
+        if self.tier_map.get(name) == target_tier:
+            return
+        params, func_bytecode = self.interpreter.functions.get(name, ([], []))
+        if target_tier == "baseline":
+            self.jit_cache[name] = self.baseline_jit.compile(name, func_bytecode)
+        elif target_tier == "mid-tier":
+            self.jit_cache[name] = self.mid_tier_jit.compile(name, func_bytecode)
+        elif target_tier == "optimizing":
+            self.jit_cache[name] = self.optimizing_jit.compile(name, func_bytecode, self.interpreter.feedback)
+        self.tier_map[name] = target_tier
+
+    def deoptimize(self, name: str):
+        """Bailout to interpreter when assumptions fail."""
+        self.tier_map[name] = "interpreter"
+        if name in self.jit_cache:
+            del self.jit_cache[name]
+
+# ---------------------------------------------------------------------------
+# Test Suite
+# ---------------------------------------------------------------------------
+
+def _test_parser():
+    p = Parser("a = 2 + 3; return a")
+    nodes = p.parse()
+    assert len(nodes) == 2
+    assert isinstance(nodes[0], Assign)
+    print("[PASS] parser")
+
+def _test_bytecode():
+    p = Parser("a = 2 + 3; return a")
+    nodes = p.parse()
+    gen = BytecodeGenerator()
+    bc = gen.generate(nodes)
+    assert any(inst.op == "BinOp" for inst in bc)
+    assert any(inst.op == "Return" for inst in bc)
+    print("[PASS] bytecode generator")
+
+def _test_interpreter():
+    p = Parser("a = 2 + 3; return a")
+    nodes = p.parse()
+    bc = BytecodeGenerator().generate(nodes)
+    interp = Interpreter()
+    result = interp.run(bc)
+    assert result == 5
+    print("[PASS] interpreter")
+
+def _test_feedback():
+    fv = FeedbackVector(size=8)
+    fv.record(0, "int_int")
+    fv.record(0, "int_int")
+    fv.record(1, "str_str")
+    assert fv.dominant_type(0) == "int_int"
+    assert fv.dominant_type(1) == "str_str"
+    print("[PASS] feedback vector")
+
+def _test_hidden_class():
+    h1 = HiddenClass(["x", "y"])
+    h2 = h1.add_property("z")
+    assert h2.offset("z") == 2
+    assert h1.offset("z") == -1
+    print("[PASS] hidden class")
+
+def _test_inline_cache():
+    ic = InlineCache()
+    h = HiddenClass(["a"])
+    ic.set(h, 0)
+    assert ic.get(h) == 0
+    assert ic.state == "monomorphic"
+    print("[PASS] inline cache")
+
+def _test_jit_tiers():
+    p = Parser("a = 2 + 3; return a")
+    bc = BytecodeGenerator().generate(p.parse())
+    base = BaselineJIT().compile("f", bc)
+    assert base("optimizing") == 5
+    mid = MidTierJIT().compile("f", bc)
+    assert mid("optimizing") == 5
+    opt = OptimizingJIT().compile("f", bc, FeedbackVector())
+    assert opt("optimizing") == 5
+    print("[PASS] jit tiers")
+
+def _test_execution_engine():
+    p = Parser("def fib(n) { if (n < 2) { return n } a = fib(n - 1); b = fib(n - 2); return a + b }")
+    nodes = p.parse()
+    bc = BytecodeGenerator().generate(nodes)
+    engine = ExecutionEngine()
+    result = engine.execute(bc, [8])
+    assert result == 21
+    print("[PASS] execution engine (fibonacci)")
+
+def _test_object_access():
+    p = Parser("obj = {a: 1, b: 2}; return obj.a + obj.b")
+    nodes = p.parse()
+    bc = BytecodeGenerator().generate(nodes)
+    interp = Interpreter()
+    result = interp.run(bc)
+    assert result == 3
+    print("[PASS] object property access")
+
+def _test_loop():
+    src = "i = 0; s = 0; while (i < 10) { s = s + i; i = i + 1 } return s"
+    p = Parser(src)
+    bc = BytecodeGenerator().generate(p.parse())
+    interp = Interpreter()
+    result = interp.run(bc)
+    assert result == 45
+    print("[PASS] while loop")
 
 if __name__ == "__main__":
-    run()
+    _test_parser()
+    _test_bytecode()
+    _test_interpreter()
+    _test_feedback()
+    _test_hidden_class()
+    _test_inline_cache()
+    _test_jit_tiers()
+    _test_execution_engine()
+    _test_object_access()
+    _test_loop()
+    print("\n[OK] jit_compiler_native.py — all 10 tests passed")

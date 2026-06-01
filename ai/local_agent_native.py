@@ -1,356 +1,305 @@
-#!/usr/bin/env python3
-"""
-MAGNATRIX-OS Layer: AI — Local LLM Agent from Scratch
-File: ai/local_agent_native.py
-Pattern: AMATI-PELAJARI-TIRU dari FirstFocus15/AI-Agents + agents-from-scratch
-
-Native pure-Python reimplementation of:
-  - Pure Python agent using local GGUF model (no frameworks)
-  - Manual prompt construction with system/user/assistant roles
-  - Simple memory: rolling buffer of recent messages
-  - Tool definitions via JSON schema in prompt
-  - Manual parsing of tool calls dari LLM output
-  - GGUF loader stub (documented how to integrate real one)
-  - Evaluation framework: golden dataset for regression testing
-  - Telemetry: latency, success rate, token usage tracking
-
-Zero external dependencies. Pure Python standard library.
-"""
+# local_agent_native.py
+# AMATI-PELAJARI-TIRU: Pure Python Local LLM Agent (no LangChain, no LlamaIndex)
+# Manual prompt construction, tool parsing, rolling memory, GGUF loader stub.
+# Pure Python, standard library only.
 
 from __future__ import annotations
-
-import json
-import random
-import re
-import time
-from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, List, Optional, Tuple
-
+import json, re, time, dataclasses, typing, os, hashlib
+from collections import deque
+from typing import List, Dict, Optional, Callable, Any
 
 # ---------------------------------------------------------------------------
-# 1.  LOCAL LLM — interface with GGUF stub
+# GGUF Loader Stub (real implementation via ctypes to llama.cpp)
+# ---------------------------------------------------------------------------
+
+class GGUFLoader:
+    """Stub for GGUF model loading. Documented integration point for llama.cpp via ctypes."""
+
+    def __init__(self, path: str):
+        self.path = path
+        self.loaded = False
+
+    def load(self) -> bool:
+        # STUB: real implementation would use ctypes to load llama.cpp shared library
+        # and call llama_load_model_from_file(path, params)
+        if os.path.exists(self.path) or self.path.endswith(".gguf"):
+            self.loaded = True
+        return self.loaded
+
+    def generate(self, prompt: str, max_tokens: int = 256, temperature: float = 0.7) -> str:
+        if not self.loaded:
+            return "[Model not loaded]"
+        # STUB: real implementation would call llama.cpp inference
+        return f"[GGUF stub response for: {prompt[:40]}...]"
+
+# ---------------------------------------------------------------------------
+# Local LLM Interface
 # ---------------------------------------------------------------------------
 
 class LocalLLM:
-    """
-    Interface untuk local LLM. Mock implementation with deterministic responses.
-    Real implementation: load GGUF via llama.cpp ctypes FFI.
-    """
+    """Interface for local model. Swappable between real GGUF and mock."""
 
-    def __init__(self, model_path: str = "mock-model.gguf") -> None:
-        self.model_path = model_path
-        self.loaded = False
-        self._calls = 0
-        self._tokens_generated = 0
+    def __init__(self, model_path: Optional[str] = None, mock: bool = True):
+        self.mock = mock
+        self.gguf = None
+        if not mock and model_path:
+            self.gguf = GGUFLoader(model_path)
+            self.gguf.load()
 
-    def load(self) -> bool:
-        """Load model. Returns success."""
-        # STUB: Real implementation uses llama.cpp via ctypes
-        # Example:
-        #   import ctypes
-        #   lib = ctypes.CDLL("./libllama.so")
-        #   ctx = lib.llama_load_model(self.model_path.encode())
-        self.loaded = True
-        return True
+    def generate(self, prompt: str, max_tokens: int = 256) -> str:
+        if self.mock:
+            return self._mock_generate(prompt, max_tokens)
+        if self.gguf:
+            return self.gguf.generate(prompt, max_tokens)
+        return "[No model loaded]"
 
-    def generate(self, prompt: str, max_tokens: int = 512,
-                 temperature: float = 0.7) -> str:
-        """Generate text from prompt."""
-        if not self.loaded:
-            self.load()
-        self._calls += 1
-        self._tokens_generated += min(max_tokens, len(prompt) // 4 + 20)
-
-        # Mock: deterministic heuristic responses
-        p = prompt.lower()
-        if "search" in p or "find" in p:
-            return f'{{"tool": "search", "args": "{prompt[:30]}"}}'
-        if "write" in p or "save" in p:
-            return f'{{"tool": "write_file", "args": "output.txt|{prompt[:50]}"}}'
-        if "hello" in p or "hi" in p:
-            return "Hello! I am a local LLM agent running entirely on your machine."
-        if "calculate" in p or "math" in p or "=" in p:
-            return "I can help with calculations. Please provide the expression."
-        if "tool" in p and "{" in prompt:
-            return "I will use the appropriate tool for this task."
-        return f"[LocalLLM] Processed prompt ({len(prompt)} chars). This is a mock response for testing."
-
-    def get_stats(self) -> Dict[str, Any]:
-        return {
-            "model": self.model_path,
-            "calls": self._calls,
-            "tokens_generated": self._tokens_generated,
-        }
-
+    def _mock_generate(self, prompt: str, max_tokens: int) -> str:
+        # Deterministic heuristic based on prompt keywords
+        if "tool" in prompt.lower() or "function" in prompt.lower():
+            return json.dumps({"name": "search", "arguments": {"query": "hello"}})
+        if "calculate" in prompt.lower() or "math" in prompt.lower():
+            return "42"
+        if "hello" in prompt.lower() or "hi" in prompt.lower():
+            return "Hello! I am a local AI agent."
+        return "This is a mock local LLM response."
 
 # ---------------------------------------------------------------------------
-# 2.  PROMPT BUILDER
+# Prompt Builder
 # ---------------------------------------------------------------------------
 
 class PromptBuilder:
-    """Builds prompts dengan system message, history, and tool definitions."""
+    """Manual prompt construction with system/user/assistant roles and tool schemas."""
 
-    SYSTEM_TEMPLATE = """You are a helpful AI assistant running locally on the user's machine.
-You have access to the following tools:
-{tools}
+    def __init__(self, system_prompt: str = "You are a helpful AI assistant."):
+        self.system_prompt = system_prompt
 
-When you need to use a tool, respond with a JSON object:
-{{"tool": "TOOL_NAME", "args": "arguments"}}
-
-Be concise and accurate."""
-
-    @staticmethod
-    def build(system: str, history: List[Dict[str, str]],
-              tools: List[Dict[str, Any]]) -> str:
-        """Build full prompt."""
-        tools_desc = "\n".join(
-            f"- {t['name']}: {t.get('description', 'No description')}"
-            for t in tools
-        )
-        system_msg = system or PromptBuilder.SYSTEM_TEMPLATE.format(tools=tools_desc)
-
-        parts = [f"<|system|>\n{system_msg}\n<|end|>"]
+    def build(self, history: List[Dict[str, str]], tools: List[Dict[str, Any]], user_message: str) -> str:
+        lines = [f"<system>\n{self.system_prompt}\n</system>"]
+        if tools:
+            lines.append("<tools>")
+            for tool in tools:
+                lines.append(json.dumps(tool, indent=2))
+            lines.append("</tools>")
         for msg in history:
-            role = msg.get("role", "user")
-            content = msg.get("content", "")
-            parts.append(f"<|{role}|>\n{content}\n<|end|>")
-        parts.append("<|assistant|>\n")
-        return "\n".join(parts)
-
+            role = msg["role"]
+            content = msg["content"]
+            lines.append(f"<{role}>\n{content}\n</{role}>")
+        lines.append(f"<user>\n{user_message}\n</user>")
+        lines.append("<assistant>")
+        return "\n".join(lines)
 
 # ---------------------------------------------------------------------------
-# 3.  MESSAGE BUFFER
+# Message Buffer (Rolling Memory)
 # ---------------------------------------------------------------------------
 
 class MessageBuffer:
-    """Rolling memory buffer."""
+    """Rolling buffer of recent messages."""
 
-    def __init__(self, max_messages: int = 20) -> None:
+    def __init__(self, max_messages: int = 20):
         self.max_messages = max_messages
-        self.messages: List[Dict[str, str]] = []
+        self.buffer: deque = deque(maxlen=max_messages)
 
-    def add(self, role: str, content: str) -> None:
-        self.messages.append({"role": role, "content": content})
-        if len(self.messages) > self.max_messages:
-            self.messages.pop(0)
+    def add(self, role: str, content: str):
+        self.buffer.append({"role": role, "content": content, "timestamp": time.time()})
 
-    def get_context(self) -> List[Dict[str, str]]:
-        return self.messages.copy()
+    def get_context(self, n: Optional[int] = None) -> List[Dict[str, str]]:
+        msgs = list(self.buffer)
+        if n:
+            msgs = msgs[-n:]
+        return [{"role": m["role"], "content": m["content"]} for m in msgs]
 
-    def clear(self) -> None:
-        self.messages = []
+    def clear(self):
+        self.buffer.clear()
 
-
-# ---------------------------------------------------------------------------
-# 4.  TOOL DEFINITIONS
-# ---------------------------------------------------------------------------
-
-@dataclass
-class Tool:
-    name: str
-    description: str
-    schema: Dict[str, Any] = field(default_factory=dict)
-    run_fn: Optional[Callable[..., str]] = None
-
-    def run(self, args: str) -> str:
-        if self.run_fn:
-            return self.run_fn(args)
-        return f"[TOOL] {self.name}({args})"
-
+    def to_dict(self) -> List[Dict[str, Any]]:
+        return list(self.buffer)
 
 # ---------------------------------------------------------------------------
-# 5.  TOOL PARSER
+# Tool Definition & Parser
 # ---------------------------------------------------------------------------
 
-@dataclass
+@dataclasses.dataclass
 class ToolCall:
     tool_name: str
-    arguments: str
+    arguments: Dict[str, Any]
 
+class Tool:
+    def __init__(self, name: str, schema: Dict[str, Any], run: Callable):
+        self.name = name
+        self.schema = schema
+        self._run = run
+
+    def run(self, arguments: Dict[str, Any]) -> Any:
+        return self._run(**arguments)
 
 class ToolParser:
-    """Parses tool calls dari LLM output."""
+    """Parse tool calls from LLM output (JSON or XML format)."""
 
-    @staticmethod
-    def parse(text: str) -> List[ToolCall]:
-        """Extract tool calls dari text."""
+    def parse(self, response: str) -> List[ToolCall]:
         calls = []
-        # JSON format: {"tool": "NAME", "args": "..."}
+        # Try JSON
         try:
-            # Try to find JSON objects
-            pattern = r'\{[^}]*"tool"[^}]*\}'
-            matches = re.findall(pattern, text)
-            for m in matches:
-                data = json.loads(m)
-                if "tool" in data:
-                    calls.append(ToolCall(data["tool"], data.get("args", "")))
-        except Exception:
+            data = json.loads(response)
+            if isinstance(data, dict) and "name" in data:
+                calls.append(ToolCall(data["name"], data.get("arguments", {})))
+                return calls
+            if isinstance(data, list):
+                for item in data:
+                    calls.append(ToolCall(item["name"], item.get("arguments", {})))
+                return calls
+        except json.JSONDecodeError:
             pass
-
-        # XML format fallback: <TOOL: NAME>args</TOOL>
-        xml_pattern = r'<TOOL:\s*([A-Z_]+)>(.*?)</TOOL>'
-        for match in re.finditer(xml_pattern, text, re.DOTALL | re.IGNORECASE):
-            calls.append(ToolCall(match.group(1), match.group(2).strip()))
-
+        # Try XML: <tool_name>args</tool_name> or <TOOL: name>args</TOOL>
+        xml_pattern = re.findall(r'<(\w+)>\s*(.*?)\s*</\1>', response, re.DOTALL)
+        for name, args_text in xml_pattern:
+            if name in ("system", "user", "assistant", "tools"):
+                continue
+            try:
+                args = json.loads(args_text)
+            except json.JSONDecodeError:
+                args = {"query": args_text.strip()}
+            calls.append(ToolCall(name, args))
         return calls
 
-    @staticmethod
-    def has_tool_call(text: str) -> bool:
-        return len(ToolParser.parse(text)) > 0
-
-
 # ---------------------------------------------------------------------------
-# 6.  SIMPLE AGENT
+# Simple Agent
 # ---------------------------------------------------------------------------
 
 class SimpleAgent:
-    """Agent loop dengan local LLM, memory, tools."""
+    """Loop with local LLM, memory, and tools."""
 
-    def __init__(self, llm: LocalLLM, tools: List[Tool],
-                 max_steps: int = 10) -> None:
+    def __init__(self, llm: LocalLLM, tools: List[Tool], system_prompt: str = "You are a helpful AI assistant.", max_steps: int = 5):
         self.llm = llm
         self.tools = {t.name: t for t in tools}
         self.memory = MessageBuffer()
+        self.prompt_builder = PromptBuilder(system_prompt)
         self.max_steps = max_steps
-        self.step_count = 0
+        self.tool_parser = ToolParser()
 
     def run(self, goal: str) -> str:
-        """Execute agent loop."""
         self.memory.add("user", goal)
-        response = ""
-
-        while self.step_count < self.max_steps:
-            self.step_count += 1
-
-            # Build prompt
-            tools_desc = [
-                {"name": t.name, "description": t.description}
-                for t in self.tools.values()
-            ]
-            prompt = PromptBuilder.build("", self.memory.get_context(), tools_desc)
-
-            # Generate
+        for _ in range(self.max_steps):
+            history = self.memory.get_context()
+            tool_schemas = [t.schema for t in self.tools.values()]
+            prompt = self.prompt_builder.build(history, tool_schemas, goal)
             response = self.llm.generate(prompt, max_tokens=256)
             self.memory.add("assistant", response)
-
-            # Check for tool calls
-            calls = ToolParser.parse(response)
+            # Parse tool calls
+            calls = self.tool_parser.parse(response)
             if not calls:
-                break  # No tool call = done
-
-            # Execute tools
+                # No tool call, return as final answer
+                return response
+            # Execute tool calls
             for call in calls:
-                if call.tool_name in self.tools:
-                    result = self.tools[call.tool_name].run(call.arguments)
-                    self.memory.add("tool", f"{call.tool_name}: {result}")
+                tool = self.tools.get(call.tool_name)
+                if tool:
+                    try:
+                        result = tool.run(call.arguments)
+                        self.memory.add("system", f"Tool {call.tool_name} result: {result}")
+                    except Exception as e:
+                        self.memory.add("system", f"Tool {call.tool_name} error: {e}")
                 else:
-                    self.memory.add("tool", f"Unknown tool: {call.tool_name}")
-
-        return response
-
-    def get_history(self) -> List[Dict[str, str]]:
-        return self.memory.get_context()
-
+                    self.memory.add("system", f"Unknown tool: {call.tool_name}")
+        # Return last assistant message if max steps reached
+        history = self.memory.get_context()
+        for msg in reversed(history):
+            if msg["role"] == "assistant":
+                return msg["content"]
+        return "[No response generated]"
 
 # ---------------------------------------------------------------------------
-# 7.  EVALUATOR
+# Evaluator (Golden Dataset Regression Testing)
 # ---------------------------------------------------------------------------
 
 class Evaluator:
-    """Evaluate agent against golden dataset."""
+    """Compare agent output against golden answers."""
 
-    def __init__(self) -> None:
-        self.cases: List[Dict[str, Any]] = []
+    def __init__(self, test_cases: List[Dict[str, Any]]):
+        self.test_cases = test_cases
 
-    def add_case(self, input_text: str, expected_keywords: List[str],
-                 description: str = "") -> None:
-        self.cases.append({
-            "input": input_text,
-            "expected": expected_keywords,
-            "description": description,
-        })
-
-    def evaluate(self, agent_factory: Callable[[], SimpleAgent]) -> Dict[str, Any]:
-        """Run all test cases."""
+    def run(self, agent: SimpleAgent) -> Dict[str, Any]:
         results = []
-        for case in self.cases:
-            agent = agent_factory()
-            response = agent.run(case["input"])
-            found = [kw for kw in case["expected"] if kw.lower() in response.lower()]
-            score = len(found) / len(case["expected"]) if case["expected"] else 1.0
+        for case in self.test_cases:
+            actual = agent.run(case["input"])
+            expected = case["expected"]
+            score = self._score(actual, expected)
             results.append({
-                "description": case["description"],
                 "input": case["input"],
+                "expected": expected,
+                "actual": actual,
                 "score": score,
-                "found": found,
-                "response_preview": response[:100],
             })
+        avg_score = sum(r["score"] for r in results) / len(results) if results else 0.0
+        return {"results": results, "average_score": avg_score, "pass_rate": sum(1 for r in results if r["score"] >= 0.8) / len(results)}
 
-        avg_score = sum(r["score"] for r in results) / len(results) if results else 0
-        return {
-            "total": len(results),
-            "passed": sum(1 for r in results if r["score"] >= 0.5),
-            "avg_score": avg_score,
-            "details": results,
-        }
-
+    def _score(self, actual: str, expected: str) -> float:
+        # Simple keyword overlap scoring
+        a_words = set(re.findall(r'\w+', actual.lower()))
+        e_words = set(re.findall(r'\w+', expected.lower()))
+        if not e_words:
+            return 1.0 if not a_words else 0.0
+        overlap = len(a_words & e_words) / len(e_words)
+        return overlap
 
 # ---------------------------------------------------------------------------
-# 8.  TELEMETRY
+# Telemetry
 # ---------------------------------------------------------------------------
 
 class Telemetry:
-    """Track runtime metrics."""
+    """Track latency, success rate, token usage."""
 
-    def __init__(self) -> None:
-        self.metrics: List[Dict[str, Any]] = []
+    def __init__(self):
+        self.calls: List[Dict[str, Any]] = []
+        self.total_tokens = 0
 
-    def record(self, event: str, data: Dict[str, Any]) -> None:
-        self.metrics.append({
-            "event": event,
-            "time": time.time(),
-            **data,
+    def record(self, prompt: str, response: str, latency_ms: float, success: bool):
+        self.calls.append({
+            "prompt_length": len(prompt),
+            "response_length": len(response),
+            "latency_ms": latency_ms,
+            "success": success,
+            "timestamp": time.time(),
         })
 
-    def summary(self) -> Dict[str, Any]:
-        if not self.metrics:
-            return {}
-        latencies = [m.get("latency_ms", 0) for m in self.metrics if "latency_ms" in m]
-        successes = sum(1 for m in self.metrics if m.get("success", False))
-        total = len(self.metrics)
+    def export(self) -> Dict[str, Any]:
+        total = len(self.calls)
+        successes = sum(1 for c in self.calls if c["success"])
+        avg_latency = sum(c["latency_ms"] for c in self.calls) / total if total else 0.0
         return {
-            "total_events": total,
-            "success_rate": successes / total if total else 0,
-            "avg_latency_ms": sum(latencies) / len(latencies) if latencies else 0,
-            "max_latency_ms": max(latencies) if latencies else 0,
+            "total_calls": total,
+            "success_count": successes,
+            "success_rate": successes / total if total else 0.0,
+            "average_latency_ms": avg_latency,
+            "calls": self.calls,
         }
 
-    def export(self) -> str:
-        return json.dumps(self.metrics, indent=2)
-
+    def reset(self):
+        self.calls.clear()
+        self.total_tokens = 0
 
 # ---------------------------------------------------------------------------
-# 9.  MAIN DEMO & TEST SUITE
+# Test Suite
 # ---------------------------------------------------------------------------
 
-def _test_local_llm() -> None:
-    llm = LocalLLM()
-    r = llm.generate("Hello there")
-    assert "Hello" in r
-    assert llm.get_stats()["calls"] == 1
-    print("  [OK] LocalLLM")
+def _test_gguf_loader():
+    loader = GGUFLoader("dummy.gguf")
+    assert loader.load() == True
+    assert "stub" in loader.generate("hello").lower()
+    print("[PASS] gguf loader stub")
 
+def _test_local_llm():
+    llm = LocalLLM(mock=True)
+    assert "mock" in llm.generate("test").lower() or "42" in llm.generate("calculate")
+    print("[PASS] local llm")
 
-def _test_prompt_builder() -> None:
-    prompt = PromptBuilder.build("", [
-        {"role": "user", "content": "hi"},
-    ], [{"name": "search", "description": "web search"}])
-    assert "search" in prompt
-    assert "hi" in prompt
-    print("  [OK] PromptBuilder")
+def _test_prompt_builder():
+    pb = PromptBuilder("You are a test assistant.")
+    prompt = pb.build([{"role": "user", "content": "hi"}], [], "hello")
+    assert "system" in prompt
+    assert "hello" in prompt
+    print("[PASS] prompt builder")
 
-
-def _test_message_buffer() -> None:
+def _test_message_buffer():
     buf = MessageBuffer(max_messages=3)
     buf.add("user", "a")
     buf.add("user", "b")
@@ -358,74 +307,47 @@ def _test_message_buffer() -> None:
     buf.add("user", "d")
     assert len(buf.get_context()) == 3
     assert buf.get_context()[0]["content"] == "b"
-    print("  [OK] MessageBuffer")
+    print("[PASS] message buffer")
 
-
-def _test_tool_parser() -> None:
-    text = 'Some text {\"tool\": "search\", "args\": "query"} more'
-    calls = ToolParser.parse(text)
+def _test_tool_parser():
+    parser = ToolParser()
+    json_resp = '{"name": "search", "arguments": {"query": "cats"}}'
+    calls = parser.parse(json_resp)
     assert len(calls) == 1
     assert calls[0].tool_name == "search"
-    print("  [OK] ToolParser JSON")
+    xml_resp = '<search>{"query": "dogs"}</search>'
+    calls2 = parser.parse(xml_resp)
+    assert calls2[0].tool_name == "search"
+    print("[PASS] tool parser")
 
-    text2 = "Use <TOOL: WRITE_FILE>path.txt|content</TOOL> please"
-    calls2 = ToolParser.parse(text2)
-    assert len(calls2) == 1
-    assert calls2[0].tool_name == "WRITE_FILE"
-    print("  [OK] ToolParser XML")
+def _test_simple_agent():
+    llm = LocalLLM(mock=True)
+    search_tool = Tool("search", {"name": "search", "parameters": {"query": "string"}}, lambda query: f"Results for {query}")
+    agent = SimpleAgent(llm, [search_tool])
+    result = agent.run("What is the weather?")
+    assert result
+    print("[PASS] simple agent")
 
+def _test_evaluator():
+    cases = [{"input": "hello", "expected": "hello world"}]
+    llm = LocalLLM(mock=True)
+    agent = SimpleAgent(llm, [])
+    ev = Evaluator(cases)
+    report = ev.run(agent)
+    assert "average_score" in report
+    print("[PASS] evaluator")
 
-def _test_simple_agent() -> None:
-    llm = LocalLLM()
-    tools = [
-        Tool("search", "Search the web", run_fn=lambda q: f"Results for {q}"),
-        Tool("write_file", "Write to file", run_fn=lambda a: "File written"),
-    ]
-    agent = SimpleAgent(llm, tools, max_steps=5)
-    result = agent.run("Search for Python docs")
-    assert agent.step_count >= 1
-    assert len(agent.get_history()) >= 2
-    print("  [OK] SimpleAgent")
-
-
-def _test_evaluator() -> None:
-    ev = Evaluator()
-    ev.add_case("Say hello", ["hello"], "Basic greeting")
-    llm = LocalLLM()
-    tools = [Tool("echo", "Echo", run_fn=lambda x: x)]
-    result = ev.evaluate(lambda: SimpleAgent(llm, tools, max_steps=3))
-    assert result["total"] == 1
-    print("  [OK] Evaluator")
-
-
-def _test_telemetry() -> None:
+def _test_telemetry():
     tel = Telemetry()
-    tel.record("inference", {"latency_ms": 100, "success": True})
-    tel.record("inference", {"latency_ms": 150, "success": True})
-    tel.record("inference", {"latency_ms": 200, "success": False})
-    s = tel.summary()
-    assert s["total_events"] == 3
-    assert s["success_rate"] == 2 / 3
-    assert s["avg_latency_ms"] == 150
-    print("  [OK] Telemetry")
+    tel.record("hi", "hello", 120.0, True)
+    tel.record("test", "fail", 50.0, False)
+    report = tel.export()
+    assert report["total_calls"] == 2
+    assert report["success_rate"] == 0.5
+    print("[PASS] telemetry")
 
-
-def _test_gguf_stub_documentation() -> None:
-    """Verify that GGUF integration path is documented."""
-    import inspect
-    src = inspect.getsource(LocalLLM.load)
-    assert "llama.cpp" in src or "STUB" in src
-    assert "ctypes" in src or "STUB" in src
-    print("  [OK] GGUF stub documented")
-
-
-def _demo() -> None:
-    print("=" * 60)
-    print("MAGNATRIX-OS Local LLM Agent — Native Demo")
-    print("Pattern: AMATI-PELAJARI-TIRU dari agents-from-scratch")
-    print("=" * 60)
-
-    print("\n[Unit Tests]")
+if __name__ == "__main__":
+    _test_gguf_loader()
     _test_local_llm()
     _test_prompt_builder()
     _test_message_buffer()
@@ -433,51 +355,4 @@ def _demo() -> None:
     _test_simple_agent()
     _test_evaluator()
     _test_telemetry()
-    _test_gguf_stub_documentation()
-
-    print("\n[Agent Conversation Demo]")
-    llm = LocalLLM()
-    tools = [
-        Tool("search", "Web search", run_fn=lambda q: f"[MOCK] Found 3 results for '{q}'"),
-        Tool("calculate", "Calculator", run_fn=lambda expr: f"[RESULT] {expr} = 42"),
-    ]
-    agent = SimpleAgent(llm, tools, max_steps=5)
-
-    goals = [
-        "What is the weather today?",
-        "Calculate 100 / 4",
-        "Write a summary of AI trends",
-    ]
-
-    for goal in goals:
-        print(f"\nUser: {goal}")
-        response = agent.run(goal)
-        print(f"Agent: {response[:100]}...")
-
-    print(f"\nTotal steps: {agent.step_count}")
-    print(f"History length: {len(agent.get_history())}")
-
-    print("\n[Evaluation Demo]")
-    ev = Evaluator()
-    ev.add_case("Say hello", ["Hello"], "Greeting")
-    ev.add_case("Search for python", ["search", "python"], "Search task")
-    result = ev.evaluate(lambda: SimpleAgent(LocalLLM(), tools, max_steps=3))
-    print(f"Passed: {result['passed']}/{result['total']}")
-    print(f"Avg score: {result['avg_score']:.2f}")
-
-    print("\n[Telemetry Summary]")
-    tel = Telemetry()
-    for i in range(5):
-        tel.record("inference", {
-            "latency_ms": 80 + i * 10 + random.randint(-5, 5),
-            "success": i < 4,
-        })
-    print(json.dumps(tel.summary(), indent=2))
-
-    print("\n" + "=" * 60)
-    print("All tests passed. Demo complete.")
-    print("=" * 60)
-
-
-if __name__ == "__main__":
-    _demo()
+    print("\n[OK] local_agent_native.py — all 8 tests passed")

@@ -1,707 +1,369 @@
-#!/usr/bin/env python3
-"""
-document_agent_native.py — Multi-Document Agent with Meta-Agent Routing
-AMATI-PELAJARI-TIRU dari AyushParikh/LlamaIndex-Agent pattern.
-
-Architecture:
-  BaseLayer    → DocumentChunk, HashEmbedding, VectorIndex
-  CoreEngine   → QueryEngine, Reranker (BM25-style), Synthesizer
-  Features     → DocumentAgent, MetaAgent (router), MockLLM
-  Kernel       → DocumentAgentKernel (wiring + demo scenarios)
-
-Pure Python · stdlib only · zero external dependencies
-Target: ~500-700 lines · Single file · Runnable without install
-"""
+# document_agent_native.py
+# AMATI-PELAJARI-TIRU: LlamaIndex Multi-Document Agent Pattern
+# Meta-agent routes queries to per-document agents. Pure Python, zero deps.
 
 from __future__ import annotations
+import re, json, math, hashlib, dataclasses, typing, os
+from typing import List, Dict, Optional, Tuple, Any
 
-import hashlib
-import json
-import math
-import random
-import re
-import uuid
-from collections import Counter, defaultdict
-from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from enum import Enum, auto
-from typing import Any, Dict, List, Optional, Set, Tuple
-
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# Section 1 — BaseLayer
-# DocumentChunk · HashEmbedding · VectorIndex
-# ═══════════════════════════════════════════════════════════════════════════════
-
-
-@dataclass
-class DocumentChunk:
-    """A chunk of a document with embedding and metadata."""
-    id: str
-    content: str
-    doc_id: str
-    embedding: List[float] = field(default_factory=list)
-    metadata: Dict[str, Any] = field(default_factory=dict)
-    index: int = 0  # chunk index within document
-
-    def __post_init__(self) -> None:
-        if not self.id:
-            self.id = f"chunk_{uuid.uuid4().hex[:8]}"
-
-    def __repr__(self) -> str:
-        preview = self.content[:40].replace("\n", " ")
-        return f"<DocumentChunk id={self.id} doc={self.doc_id} idx={self.index} `{preview}...`>"
-
+# ---------------------------------------------------------------------------
+# Reusable HashEmbedding (same as agentic_rag_native)
+# ---------------------------------------------------------------------------
 
 class HashEmbedding:
-    """
-    Deterministic hash-based embedding using stdlib only.
-    Simulates semantic vectors without neural networks.
-    """
-
-    DIM = 128
-
-    def __init__(self, dim: int = DIM) -> None:
+    def __init__(self, dim: int = 128, seed: int = 42):
         self.dim = dim
+        self.seed = seed
+
+    def _hash_vector(self, text: str, component: int) -> float:
+        h = hashlib.blake2b(key=component.to_bytes(4, "big", signed=True), digest_size=32)
+        h.update(text.encode("utf-8"))
+        val = int.from_bytes(h.digest(), "big")
+        return (val / (2 ** 256)) * 2 - 1
 
     def embed(self, text: str) -> List[float]:
-        """Produce a normalized dense vector from text."""
-        # Tokenize + normalize
-        tokens = self._tokenize(text)
-        if not tokens:
-            return [0.0] * self.dim
-
-        # Build vector via multiple hash functions (simulating n-gram features)
-        vec = [0.0] * self.dim
-        for token in tokens:
-            for i, seed in enumerate([0, 1, 2, 3]):
-                h = hashlib.sha256(f"{seed}:{token}".encode()).digest()
-                for j in range(self.dim // 4):
-                    idx = i * (self.dim // 4) + j
-                    val = int.from_bytes(h[j * 4 : j * 4 + 4], "little") / (2**32 - 1)
-                    vec[idx] += val
-
-        # L2 normalize
-        norm = math.sqrt(sum(v * v for v in vec)) + 1e-9
+        vec = [self._hash_vector(text, i) for i in range(self.dim)]
+        norm = math.sqrt(sum(v * v for v in vec)) or 1.0
         return [v / norm for v in vec]
 
-    def _tokenize(self, text: str) -> List[str]:
-        """Simple whitespace + punctuation tokenization."""
-        lowered = text.lower()
-        # Remove punctuation, keep alphanumerics and spaces
-        cleaned = re.sub(r"[^a-z0-9\s]", " ", lowered)
-        tokens = [t for t in cleaned.split() if len(t) > 1]
-        # Deduplicate preserving order
-        seen: Set[str] = set()
-        result: List[str] = []
-        for t in tokens:
-            if t not in seen:
-                seen.add(t)
-                result.append(t)
-        return result
-
     def cosine_similarity(self, a: List[float], b: List[float]) -> float:
-        """Cosine similarity between two vectors."""
-        dot = sum(x * y for x, y in zip(a, b))
-        return dot  # already normalized
-
-
-class VectorIndex:
-    """In-memory vector index for document chunk retrieval."""
-
-    def __init__(self, embedder: HashEmbedding, top_k: int = 5) -> None:
-        self.embedder = embedder
-        self.top_k = top_k
-        self._chunks: List[DocumentChunk] = []
-        self._by_doc: Dict[str, List[DocumentChunk]] = defaultdict(list)
-
-    def add(self, chunks: List[DocumentChunk]) -> None:
-        """Index document chunks (compute embeddings if missing)."""
-        for chunk in chunks:
-            if not chunk.embedding:
-                chunk.embedding = self.embedder.embed(chunk.content)
-            self._chunks.append(chunk)
-            self._by_doc[chunk.doc_id].append(chunk)
-
-    def search(self, query: str, k: Optional[int] = None) -> List[Tuple[DocumentChunk, float]]:
-        """Retrieve top-k chunks by cosine similarity."""
-        k = k or self.top_k
-        if not self._chunks:
-            return []
-        q_vec = self.embedder.embed(query)
-        scored = []
-        for chunk in self._chunks:
-            sim = self.embedder.cosine_similarity(q_vec, chunk.embedding)
-            scored.append((chunk, sim))
-        scored.sort(key=lambda x: x[1], reverse=True)
-        return scored[:k]
-
-    def get_doc_chunks(self, doc_id: str) -> List[DocumentChunk]:
-        return list(self._by_doc.get(doc_id, []))
-
-    def all_docs(self) -> Set[str]:
-        return set(self._by_doc.keys())
-
-    def stats(self) -> Dict[str, Any]:
-        return {
-            "total_chunks": len(self._chunks),
-            "total_docs": len(self._by_doc),
-            "avg_chunks_per_doc": len(self._chunks) / max(len(self._by_doc), 1),
-        }
-
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# Section 2 — CoreEngine
-# QueryEngine · Reranker · Synthesizer
-# ═══════════════════════════════════════════════════════════════════════════════
-
-
-class Reranker:
-    """
-    BM25-style sparse scoring for re-ranking retrieved chunks.
-    Blends with vector similarity for hybrid relevance.
-    """
-
-    def __init__(self, k1: float = 1.5, b: float = 0.75) -> None:
-        self.k1 = k1
-        self.b = b
-        self._doc_freqs: Dict[str, int] = defaultdict(int)
-        self._doc_lengths: List[int] = []
-        self._avg_dl: float = 0.0
-        self._N: int = 0
-
-    def index_corpus(self, chunks: List[DocumentChunk]) -> None:
-        """Pre-compute document frequencies and lengths."""
-        self._doc_freqs.clear()
-        self._doc_lengths = []
-        self._N = len(chunks)
-        term_doc_counts: Dict[str, Set[int]] = defaultdict(set)
-        lengths: List[int] = []
-
-        for i, chunk in enumerate(chunks):
-            tokens = set(self._tokenize(chunk.content))
-            lengths.append(len(tokens))
-            for t in tokens:
-                term_doc_counts[t].add(i)
-
-        for term, docs in term_doc_counts.items():
-            self._doc_freqs[term] = len(docs)
-
-        self._doc_lengths = lengths
-        self._avg_dl = sum(lengths) / max(len(lengths), 1)
-
-    def score(self, query: str, chunk: DocumentChunk, vector_score: float = 0.0) -> float:
-        """Hybrid score: 0.6 * BM25 + 0.4 * vector similarity."""
-        q_tokens = self._tokenize(query)
-        if not q_tokens:
-            return vector_score
-
-        d_tokens = self._tokenize(chunk.content)
-        dl = len(d_tokens)
-        tf_counter = Counter(d_tokens)
-
-        bm25 = 0.0
-        for term in q_tokens:
-            df = self._doc_freqs.get(term, 0)
-            if df == 0:
-                continue
-            idf = math.log((self._N - df + 0.5) / (df + 0.5) + 1)
-            tf = tf_counter.get(term, 0)
-            denom = tf + self.k1 * (1 - self.b + self.b * dl / max(self._avg_dl, 1))
-            bm25 += idf * (tf * (self.k1 + 1)) / max(denom, 1)
-
-        # Normalize BM25 roughly to [0, 1]
-        bm25_norm = min(bm25 / 10.0, 1.0)
-        return 0.6 * bm25_norm + 0.4 * vector_score
-
-    def rerank(
-        self, query: str, results: List[Tuple[DocumentChunk, float]]
-    ) -> List[Tuple[DocumentChunk, float]]:
-        """Re-rank vector search results with BM25 blending."""
-        reranked = [(chunk, self.score(query, chunk, vec_score)) for chunk, vec_score in results]
-        reranked.sort(key=lambda x: x[1], reverse=True)
-        return reranked
-
-    def _tokenize(self, text: str) -> List[str]:
-        lowered = text.lower()
-        cleaned = re.sub(r"[^a-z0-9\s]", " ", lowered)
-        return [t for t in cleaned.split() if len(t) > 1]
-
-
-class Synthesizer:
-    """Merge multiple document agent responses into a coherent answer."""
-
-    def merge(self, answers: List[Dict[str, Any]], query: str) -> Dict[str, Any]:
-        """
-        Combine answers from multiple document agents.
-        Returns: {answer, sources, confidence}
-        """
-        if not answers:
-            return {"answer": "No relevant documents found.", "sources": [], "confidence": 0.0}
-
-        # Sort by confidence descending
-        answers = sorted(answers, key=lambda x: x.get("confidence", 0), reverse=True)
-
-        # Deduplicate source chunks
-        seen_chunks: Set[str] = set()
-        sources: List[Dict[str, Any]] = []
-        for ans in answers:
-            for src in ans.get("sources", []):
-                cid = src.get("chunk_id", "")
-                if cid and cid not in seen_chunks:
-                    seen_chunks.add(cid)
-                    sources.append(src)
-
-        # Build synthesized answer
-        parts: List[str] = []
-        for ans in answers[:3]:
-            excerpt = ans.get("answer", "").strip()
-            if excerpt and excerpt not in parts:
-                parts.append(excerpt)
-
-        # Add source attribution
-        if sources:
-            doc_names = sorted(set(s.get("doc_id", "unknown") for s in sources))
-            attribution = f"\n\n(Sources: {', '.join(doc_names)} — {len(sources)} chunks)"
-        else:
-            attribution = ""
-
-        answer_text = "\n\n".join(parts) + attribution
-        avg_conf = sum(a.get("confidence", 0) for a in answers) / len(answers)
-
-        return {
-            "answer": answer_text,
-            "sources": sources,
-            "confidence": round(avg_conf, 3),
-        }
-
-
-class QueryEngine:
-    """
-    End-to-end query pipeline:
-    embed → vector search → rerank → return top chunks.
-    """
-
-    def __init__(self, index: VectorIndex, reranker: Reranker, top_k: int = 5) -> None:
-        self.index = index
-        self.reranker = reranker
-        self.top_k = top_k
-
-    def query(self, question: str) -> List[Tuple[DocumentChunk, float]]:
-        """Execute full retrieval pipeline."""
-        # Stage 1: vector retrieval
-        vector_results = self.index.search(question, k=self.top_k * 2)
-        if not vector_results:
-            return []
-        # Stage 2: re-rank
-        reranked = self.reranker.rerank(question, vector_results)
-        return reranked[: self.top_k]
-
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# Section 3 — Features
-# DocumentAgent · MetaAgent (MockLLM deprecated, use MockToUnifiedBridge)
-# ═══════════════════════════════════════════════════════════════════════════════
-
-from ai.mock_to_unified_bridge import MockToUnifiedBridge
-
-# MockLLM alias for backward compatibility
-MockLLM = MockToUnifiedBridge
-
-
-
-class DocumentAgent:
-    """
-    Per-document agent that exposes a query tool.
-    Owns a slice of the vector index (its own chunks).
-    """
-
-    def __init__(
-        self,
-        document_id: str,
-        document_name: str,
-        chunks: List[DocumentChunk],
-        query_engine: QueryEngine,
-        llm: MockLLM,
-    ) -> None:
-        self.document_id = document_id
-        self.document_name = document_name
-        self.chunks = chunks
-        self.query_engine = query_engine
-        self.llm = llm
-
-    def query(self, question: str) -> Dict[str, Any]:
-        """Answer a question using only this document's chunks."""
-        # Search within this agent's chunks
-        # Build a mini index from owned chunks
-        mini_index = VectorIndex(self.query_engine.index.embedder, top_k=3)
-        mini_index.add(self.chunks)
-        mini_qe = QueryEngine(mini_index, self.query_engine.reranker, top_k=3)
-        results = mini_qe.query(question)
-
-        if not results:
-            return {
-                "answer": f"No relevant information found in {self.document_name}.",
-                "sources": [],
-                "confidence": 0.0,
-                "agent": self.document_id,
-            }
-
-        contexts = [chunk.content for chunk, _ in results]
-        answer = self.llm.generate(question, contexts)
-
-        sources = [
-            {
-                "chunk_id": chunk.id,
-                "doc_id": chunk.doc_id,
-                "score": round(score, 4),
-                "excerpt": chunk.content[:80] + "...",
-            }
-            for chunk, score in results
-        ]
-
-        confidence = sum(score for _, score in results) / len(results)
-
-        return {
-            "answer": answer,
-            "sources": sources,
-            "confidence": round(confidence, 3),
-            "agent": self.document_id,
-        }
-
-    def summarize(self) -> str:
-        """Summarize the entire document."""
-        full_text = " ".join(c.content for c in self.chunks)
-        return self.llm.summarize(full_text)
-
-    def __repr__(self) -> str:
-        return f"<DocumentAgent doc={self.document_name} chunks={len(self.chunks)}>"
-
-
-class MetaAgent:
-    """
-    Top-level router that selects relevant document agents for a query.
-    Implements selective document loading — only relevant docs participate.
-    """
-
-    def __init__(
-        self,
-        document_agents: List[DocumentAgent],
-        query_engine: QueryEngine,
-        llm: MockLLM,
-        synthesizer: Synthesizer,
-    ) -> None:
-        self.agents = {a.document_id: a for a in document_agents}
-        self.query_engine = query_engine
-        self.llm = llm
-        self.synthesizer = synthesizer
-        self._history: List[Dict[str, Any]] = []
-
-    def route(self, query: str, top_n: int = 3) -> List[DocumentAgent]:
-        """
-        Select the most relevant document agents for a query.
-        Uses keyword overlap + lightweight vector probe.
-        """
-        if len(self.agents) <= top_n:
-            return list(self.agents.values())
-
-        query_vec = self.query_engine.index.embedder.embed(query)
-        scored: List[Tuple[DocumentAgent, float]] = []
-
-        for agent in self.agents.values():
-            # Score by average similarity of top chunk
-            best_sim = 0.0
-            for chunk in agent.chunks:
-                sim = self.query_engine.index.embedder.cosine_similarity(query_vec, chunk.embedding)
-                if sim > best_sim:
-                    best_sim = sim
-            scored.append((agent, best_sim))
-
-        scored.sort(key=lambda x: x[1], reverse=True)
-        return [a for a, _ in scored[:top_n]]
-
-    def ask(self, question: str) -> Dict[str, Any]:
-        """
-        Full pipeline: route → query selected agents → synthesize.
-        """
-        selected = self.route(question)
-        answers: List[Dict[str, Any]] = []
-        for agent in selected:
-            ans = agent.query(question)
-            answers.append(ans)
-
-        merged = self.synthesizer.merge(answers, question)
-        merged["agents_used"] = [a.document_id for a in selected]
-        merged["query"] = question
-
-        self._history.append({
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-            "query": question,
-            "answer": merged["answer"],
-            "agents": merged["agents_used"],
-            "confidence": merged["confidence"],
-        })
-
-        return merged
-
-    def get_history(self) -> List[Dict[str, Any]]:
-        return list(self._history)
-
-    def list_agents(self) -> List[Dict[str, Any]]:
-        return [
-            {
-                "id": a.document_id,
-                "name": a.document_name,
-                "chunks": len(a.chunks),
-            }
-            for a in self.agents.values()
-        ]
-
-    def __repr__(self) -> str:
-        return f"<MetaAgent agents={len(self.agents)} history={len(self._history)}>"
-
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# Section 4 — Kernel
-# DocumentAgentKernel (MAGNATRIX bridge + demo scenarios)
-# ═══════════════════════════════════════════════════════════════════════════════
-
-
-class DocumentAgentKernel:
-    """
-    MAGNATRIX Layer 5 (Knowledge) integration kernel.
-    Wires all components and provides runnable demo scenarios.
-    """
-
-    def __init__(self) -> None:
-        self.embedder = HashEmbedding()
-        self.index = VectorIndex(self.embedder, top_k=5)
-        self.reranker = Reranker()
-        self.query_engine: Optional[QueryEngine] = None
-        self.llm = MockLLM()
-        self.synthesizer = Synthesizer()
-        self.meta_agent: Optional[MetaAgent] = None
-        self._docs_added = 0
-
-    def add_document(self, doc_id: str, name: str, content: str, chunk_size: int = 200) -> None:
-        """Chunk and index a document."""
-        chunks = self._chunk_text(doc_id, content, chunk_size)
-        self.index.add(chunks)
-        self._docs_added += 1
-
-    def _chunk_text(self, doc_id: str, text: str, chunk_size: int) -> List[DocumentChunk]:
-        """Simple fixed-size chunking with overlap."""
-        words = text.split()
-        overlap = max(chunk_size // 5, 20)
-        chunks: List[DocumentChunk] = []
-        i = 0
-        idx = 0
-        while i < len(words):
-            end = min(i + chunk_size, len(words))
-            chunk_text = " ".join(words[i:end])
-            chunks.append(
-                DocumentChunk(
-                    id=f"{doc_id}_chunk_{idx}",
-                    content=chunk_text,
+        return sum(x * y for x, y in zip(a, b))
+
+# ---------------------------------------------------------------------------
+# Document Chunk & Document Loading
+# ---------------------------------------------------------------------------
+
+@dataclasses.dataclass
+class DocumentChunk:
+    id: str
+    content: str
+    embedding: List[float]
+    doc_id: str
+    metadata: Dict[str, Any]
+
+class Chunker:
+    def __init__(self, max_chunk_size: int = 512, overlap: int = 64):
+        self.max_chunk_size = max_chunk_size
+        self.overlap = overlap
+
+    def chunk(self, text: str, doc_id: str, embedder: HashEmbedding) -> List[DocumentChunk]:
+        sentences = re.split(r'(?<=[.!?])\s+', text)
+        chunks = []
+        buffer = ""
+        chunk_idx = 0
+        for sent in sentences:
+            if len(buffer) + len(sent) + 1 > self.max_chunk_size and buffer:
+                chunks.append(DocumentChunk(
+                    id=f"{doc_id}_chunk_{chunk_idx}",
+                    content=buffer.strip(),
+                    embedding=embedder.embed(buffer.strip()),
                     doc_id=doc_id,
-                    index=idx,
-                    metadata={"start_word": i, "end_word": end},
-                )
-            )
-            idx += 1
-            i += chunk_size - overlap
-            if end == len(words):
-                break
+                    metadata={"index": chunk_idx}
+                ))
+                buffer = buffer[-self.overlap:] if self.overlap < len(buffer) else ""
+                chunk_idx += 1
+            buffer += (" " if buffer else "") + sent
+        if buffer.strip():
+            chunks.append(DocumentChunk(
+                id=f"{doc_id}_chunk_{chunk_idx}",
+                content=buffer.strip(),
+                embedding=embedder.embed(buffer.strip()),
+                doc_id=doc_id,
+                metadata={"index": chunk_idx}
+            ))
         return chunks
 
-    def build(self) -> None:
-        """Finalize indexing and build queryable agents."""
-        # Index corpus for BM25
-        self.reranker.index_corpus(self.index._chunks)
-        self.query_engine = QueryEngine(self.index, self.reranker, top_k=5)
+class DocumentLoader:
+    """Load .txt and .md files."""
 
-        # Build per-document agents
-        agents: List[DocumentAgent] = []
-        for doc_id in self.index.all_docs():
-            chunks = self.index.get_doc_chunks(doc_id)
-            agent = DocumentAgent(
-                document_id=doc_id,
-                document_name=doc_id.replace("_", " ").title(),
-                chunks=chunks,
-                query_engine=self.query_engine,
-                llm=self.llm,
-            )
-            agents.append(agent)
+    def load(self, path: str) -> Tuple[str, Dict[str, Any]]:
+        if not os.path.exists(path):
+            return "", {"error": f"File not found: {path}"}
+        with open(path, "r", encoding="utf-8") as f:
+            text = f.read()
+        meta = {"path": path, "size": len(text), "ext": os.path.splitext(path)[1]}
+        return text, meta
 
-        self.meta_agent = MetaAgent(
-            document_agents=agents,
-            query_engine=self.query_engine,
-            llm=self.llm,
-            synthesizer=self.synthesizer,
+    def load_directory(self, dir_path: str) -> List[Tuple[str, Dict[str, Any]]]:
+        results = []
+        if not os.path.isdir(dir_path):
+            return results
+        for fname in os.listdir(dir_path):
+            if fname.endswith(".txt") or fname.endswith(".md"):
+                p = os.path.join(dir_path, fname)
+                text, meta = self.load(p)
+                meta["filename"] = fname
+                results.append((text, meta))
+        return results
+
+# ---------------------------------------------------------------------------
+# Vector Index (per-document and global)
+# ---------------------------------------------------------------------------
+
+class VectorIndex:
+    def __init__(self, dim: int = 128):
+        self.dim = dim
+        self.embedder = HashEmbedding(dim=dim)
+        self.chunks: List[DocumentChunk] = []
+
+    def add(self, chunks: List[DocumentChunk]):
+        self.chunks.extend(chunks)
+
+    def search(self, query: str, k: int = 5) -> List[DocumentChunk]:
+        qvec = self.embedder.embed(query)
+        scored = [(self.embedder.cosine_similarity(qvec, c.embedding), c) for c in self.chunks]
+        scored.sort(key=lambda x: x[0], reverse=True)
+        return [c for _, c in scored[:k]]
+
+    def clear(self):
+        self.chunks.clear()
+
+# ---------------------------------------------------------------------------
+# BM25-style Reranker
+# ---------------------------------------------------------------------------
+
+class BM25Reranker:
+    """Simple BM25-inspired scoring for re-ranking."""
+
+    def __init__(self, k1: float = 1.5, b: float = 0.75):
+        self.k1 = k1
+        self.b = b
+
+    def _tokenize(self, text: str) -> List[str]:
+        return re.findall(r'[a-zA-Z]+', text.lower())
+
+    def score(self, query: str, chunk: DocumentChunk) -> float:
+        q_tokens = self._tokenize(query)
+        c_tokens = self._tokenize(chunk.content)
+        if not q_tokens or not c_tokens:
+            return 0.0
+        # Simple term frequency scoring
+        score = 0.0
+        avg_len = 200.0  # assumed average chunk length
+        for tok in q_tokens:
+            tf = c_tokens.count(tok)
+            if tf == 0:
+                continue
+            idf = 1.0  # simplified idf
+            denom = tf + self.k1 * (1 - self.b + self.b * (len(c_tokens) / avg_len))
+            score += idf * (tf * (self.k1 + 1)) / denom
+        return score
+
+    def rerank(self, query: str, chunks: List[DocumentChunk]) -> List[Tuple[float, DocumentChunk]]:
+        scored = [(self.score(query, c), c) for c in chunks]
+        scored.sort(key=lambda x: x[0], reverse=True)
+        return scored
+
+# ---------------------------------------------------------------------------
+# Mock LLM
+# ---------------------------------------------------------------------------
+
+class MockLLM:
+    def generate(self, prompt: str, max_tokens: int = 256) -> str:
+        if "summarize" in prompt.lower():
+            return "Summary: The document discusses key topics concisely."
+        if "answer" in prompt.lower():
+            return "Answer: Based on the document content, the answer is straightforward."
+        return "Generated response."
+
+# ---------------------------------------------------------------------------
+# Document Agent (one per document)
+# ---------------------------------------------------------------------------
+
+class DocumentAgent:
+    """Per-document agent with embedded query capability."""
+
+    def __init__(self, doc_id: str, chunks: List[DocumentChunk], llm: Optional[MockLLM] = None):
+        self.doc_id = doc_id
+        self.chunks = chunks
+        self.llm = llm or MockLLM()
+        self.index = VectorIndex(dim=128)
+        self.index.add(chunks)
+
+    def query(self, question: str) -> str:
+        results = self.index.search(question, k=3)
+        context = "\n".join(c.content for c in results)
+        prompt = (
+            f"Document: {self.doc_id}\n"
+            f"Context:\n{context}\n\n"
+            f"Question: {question}\n"
+            "Answer concisely based on the document."
         )
+        return self.llm.generate(prompt, max_tokens=256)
 
-    def ask(self, question: str) -> Dict[str, Any]:
-        """Ask the meta-agent."""
-        if not self.meta_agent:
-            raise RuntimeError("Kernel not built. Call build() first.")
-        return self.meta_agent.ask(question)
+    def summarize(self) -> str:
+        all_text = "\n".join(c.content for c in self.chunks)[:2000]
+        prompt = f"Summarize the following document:\n{all_text}\n"
+        return self.llm.generate(prompt, max_tokens=256)
 
-    def status(self) -> Dict[str, Any]:
+    def get_tool_description(self) -> Dict[str, Any]:
         return {
-            "kernel": "DocumentAgentKernel",
-            "docs_indexed": self._docs_added,
-            "chunks": self.index.stats(),
-            "agents": len(self.meta_agent.agents) if self.meta_agent else 0,
-            "queries": len(self.meta_agent._history) if self.meta_agent else 0,
+            "name": f"query_{self.doc_id}",
+            "description": f"Query document {self.doc_id}",
+            "parameters": {"question": "string"}
         }
 
+# ---------------------------------------------------------------------------
+# Meta Agent (top-level router)
+# ---------------------------------------------------------------------------
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# Demo Scenarios
-# ═══════════════════════════════════════════════════════════════════════════════
+class MetaAgent:
+    """Routes queries to relevant document agents."""
 
+    def __init__(self, llm: Optional[MockLLM] = None):
+        self.llm = llm or MockLLM()
+        self.agents: Dict[str, DocumentAgent] = {}
+        self.global_index = VectorIndex(dim=128)
+        self.reranker = BM25Reranker()
 
-def _demo_docs() -> Dict[str, str]:
-    return {
-        "bitcoin_whitepaper": """
-Bitcoin: A Peer-to-Peer Electronic Cash System.
-Satoshi Nakamoto.
-Abstract. A purely peer-to-peer version of electronic cash would allow online
-payments to be sent directly from one party to another without going through a
-financial institution. Digital signatures provide part of the solution, but main
-benefits are lost if a trusted third party is still required to prevent double-spending.
-We propose a solution to the double-spending problem using a peer-to-peer network.
-The network timestamps transactions by hashing them into an ongoing chain of
-hash-based proof-of-work, forming a record that cannot be changed without
-redoing the proof-of-work. The longest chain not only serves as proof of the
-sequence of events witnessed, but proof that it came from the largest pool of
-CPU power. As long as a majority of CPU power is controlled by nodes that are
-not cooperating to attack the network, they'll generate the longest chain and
-outpace attackers. The network itself requires minimal structure. Messages are
-broadcast on a best effort basis, and nodes can leave and rejoin the network at
-will, accepting the longest proof-of-work chain as proof of what happened while
-they were gone.
-""",
-        "ethereum_whitepaper": """
-Ethereum Whitepaper.
-A Next-Generation Smart Contract and Decentralized Application Platform.
-Buterin.
-The concept of decentralized consensus and smart contracts has applications far
-beyond the currency and financial world. Smart contracts are programs that execute
-exactly as programmed without any possibility of downtime, censorship, fraud, or
-third-party interference. They can be used to encode arbitrary state transition
-functions, allowing developers to create markets, store registries of debts or promises,
-and move funds in accordance with instructions given long in the past. Ethereum
-provides a Turing-complete programming language used to write scripts or smart
-contracts that can encode any fungible digital asset. Ethereum's chief innovation
-is the integration of a Turing-complete programming language with a blockchain
-platform. Ethereum uses gas to measure computational effort. Every transaction
-and smart contract execution costs a certain amount of gas. The gas limit prevents
-infinite loops and resource exhaustion.
-""",
-        "ipfs_paper": """
-IPFS — Content Addressed, Versioned, P2P File System.
-Juan Benet.
-The InterPlanetary File System (IPFS) is a peer-to-peer distributed file system
-that seeks to connect all computing devices with the same system of files.
-IPFS combines ideas from Kademlia DHT, BitTorrent, and Git to create a single
-unified protocol. Content is addressed by its cryptographic hash rather than by
-its location. This provides intrinsic deduplication and ensures content integrity.
-IPFS uses a Merkle DAG to model the filesystem. Each node in the DAG can be a
-file, a directory, or a more complex data structure. The Merkle structure provides
-cryptographic integrity and efficient distribution. Bitswap is the block exchange
-protocol used by IPFS. It is a generalized version of the BitTorrent protocol
-adapted for arbitrary Merkle DAGs. Bitswap uses a want list and a have list to
-manage block exchange between peers.
-""",
-    }
+    def register_agent(self, agent: DocumentAgent):
+        self.agents[agent.doc_id] = agent
+        self.global_index.add(agent.chunks)
 
+    def route(self, query: str) -> List[str]:
+        """Select relevant document agents using global index + heuristics."""
+        global_results = self.global_index.search(query, k=10)
+        # Aggregate by doc_id
+        doc_scores: Dict[str, float] = {}
+        for chunk in global_results:
+            doc_scores[chunk.doc_id] = doc_scores.get(chunk.doc_id, 0.0) + 1.0
+        # Rerank with BM25 on top chunks per doc
+        for doc_id, agent in self.agents.items():
+            chunks = agent.index.search(query, k=5)
+            scored = self.reranker.rerank(query, chunks)
+            if scored:
+                doc_scores[doc_id] = doc_scores.get(doc_id, 0.0) + scored[0][0]
+        sorted_docs = sorted(doc_scores.items(), key=lambda x: x[1], reverse=True)
+        # Return top 3 or all if few
+        return [doc_id for doc_id, _ in sorted_docs[:3]]
 
-def main() -> None:  # pragma: no cover
-    print("=" * 70)
-    print("DOCUMENT AGENT NATIVE — Multi-Document Agent with Meta-Agent Routing")
-    print("=" * 70)
+    def query(self, question: str) -> str:
+        relevant = self.route(question)
+        answers = []
+        for doc_id in relevant:
+            agent = self.agents[doc_id]
+            answer = agent.query(question)
+            answers.append((doc_id, answer))
+        return self.synthesize(question, answers)
 
-    kernel = DocumentAgentKernel()
+    def synthesize(self, question: str, answers: List[Tuple[str, str]]) -> str:
+        context = "\n\n".join(f"[{doc_id}] {ans}" for doc_id, ans in answers)
+        prompt = (
+            f"Question: {question}\n"
+            f"Answers from documents:\n{context}\n\n"
+            "Synthesize a single coherent answer."
+        )
+        return self.llm.generate(prompt, max_tokens=256)
 
-    # ── Load documents ──
-    docs = _demo_docs()
-    for doc_id, content in docs.items():
-        kernel.add_document(doc_id, doc_id, content.strip(), chunk_size=80)
-        print(f"Indexed: {doc_id} → {kernel.index.stats()['total_chunks']} total chunks")
+# ---------------------------------------------------------------------------
+# Query Engine
+# ---------------------------------------------------------------------------
 
-    kernel.build()
-    print(f"\nKernel built: {kernel.status()}")
+class QueryEngine:
+    """High-level query interface combining index + reranker + synthesis."""
 
-    # ── Demo 1: Single document query ──
-    print("\n" + "-" * 70)
-    print("DEMO 1: Query Single Document (Bitcoin — double spending)")
-    print("-" * 70)
-    btc_agent = kernel.meta_agent.agents["bitcoin_whitepaper"]
-    r1 = btc_agent.query("How does Bitcoin prevent double spending?")
-    print(f"\nAnswer:\n{r1['answer']}")
-    print(f"Confidence: {r1['confidence']}")
-    print(f"Sources: {len(r1['sources'])} chunks")
+    def __init__(self, meta_agent: MetaAgent):
+        self.meta = meta_agent
 
-    # ── Demo 2: Meta-agent routing ──
-    print("\n" + "-" * 70)
-    print("DEMO 2: Meta-Agent Routing (gas + smart contracts)")
-    print("-" * 70)
-    r2 = kernel.ask("What is gas and how do smart contracts work?")
-    print(f"\nAnswer:\n{r2['answer']}")
-    print(f"Agents used: {r2['agents_used']}")
-    print(f"Confidence: {r2['confidence']}")
+    def query(self, question: str) -> Dict[str, Any]:
+        answer = self.meta.query(question)
+        relevant_docs = self.meta.route(question)
+        return {
+            "question": question,
+            "answer": answer,
+            "relevant_documents": relevant_docs,
+        }
 
-    # ── Demo 3: IPFS content addressing ──
-    print("\n" + "-" * 70)
-    print("DEMO 3: IPFS Query (Merkle DAG)")
-    print("-" * 70)
-    r3 = kernel.ask("How does IPFS ensure content integrity?")
-    print(f"\nAnswer:\n{r3['answer']}")
-    print(f"Agents used: {r3['agents_used']}")
+# ---------------------------------------------------------------------------
+# Synthesizer (standalone)
+# ---------------------------------------------------------------------------
 
-    # ── Demo 4: Cross-document query ──
-    print("\n" + "-" * 70)
-    print("DEMO 4: Cross-Document Query (peer-to-peer networks)")
-    print("-" * 70)
-    r4 = kernel.ask("Compare peer-to-peer networks in Bitcoin and IPFS.")
-    print(f"\nAnswer:\n{r4['answer']}")
-    print(f"Agents used: {r4['agents_used']}")
-    print(f"Confidence: {r4['confidence']}")
+class Synthesizer:
+    """Merges multiple document agent responses into a coherent answer."""
 
-    # ── Demo 5: Summarization ──
-    print("\n" + "-" * 70)
-    print("DEMO 5: Document Summarization")
-    print("-" * 70)
-    for doc_id in ["bitcoin_whitepaper", "ethereum_whitepaper"]:
-        agent = kernel.meta_agent.agents[doc_id]
-        print(f"\n{doc_id}:")
-        print(f"  {agent.summarize()[:200]}...")
+    def __init__(self, llm: Optional[MockLLM] = None):
+        self.llm = llm or MockLLM()
 
-    # ── Demo 6: Routing inspection ──
-    print("\n" + "-" * 70)
-    print("DEMO 6: Routing Inspection")
-    print("-" * 70)
-    selected = kernel.meta_agent.route("Merkle tree and hash chains", top_n=2)
-    print(f"\nFor query 'Merkle tree and hash chains':")
-    for a in selected:
-        print(f"  → {a.document_name} ({len(a.chunks)} chunks)")
+    def merge(self, question: str, answers: List[Tuple[str, str]]) -> str:
+        context = "\n\n".join(f"Doc {doc_id}: {ans}" for doc_id, ans in answers)
+        prompt = (
+            f"Question: {question}\n"
+            f"Document answers:\n{context}\n\n"
+            "Provide a unified, coherent answer. Remove contradictions."
+        )
+        return self.llm.generate(prompt, max_tokens=256)
 
-    # ── Demo 7: Index stats + history ──
-    print("\n" + "-" * 70)
-    print("DEMO 7: System Status & Query History")
-    print("-" * 70)
-    print(f"\nStatus: {json.dumps(kernel.status(), indent=2)}")
-    print(f"\nQuery history ({len(kernel.meta_agent.get_history())} queries):")
-    for h in kernel.meta_agent.get_history():
-        print(f"  [{h['timestamp']}] {h['query'][:40]}... | agents={h['agents']} | conf={h['confidence']}")
+# ---------------------------------------------------------------------------
+# Test Suite
+# ---------------------------------------------------------------------------
 
-    # ── Final ──
-    print("\n" + "=" * 70)
-    total = len(open(__file__).readlines())
-    print(f"Document Agent Native — COMPLETE ({total} lines)")
-    print("=" * 70)
+def _test_chunk_and_index():
+    embedder = HashEmbedding(dim=64)
+    chunker = Chunker(max_chunk_size=200, overlap=20)
+    text = "Alpha is a company. It builds software. Beta is a rival. It builds hardware."
+    chunks = chunker.chunk(text, "doc1", embedder)
+    assert len(chunks) > 0
+    idx = VectorIndex(dim=64)
+    idx.add(chunks)
+    res = idx.search("software", k=2)
+    assert len(res) > 0
+    print("[PASS] chunk and index")
 
+def _test_document_agent():
+    chunker = Chunker(max_chunk_size=200, overlap=20)
+    embedder = HashEmbedding(dim=64)
+    chunks = chunker.chunk("Paris is the capital of France. The Eiffel Tower is in Paris.", "france", embedder)
+    agent = DocumentAgent("france", chunks)
+    ans = agent.query("capital of France")
+    assert "France" in ans or "Paris" in ans or "Answer" in ans
+    print("[PASS] document agent")
+
+def _test_meta_agent():
+    chunker = Chunker(max_chunk_size=200, overlap=20)
+    embedder = HashEmbedding(dim=64)
+    a1 = DocumentAgent("doc1", chunker.chunk("Python is great for AI. It has many libraries.", "doc1", embedder))
+    a2 = DocumentAgent("doc2", chunker.chunk("Rust is fast and safe. It uses ownership.", "doc2", embedder))
+    meta = MetaAgent()
+    meta.register_agent(a1)
+    meta.register_agent(a2)
+    routed = meta.route("Python libraries")
+    assert "doc1" in routed
+    print("[PASS] meta agent routing")
+
+def _test_reranker():
+    chunker = Chunker(max_chunk_size=200, overlap=20)
+    embedder = HashEmbedding(dim=64)
+    chunks = chunker.chunk("Machine learning is a subset of AI. Deep learning is part of ML.", "ml", embedder)
+    reranker = BM25Reranker()
+    scored = reranker.rerank("deep learning", chunks)
+    assert len(scored) > 0
+    print("[PASS] bm25 reranker")
+
+def _test_query_engine():
+    chunker = Chunker(max_chunk_size=200, overlap=20)
+    embedder = HashEmbedding(dim=64)
+    a1 = DocumentAgent("doc1", chunker.chunk("Python is a programming language. It is used for web development.", "doc1", embedder))
+    a2 = DocumentAgent("doc2", chunker.chunk("JavaScript runs in browsers. It is used for frontend.", "doc2", embedder))
+    meta = MetaAgent()
+    meta.register_agent(a1)
+    meta.register_agent(a2)
+    engine = QueryEngine(meta)
+    result = engine.query("web development language")
+    assert "answer" in result
+    assert result["relevant_documents"]
+    print("[PASS] query engine")
+
+def _test_synthesizer():
+    synth = Synthesizer()
+    merged = synth.merge("What is AI?", [("doc1", "AI is intelligence in machines."), ("doc2", "AI solves complex problems.")])
+    assert merged
+    print("[PASS] synthesizer")
 
 if __name__ == "__main__":
-    main()
+    _test_chunk_and_index()
+    _test_document_agent()
+    _test_meta_agent()
+    _test_reranker()
+    _test_query_engine()
+    _test_synthesizer()
+    print("\n[OK] document_agent_native.py — all 6 tests passed")
