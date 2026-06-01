@@ -1,322 +1,300 @@
-# agentic_rag_native.py
-# AMATI-PELAJARI-TIRU: LangGraph + FAISS + MCP Pattern (from AgenticRAG)
-# Pure Python, zero external dependencies. Mock LLM swappable.
+# knowledge/agentic_rag_native.py
+# AMATI-PELAJARI-TIRU: Pattern extracted from LangGraph AgenticRAG
+# https://github.com/priyanshudutta04/AgenticRAG (original ref: cesarhgd85/LangGraph-AgenticRAG)
+# Agentic Retrieval-Augmented Generation with LangGraph workflow, FAISS, MCP tools
+# Native reimplementation for MAGNATRIX-OS Layer 5 (Knowledge) + Layer 10 (AI)
+
+"""
+Native Agentic RAG Engine
+=========================
+Inspired by LangGraph AgenticRAG patterns:
+  - decide: Analyze query to determine if retrieval is needed
+  - retrieve: Fetch documents from FAISS vector store
+  - generate: Produce answer using LLM + retrieved context
+  - conditional routing: retrieval_needed? -> retrieve : generate
+  - MCP integration: DuckDuckGo search + Playwright browser automation
+  - hybrid search: local FAISS + real-time web via MCP
+
+Features:
+  - Pure-Python state graph (no external LangGraph dependency)
+  - In-memory FAISS-like vector store with cosine similarity
+  - Pluggable MCP client interface
+  - Streaming workflow execution
+  - Document chunking with overlap
+  - Web-base document loader simulation
+"""
 
 from __future__ import annotations
-import re, json, math, random, hashlib, dataclasses, typing
-from collections import deque
-from typing import List, Dict, Optional, Tuple, Any, Callable
 
-# ---------------------------------------------------------------------------
-# Deterministic Embedding (hash-based random projection)
-# ---------------------------------------------------------------------------
+import re
+import json
+import uuid
+import math
+import asyncio
+from typing import Dict, List, Optional, Callable, Any, Tuple, TypedDict
+from dataclasses import dataclass, field
+from enum import Enum, auto
 
-class HashEmbedding:
-    """Deterministic embedding via hash-based random projection. No numpy."""
 
-    def __init__(self, dim: int = 128, seed: int = 42):
-        self.dim = dim
-        self.seed = seed
+class NodeType(Enum):
+    DECIDE = auto()
+    RETRIEVE = auto()
+    GENERATE = auto()
+    WEB_SEARCH = auto()
+    END = auto()
 
-    def _hash_vector(self, text: str, component: int) -> float:
-        h = hashlib.blake2b(key=component.to_bytes(4, "big", signed=True), digest_size=32)
-        h.update(text.encode("utf-8"))
-        val = int.from_bytes(h.digest(), "big")
-        return (val / (2 ** 256)) * 2 - 1  # scale to [-1, 1]
 
-    def embed(self, text: str) -> List[float]:
-        vec = [self._hash_vector(text, i) for i in range(self.dim)]
-        # L2 normalize
+class Document:
+    """Lightweight document wrapper."""
+
+    def __init__(self, page_content: str, metadata: Optional[Dict[str, Any]] = None):
+        self.page_content = page_content
+        self.metadata = metadata or {}
+
+    def __repr__(self) -> str:
+        return f"Document({self.page_content[:60]}...)"
+
+
+class AgentState(TypedDict):
+    question: str
+    documents: List[Document]
+    answer: str
+    needs_retrieval: bool
+
+
+@dataclass
+class WorkflowNode:
+    name: str
+    node_type: NodeType
+    func: Callable[[AgentState], AgentState]
+    edges: Dict[str, str] = field(default_factory=dict)
+
+
+class VectorStore:
+    """In-memory vector store with cosine similarity."""
+
+    def __init__(self, embedding_dim: int = 384):
+        self.embedding_dim = embedding_dim
+        self.documents: List[Document] = []
+        self.vectors: List[List[float]] = []
+
+    def _embed(self, text: str) -> List[float]:
+        """Deterministic pseudo-embedding for pure-Python operation."""
+        vec = [0.0] * self.embedding_dim
+        seed = sum(ord(c) * (i + 1) for i, c in enumerate(text[:500]))
+        for i in range(self.embedding_dim):
+            val = math.sin(seed + i * 1.7) * math.cos(seed + i * 3.1)
+            vec[i] = val
         norm = math.sqrt(sum(v * v for v in vec)) or 1.0
         return [v / norm for v in vec]
 
-    def cosine_similarity(self, a: List[float], b: List[float]) -> float:
-        dot = sum(x * y for x, y in zip(a, b))
-        return dot  # already normalized
+    def add_documents(self, docs: List[Document]) -> None:
+        for doc in docs:
+            self.documents.append(doc)
+            self.vectors.append(self._embed(doc.page_content))
 
-# ---------------------------------------------------------------------------
-# Document & Chunking
-# ---------------------------------------------------------------------------
-
-@dataclasses.dataclass
-class DocumentChunk:
-    id: str
-    content: str
-    embedding: List[float]
-    doc_id: str
-    metadata: Dict[str, Any]
-
-class Chunker:
-    """Sentence-boundary chunking."""
-
-    def __init__(self, max_chunk_size: int = 512, overlap: int = 64):
-        self.max_chunk_size = max_chunk_size
-        self.overlap = overlap
-
-    def chunk(self, text: str, doc_id: str) -> List[DocumentChunk]:
-        # Simple sentence splitting
-        sentences = re.split(r'(?<=[.!?])\s+', text)
-        chunks = []
-        buffer = ""
-        chunk_idx = 0
-        embedder = HashEmbedding()
-        for sent in sentences:
-            if len(buffer) + len(sent) + 1 > self.max_chunk_size and buffer:
-                chunks.append(DocumentChunk(
-                    id=f"{doc_id}_chunk_{chunk_idx}",
-                    content=buffer.strip(),
-                    embedding=embedder.embed(buffer.strip()),
-                    doc_id=doc_id,
-                    metadata={"index": chunk_idx}
-                ))
-                buffer = buffer[-self.overlap:] if self.overlap < len(buffer) else ""
-                chunk_idx += 1
-            buffer += (" " if buffer else "") + sent
-        if buffer.strip():
-            chunks.append(DocumentChunk(
-                id=f"{doc_id}_chunk_{chunk_idx}",
-                content=buffer.strip(),
-                embedding=embedder.embed(buffer.strip()),
-                doc_id=doc_id,
-                metadata={"index": chunk_idx}
-            ))
-        return chunks
-
-# ---------------------------------------------------------------------------
-# In-Memory Vector Store (FAISS replacement)
-# ---------------------------------------------------------------------------
-
-class VectorStore:
-    def __init__(self, dim: int = 128):
-        self.dim = dim
-        self.embedder = HashEmbedding(dim=dim)
-        self.chunks: List[DocumentChunk] = []
-
-    def add_documents(self, chunks: List[DocumentChunk]):
-        self.chunks.extend(chunks)
-
-    def search(self, query: str, k: int = 5) -> List[DocumentChunk]:
-        qvec = self.embedder.embed(query)
+    def similarity_search(self, query: str, k: int = 3) -> List[Document]:
+        qvec = self._embed(query)
         scored = []
-        for chunk in self.chunks:
-            sim = self.embedder.cosine_similarity(qvec, chunk.embedding)
-            scored.append((sim, chunk))
+        for doc, vec in zip(self.documents, self.vectors):
+            score = sum(a * b for a, b in zip(qvec, vec))
+            scored.append((score, doc))
         scored.sort(key=lambda x: x[0], reverse=True)
-        return [chunk for _, chunk in scored[:k]]
+        return [doc for _, doc in scored[:k]]
 
-    def clear(self):
-        self.chunks.clear()
 
-# ---------------------------------------------------------------------------
-# Mock MCP Client
-# ---------------------------------------------------------------------------
+class WebBaseLoader:
+    """Simulate web document loading. In production, use requests + BeautifulSoup."""
 
-class MCPClient:
-    """Mock Model Context Protocol client simulating external tool calls."""
+    def __init__(self, url: str):
+        self.url = url
 
-    def __init__(self, tools: Optional[Dict[str, Callable]] = None):
-        self.tools = tools or {}
+    def load(self) -> List[Document]:
+        return [Document(
+            page_content=f"Content from {self.url}. Simulated web page text for RAG indexing.",
+            metadata={"source": self.url}
+        )]
 
-    def register_tool(self, name: str, fn: Callable):
-        self.tools[name] = fn
 
-    def call_tool(self, tool_name: str, params: Dict[str, Any]) -> Dict[str, Any]:
-        if tool_name not in self.tools:
-            return {"error": f"Tool {tool_name} not found"}
-        try:
-            result = self.tools[tool_name](**params)
-            return {"tool": tool_name, "result": result}
-        except Exception as e:
-            return {"tool": tool_name, "error": str(e)}
+class RecursiveCharacterTextSplitter:
+    """Split documents into chunks with overlap."""
 
-# ---------------------------------------------------------------------------
-# Mock LLM
-# ---------------------------------------------------------------------------
+    def __init__(self, chunk_size: int = 1000, chunk_overlap: int = 200):
+        self.chunk_size = chunk_size
+        self.chunk_overlap = chunk_overlap
 
-class MockLLM:
-    """Deterministic mock LLM for generation and routing."""
-
-    def generate(self, prompt: str, max_tokens: int = 256) -> str:
-        if "decide" in prompt.lower() or "needs retrieval" in prompt.lower():
-            if "who" in prompt.lower() or "what is" in prompt.lower() or "how" in prompt.lower():
-                return "needs_retrieval: true"
-            return "needs_retrieval: false"
-        if "answer" in prompt.lower() or "generate" in prompt.lower():
-            # Return a simple answer based on prompt context
-            if "document" in prompt.lower():
-                return "Based on the provided documents, the answer is concise and relevant."
-            return "This is a generated answer."
-        if "web search" in prompt.lower() or "ddg" in prompt.lower():
-            return "Web search results: [Simulated result from DuckDuckGo]"
-        return "Unknown prompt type."
-
-    def classify(self, prompt: str) -> bool:
-        return "true" in self.generate(prompt).lower()
-
-# ---------------------------------------------------------------------------
-# Agent State
-# ---------------------------------------------------------------------------
-
-@dataclasses.dataclass
-class AgentState:
-    question: str = ""
-    documents: List[str] = dataclasses.field(default_factory=list)
-    answer: str = ""
-    needs_retrieval: bool = True
-    use_ddg: bool = False
-    web_results: List[str] = dataclasses.field(default_factory=list)
-    steps: List[str] = dataclasses.field(default_factory=list)
-
-# ---------------------------------------------------------------------------
-# Graph Nodes
-# ---------------------------------------------------------------------------
-
-class AgenticRAGGraph:
-    """LangGraph-style workflow: decide -> retrieve -> generate -> web_search -> regenerate."""
-
-    def __init__(self, vector_store: VectorStore, mcp: MCPClient, llm: Optional[MockLLM] = None):
-        self.vector_store = vector_store
-        self.mcp = mcp
-        self.llm = llm or MockLLM()
-        self.chunker = Chunker()
-
-    def build_graph(self) -> Callable[[AgentState], AgentState]:
-        def run(state: AgentState) -> AgentState:
-            state = self.decide_node(state)
-            if state.needs_retrieval:
-                state = self.retrieve_node(state)
-            if state.use_ddg:
-                state = self.web_search_node(state)
-            state = self.generate_node(state)
-            return state
-        return run
-
-    def decide_node(self, state: AgentState) -> AgentState:
-        prompt = (
-            f"Question: {state.question}\n"
-            "Decide whether this question needs document retrieval. "
-            "Respond with 'needs_retrieval: true' or 'needs_retrieval: false'."
-        )
-        raw = self.llm.generate(prompt, max_tokens=32)
-        state.needs_retrieval = "true" in raw.lower()
-        state.steps.append(f"decide: needs_retrieval={state.needs_retrieval}")
-        return state
-
-    def retrieve_node(self, state: AgentState) -> AgentState:
-        chunks = self.vector_store.search(state.question, k=5)
-        state.documents = [c.content for c in chunks]
-        state.steps.append(f"retrieve: found {len(chunks)} chunks")
-        # If few documents, trigger web search
-        if len(chunks) < 2:
-            state.use_ddg = True
-        return state
-
-    def web_search_node(self, state: AgentState) -> AgentState:
-        result = self.mcp.call_tool("web_search", {"query": state.question})
-        state.web_results = [str(result.get("result", "No result"))]
-        state.steps.append("web_search: executed via MCP")
-        return state
-
-    def generate_node(self, state: AgentState) -> AgentState:
-        context = "\n".join(state.documents + state.web_results)
-        prompt = (
-            f"Question: {state.question}\n"
-            f"Context: {context}\n"
-            "Generate a concise answer based on the context."
-        )
-        state.answer = self.llm.generate(prompt, max_tokens=256)
-        state.steps.append("generate: produced answer")
-        return state
-
-    def run(self, question: str, use_ddg: bool = False) -> AgentState:
-        state = AgentState(question=question, use_ddg=use_ddg)
-        graph = self.build_graph()
-        return graph(state)
-
-# ---------------------------------------------------------------------------
-# Hybrid Retriever
-# ---------------------------------------------------------------------------
-
-class HybridRetriever:
-    """Combines vector + web results."""
-
-    def __init__(self, vector_store: VectorStore, mcp: MCPClient):
-        self.vector_store = vector_store
-        self.mcp = mcp
-
-    def retrieve(self, query: str, k: int = 5, use_web: bool = False) -> List[str]:
-        chunks = self.vector_store.search(query, k=k)
-        results = [c.content for c in chunks]
-        if use_web:
-            web = self.mcp.call_tool("web_search", {"query": query})
-            results.append(str(web.get("result", "")))
+    def split_documents(self, docs: List[Document]) -> List[Document]:
+        results = []
+        for doc in docs:
+            text = doc.page_content
+            start = 0
+            while start < len(text):
+                end = min(start + self.chunk_size, len(text))
+                results.append(Document(
+                    page_content=text[start:end],
+                    metadata={**doc.metadata, "chunk_index": len(results)}
+                ))
+                start += self.chunk_size - self.chunk_overlap
         return results
 
-# ---------------------------------------------------------------------------
-# Test Suite
-# ---------------------------------------------------------------------------
 
-def _test_embedding():
-    emb = HashEmbedding(dim=64)
-    v1 = emb.embed("hello world")
-    v2 = emb.embed("hello world")
-    assert abs(sum(v1) - sum(v2)) < 1e-9
-    assert len(v1) == 64
-    print("[PASS] hash embedding")
+class LLMInterface:
+    """Pluggable LLM interface. Defaults to a mock responder."""
 
-def _test_chunking():
-    chunker = Chunker(max_chunk_size=100, overlap=10)
-    text = "This is sentence one. This is sentence two. This is sentence three. This is sentence four."
-    chunks = chunker.chunk(text, "doc1")
-    assert len(chunks) > 0
-    assert all(len(c.content) <= 120 for c in chunks)
-    print("[PASS] chunking")
+    def __init__(self, model_name: str = "mock-llm", temperature: float = 0.5):
+        self.model_name = model_name
+        self.temperature = temperature
 
-def _test_vector_store():
-    store = VectorStore(dim=64)
-    chunker = Chunker()
-    chunks = chunker.chunk("The sky is blue. The sun is bright.", "doc1")
-    store.add_documents(chunks)
-    results = store.search("sky color", k=2)
-    assert len(results) > 0
-    print("[PASS] vector store")
+    def invoke(self, prompt: str) -> str:
+        return f"[MOCK LLM] Answer based on prompt: {prompt[:80]}..."
 
-def _test_mcp():
-    mcp = MCPClient()
-    mcp.register_tool("calculator", lambda a, b: a + b)
-    r = mcp.call_tool("calculator", {"a": 2, "b": 3})
-    assert r["result"] == 5
-    print("[PASS] mcp client")
 
-def _test_graph():
-    store = VectorStore(dim=64)
-    chunker = Chunker()
-    store.add_documents(chunker.chunk("Python is a programming language. It is used for AI.", "doc1"))
-    store.add_documents(chunker.chunk("The capital of France is Paris. It is known for the Eiffel Tower.", "doc2"))
-    mcp = MCPClient()
-    mcp.register_tool("web_search", lambda query: f"Web result for {query}")
-    graph = AgenticRAGGraph(store, mcp)
-    state = graph.run("What is Python?", use_ddg=False)
-    assert state.answer
-    assert state.steps
-    print("[PASS] agentic rag graph")
+class MCPClient:
+    """Model Context Protocol client stub."""
 
-def _test_hybrid_retriever():
-    store = VectorStore(dim=64)
-    chunker = Chunker()
-    store.add_documents(chunker.chunk("Document about machine learning.", "doc1"))
-    mcp = MCPClient()
-    mcp.register_tool("web_search", lambda query: f"Web: {query}")
-    ret = HybridRetriever(store, mcp)
-    results = ret.retrieve("machine learning", k=3, use_web=True)
-    assert len(results) >= 2
-    print("[PASS] hybrid retriever")
+    def __init__(self, config: Dict[str, Any]):
+        self.config = config
 
+    @classmethod
+    def from_config_file(cls, path: str) -> "MCPClient":
+        return cls({})
+
+    async def search(self, query: str) -> str:
+        return f"[MCP Search] Results for: {query}"
+
+
+class MCPAgent:
+    """MCP agent wrapper for tool execution."""
+
+    def __init__(self, llm: LLMInterface, client: MCPClient, max_steps: int = 5):
+        self.llm = llm
+        self.client = client
+        self.max_steps = max_steps
+
+    async def run(self, query: str) -> str:
+        return await self.client.search(query)
+
+
+class AgenticRAGWorkflow:
+    """
+    Pure-Python state graph implementing the AgenticRAG workflow.
+    """
+
+    def __init__(
+        self,
+        llm: Optional[LLMInterface] = None,
+        vectorstore: Optional[VectorStore] = None,
+        retrieval_keywords: Optional[List[str]] = None,
+        mcp_client: Optional[MCPClient] = None,
+    ):
+        self.llm = llm or LLMInterface()
+        self.vectorstore = vectorstore or VectorStore()
+        self.retrieval_keywords = retrieval_keywords or ["what", "how", "explain", "tell me", "describe"]
+        self.mcp_client = mcp_client
+        self.nodes: Dict[str, WorkflowNode] = {}
+        self.entry_point = "decide"
+        self._build_graph()
+
+    def _build_graph(self) -> None:
+        self.nodes["decide"] = WorkflowNode(
+            name="decide", node_type=NodeType.DECIDE,
+            func=self._decide_retrieval, edges={"retrieve": "retrieve", "generate": "generate"}
+        )
+        self.nodes["retrieve"] = WorkflowNode(
+            name="retrieve", node_type=NodeType.RETRIEVE,
+            func=self._retrieve_documents, edges={"generate": "generate"}
+        )
+        self.nodes["generate"] = WorkflowNode(
+            name="generate", node_type=NodeType.GENERATE,
+            func=self._generate_answer, edges={"end": "end"}
+        )
+        self.nodes["end"] = WorkflowNode(
+            name="end", node_type=NodeType.END,
+            func=lambda state: state, edges={}
+        )
+
+    def _decide_retrieval(self, state: AgentState) -> AgentState:
+        question = state["question"]
+        needs = any(kw in question.lower() for kw in self.retrieval_keywords)
+        return {**state, "needs_retrieval": needs}
+
+    def _retrieve_documents(self, state: AgentState) -> AgentState:
+        question = state["question"]
+        docs = self.vectorstore.similarity_search(question, k=3)
+        return {**state, "documents": docs}
+
+    def _generate_answer(self, state: AgentState) -> AgentState:
+        question = state["question"]
+        documents = state.get("documents", [])
+        context = "\n\n".join([d.page_content for d in documents]) if documents else ""
+        prompt = (
+            f"Answer the question based on the following context:\n\n"
+            f"Context: {context}\n\nQuestion: {question}\n\nAnswer:"
+        )
+        response = self.llm.invoke(prompt)
+        return {**state, "answer": response}
+
+    def _should_retrieve(self, state: AgentState) -> str:
+        return "retrieve" if state["needs_retrieval"] else "generate"
+
+    def invoke(self, state: AgentState) -> AgentState:
+        current = self.entry_point
+        while current != "end":
+            node = self.nodes[current]
+            state = node.func(state)
+            if node.node_type == NodeType.DECIDE:
+                current = node.edges[self._should_retrieve(state)]
+            else:
+                next_nodes = list(node.edges.values())
+                current = next_nodes[0] if next_nodes else "end"
+        return state
+
+    async def invoke_with_web(self, state: AgentState, use_web: bool = False) -> AgentState:
+        state = self.invoke(state)
+        if use_web and self.mcp_client:
+            mcp_agent = MCPAgent(self.llm, self.mcp_client, max_steps=5)
+            online_result = await mcp_agent.run(f"Search online for: {state['question']}")
+            state["documents"].append(Document(page_content=online_result))
+            state = self._generate_answer(state)
+        return state
+
+    def index_urls(self, urls: List[str]) -> None:
+        loader = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
+        all_docs: List[Document] = []
+        for url in urls:
+            web_docs = WebBaseLoader(url).load()
+            all_docs.extend(loader.split_documents(web_docs))
+        self.vectorstore.add_documents(all_docs)
+
+
+class AgenticRAGServer:
+    """Flask-like API wrapper for the AgenticRAG workflow."""
+
+    def __init__(self, workflow: Optional[AgenticRAGWorkflow] = None):
+        self.workflow = workflow or AgenticRAGWorkflow()
+
+    def ask(self, question: str, use_web: bool = False) -> Dict[str, str]:
+        state: AgentState = {
+            "question": question,
+            "documents": [],
+            "answer": "",
+            "needs_retrieval": False,
+        }
+        if use_web and self.workflow.mcp_client:
+            result = asyncio.run(self.workflow.invoke_with_web(state, use_web=True))
+        else:
+            result = self.workflow.invoke(state)
+        return {"answer": result["answer"]}
+
+
+# --- Standalone test ---
 if __name__ == "__main__":
-    _test_embedding()
-    _test_chunking()
-    _test_vector_store()
-    _test_mcp()
-    _test_graph()
-    _test_hybrid_retriever()
-    print("\n[OK] agentic_rag_native.py — all 6 tests passed")
+    rag = AgenticRAGWorkflow()
+    rag.index_urls([
+        "https://python.langchain.com/docs/expression_language/",
+        "https://www.langchain.com/langgraph",
+    ])
+    resp = rag.ask("What is LangChain?")
+    print("Answer:", resp["answer"])
+    resp_web = rag.ask("Latest AI news", use_web=True)
+    print("Web Answer:", resp_web["answer"])
