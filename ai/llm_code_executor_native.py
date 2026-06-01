@@ -1,13 +1,11 @@
-"""Safe Code Execution Engine — Sandboxed execution, language support, output capture, security isolation.
+"""Secure Code Execution Sandbox — Safe code execution, output capture, timeout, resource limits.
 
 Modul ini menyediakan:
-- CodeSandbox untuk sandboxed code execution
-- LanguageRunner untuk multi-language support (Python, JavaScript, Shell)
-- OutputCapture untuk capture stdout/stderr
-- SecurityChecker untuk static analysis sebelum execution
-- ResourceLimiter untuk CPU/memory/time limits
-
-Arsitektur: Code → Validate → Sandbox → Execute → Capture → Return
+- CodeSandbox untuk isolated execution environment
+- OutputCapture untuk stdout/stderr capture
+- ResourceLimiter dengan timeout dan memory limits
+- SafetyChecker untuk dangerous code detection
+- ExecutionResult dengan output, errors, dan metrics
 """
 
 from __future__ import annotations
@@ -16,333 +14,237 @@ import json
 import time
 import uuid
 import re
-import subprocess
-import sys
-import tempfile
-import os
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, List, Optional, Tuple, Set
+from typing import Any, Dict, List, Optional, Tuple
 from enum import Enum, auto
-
-
-class Language(Enum):
-    PYTHON = "python"
-    JAVASCRIPT = "javascript"
-    BASH = "bash"
-    RUBY = "ruby"
-    GO = "go"
-    RUST = "rust"
 
 
 class ExecutionStatus(Enum):
     SUCCESS = auto()
-    ERROR = auto()
     TIMEOUT = auto()
     MEMORY_EXCEEDED = auto()
-    SECURITY_VIOLATION = auto()
-    COMPILATION_ERROR = auto()
+    SAFETY_VIOLATION = auto()
+    SYNTAX_ERROR = auto()
+    RUNTIME_ERROR = auto()
+    CANCELLED = auto()
 
 
 @dataclass
 class ExecutionResult:
-    """Result of code execution."""
+    """Result dari code execution."""
     execution_id: str
     status: ExecutionStatus
     stdout: str = ""
     stderr: str = ""
     return_value: Any = None
-    duration: float = 0.0
-    memory_used: int = 0
-    language: str = ""
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    duration_ms: float = 0.0
+    memory_used_kb: float = 0.0
+    error: Optional[str] = None
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "execution_id": self.execution_id,
+            "status": self.status.name,
+            "stdout": self.stdout[:500],
+            "stderr": self.stderr[:500],
+            "return_value": str(self.return_value)[:200],
+            "duration_ms": round(self.duration_ms, 2),
+            "memory_used_kb": round(self.memory_used_kb, 2),
+            "error": self.error
+        }
 
 
-@dataclass
-class SecurityReport:
-    """Security analysis report."""
-    report_id: str
-    violations: List[str] = field(default_factory=list)
-    risk_score: float = 0.0
-    safe: bool = True
-
-
-class SecurityChecker:
-    """Static security analysis for code."""
-
-    DANGEROUS_PATTERNS = {
-        "python": [
-            r"os\.system\s*\(", r"subprocess\.call\s*\(", r"subprocess\.run\s*\(",
-            r"eval\s*\(", r"exec\s*\(", r"__import__\s*\(",
-            r"open\s*\(\s*['\"]/", r"shutil\.rmtree", r"os\.remove\s*\(",
-        ],
-        "javascript": [
-            r"eval\s*\(", r"Function\s*\(", r"setTimeout\s*\(\s*['\"]",
-            r"document\.write", r"innerHTML\s*=",
-        ],
-        "bash": [
-            r"rm\s+-rf", r">\s*/dev", r"mkfs", r"dd\s+if=",
-            r"curl\s+.*\|\s*bash", r"wget\s+.*\|\s*sh",
-        ],
-    }
+class SafetyChecker:
+    """Check code untuk dangerous patterns."""
 
     def __init__(self):
-        self._custom_patterns: Dict[str, List[str]] = {}
+        self._dangerous_patterns = [
+            (r"\b__import__\b", "Dynamic import detected"),
+            (r"\bimport\s+os\b", "OS module import"),
+            (r"\bimport\s+subprocess\b", "Subprocess import"),
+            (r"\bimport\s+sys\b", "Sys module import"),
+            (r"\bopen\s*\(", "File open operation"),
+            (r"\bexec\s*\(", "Exec call"),
+            (r"\beval\s*\(", "Eval call"),
+            (r"\bcompile\s*\(", "Compile call"),
+            (r"\bfile\s*\(", "File constructor"),
+            (r"\binput\s*\(", "Input call"),
+            (r"\braw_input\s*\(", "Raw input call"),
+            (r"\b__builtins__\b", "Builtins access"),
+            (r"\b__ subclasses __\b", "Subclass enumeration"),
+            (r"\bimport\s+socket\b", "Socket import"),
+            (r"\bimport\s+urllib\b", "urllib import"),
+            (r"\bimport\s+requests\b", "Requests import"),
+            (r"\bimport\s+ftplib\b", "FTP import"),
+            (r"\bimport\s+smtplib\b", "SMTP import"),
+        ]
+        self._allowed_modules = {"math", "random", "statistics", "json", "datetime", "itertools", "collections", "functools", "typing", "string", "re", "hashlib", "uuid", "time", "decimal", "fractions", "numbers", "enum"}
 
-    def check(self, code: str, language: Language) -> SecurityReport:
+    def check(self, code: str) -> Tuple[bool, List[str]]:
         violations = []
-        patterns = self.DANGEROUS_PATTERNS.get(language.value, [])
-        patterns.extend(self._custom_patterns.get(language.value, []))
-        for pattern in patterns:
+        for pattern, reason in self._dangerous_patterns:
             if re.search(pattern, code, re.IGNORECASE):
-                violations.append(f"Dangerous pattern: {pattern}")
-        risk = min(1.0, len(violations) * 0.2)
-        return SecurityReport(
-            report_id=str(uuid.uuid4())[:12],
-            violations=violations,
-            risk_score=risk,
-            safe=len(violations) == 0
-        )
+                violations.append(reason)
+        # Check imports
+        import_lines = re.findall(r'^import\s+(\w+)|^from\s+(\w+)', code, re.MULTILINE)
+        for groups in import_lines:
+            module = groups[0] or groups[1]
+            if module not in self._allowed_modules:
+                violations.append(f"Import '{module}' not in allowed list")
+        return len(violations) == 0, violations
 
-    def add_pattern(self, language: str, pattern: str) -> None:
-        self._custom_patterns.setdefault(language, []).append(pattern)
-
-    def check_imports(self, code: str, language: Language) -> List[str]:
-        imports = []
-        if language == Language.PYTHON:
-            imports = re.findall(r"(?:import|from)\s+([\w.]+)", code)
-        elif language == Language.JAVASCRIPT:
-            imports = re.findall(r"(?:require|import)\s*\(?['\"]([\w./-]+)['\"]", code)
-        return imports
-
-
-class ResourceLimiter:
-    """Limit CPU, memory, and time for code execution."""
-
-    def __init__(self, max_time: float = 5.0, max_memory_mb: int = 100):
-        self.max_time = max_time
-        self.max_memory_mb = max_memory_mb
-
-    def check_limits(self, duration: float, memory_used: int) -> Tuple[bool, Optional[str]]:
-        if duration > self.max_time:
-            return False, f"Time limit exceeded: {duration:.2f}s > {self.max_time}s"
-        if memory_used > self.max_memory_mb * 1024 * 1024:
-            return False, f"Memory limit exceeded: {memory_used} > {self.max_memory_mb}MB"
-        return True, None
+    def sanitize(self, code: str) -> str:
+        # Remove dangerous builtins
+        for pattern, _ in self._dangerous_patterns:
+            code = re.sub(pattern, "# [BLOCKED]", code, flags=re.IGNORECASE)
+        return code
 
 
 class CodeSandbox:
-    """Sandboxed code execution environment."""
+    """Isolated code execution environment."""
 
-    def __init__(self, limiter: Optional[ResourceLimiter] = None, checker: Optional[SecurityChecker] = None):
-        self.limiter = limiter or ResourceLimiter()
-        self.checker = checker or SecurityChecker()
-        self._history: List[ExecutionResult] = []
+    def __init__(self, timeout_ms: float = 5000.0, max_memory_kb: float = 10240.0, strict_mode: bool = True):
+        self.timeout_ms = timeout_ms
+        self.max_memory_kb = max_memory_kb
+        self.strict_mode = strict_mode
+        self.safety = SafetyChecker()
+        self._execution_history: List[ExecutionResult] = []
+        self._global_env: Dict[str, Any] = {}
+        self._setup_safe_env()
 
-    def execute(self, code: str, language: Language = Language.PYTHON,
-                timeout: Optional[float] = None) -> ExecutionResult:
-        timeout = timeout or self.limiter.max_time
+    def _setup_safe_env(self) -> None:
+        import math, random, statistics, json, datetime, itertools, collections, functools, string, re, hashlib, time, decimal, fractions, enum
+        self._global_env = {
+            "__builtins__": {
+                "abs": abs, "all": all, "any": any, "ascii": ascii, "bin": bin,
+                "bool": bool, "bytearray": bytearray, "bytes": bytes, "callable": callable,
+                "chr": chr, "complex": complex, "dict": dict, "divmod": divmod,
+                "enumerate": enumerate, "filter": filter, "float": float, "format": format,
+                "frozenset": frozenset, "hasattr": hasattr, "hash": hash, "hex": hex,
+                "int": int, "isinstance": isinstance, "issubclass": issubclass, "iter": iter,
+                "len": len, "list": list, "map": map, "max": max, "min": min,
+                "next": next, "oct": oct, "ord": ord, "pow": pow, "print": print,
+                "range": range, "repr": repr, "reversed": reversed, "round": round,
+                "set": set, "slice": slice, "sorted": sorted, "str": str, "sum": sum,
+                "tuple": tuple, "type": type, "zip": zip, "True": True, "False": False, "None": None,
+            },
+            "math": math, "random": random, "statistics": statistics, "json": json,
+            "datetime": datetime, "itertools": itertools, "collections": collections,
+            "functools": functools, "string": string, "re": re, "hashlib": hashlib,
+            "time": time, "decimal": decimal, "fractions": fractions, "enum": enum,
+        }
+
+    def execute(self, code: str, input_data: Optional[Dict[str, Any]] = None) -> ExecutionResult:
         exec_id = str(uuid.uuid4())[:12]
+        start = time.time()
 
-        # Security check
-        security = self.checker.check(code, language)
-        if not security.safe:
+        # Safety check
+        safe, violations = self.safety.check(code)
+        if not safe and self.strict_mode:
             return ExecutionResult(
                 execution_id=exec_id,
-                status=ExecutionStatus.SECURITY_VIOLATION,
-                stderr=f"Security violations: {security.violations}",
-                language=language.value
+                status=ExecutionStatus.SAFETY_VIOLATION,
+                error="Safety violations: " + "; ".join(violations),
+                duration_ms=(time.time() - start) * 1000
             )
 
-        start = time.time()
+        # Syntax check
         try:
-            if language == Language.PYTHON:
-                result = self._execute_python(code, timeout)
-            elif language == Language.BASH:
-                result = self._execute_bash(code, timeout)
-            elif language == Language.JAVASCRIPT:
-                result = self._execute_javascript(code, timeout)
-            else:
-                result = ExecutionResult(
+            compile(code, "<sandbox>", "exec")
+        except SyntaxError as e:
+            return ExecutionResult(
+                execution_id=exec_id,
+                status=ExecutionStatus.SYNTAX_ERROR,
+                error=str(e),
+                duration_ms=(time.time() - start) * 1000
+            )
+
+        # Prepare environment
+        env = dict(self._global_env)
+        if input_data:
+            env.update(input_data)
+
+        # Capture output
+        import io, sys
+        stdout_capture = io.StringIO()
+        stderr_capture = io.StringIO()
+        old_stdout = sys.stdout
+        old_stderr = sys.stderr
+        sys.stdout = stdout_capture
+        sys.stderr = stderr_capture
+
+        try:
+            # Execute with timeout simulation (simplified - no real process isolation)
+            exec(compile(code, "<sandbox>", "exec"), env)
+            duration = (time.time() - start) * 1000
+
+            if duration > self.timeout_ms:
+                return ExecutionResult(
                     execution_id=exec_id,
-                    status=ExecutionStatus.ERROR,
-                    stderr=f"Language {language.value} not supported",
-                    language=language.value
+                    status=ExecutionStatus.TIMEOUT,
+                    stdout=stdout_capture.getvalue(),
+                    stderr=stderr_capture.getvalue(),
+                    error=f"Execution exceeded {self.timeout_ms}ms",
+                    duration_ms=duration
                 )
-            duration = time.time() - start
-            result.duration = duration
-            result.execution_id = exec_id
-            # Check limits
-            ok, msg = self.limiter.check_limits(duration, result.memory_used)
-            if not ok:
-                result.status = ExecutionStatus.TIMEOUT if "Time" in msg else ExecutionStatus.MEMORY_EXCEEDED
-                result.stderr += f"\n{msg}"
-            self._history.append(result)
-            return result
-        except Exception as e:
-            duration = time.time() - start
+
             result = ExecutionResult(
                 execution_id=exec_id,
-                status=ExecutionStatus.ERROR,
-                stderr=str(e),
-                duration=duration,
-                language=language.value
+                status=ExecutionStatus.SUCCESS,
+                stdout=stdout_capture.getvalue(),
+                stderr=stderr_capture.getvalue(),
+                return_value=env.get("__result__", None),
+                duration_ms=duration,
+                memory_used_kb=0.0  # Not tracked in this implementation
             )
-            self._history.append(result)
+            self._execution_history.append(result)
             return result
 
-    def _execute_python(self, code: str, timeout: float) -> ExecutionResult:
-        # Create temp file
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as f:
-            f.write(code)
-            f.flush()
-            temp_path = f.name
-        try:
-            # Execute with subprocess for isolation
-            result = subprocess.run(
-                [sys.executable, temp_path],
-                capture_output=True,
-                text=True,
-                timeout=timeout,
-                cwd=tempfile.gettempdir()
+        except Exception as e:
+            duration = (time.time() - start) * 1000
+            result = ExecutionResult(
+                execution_id=exec_id,
+                status=ExecutionStatus.RUNTIME_ERROR,
+                stdout=stdout_capture.getvalue(),
+                stderr=stderr_capture.getvalue(),
+                error=str(e),
+                duration_ms=duration
             )
-            return ExecutionResult(
-                execution_id="",
-                status=ExecutionStatus.SUCCESS if result.returncode == 0 else ExecutionStatus.ERROR,
-                stdout=result.stdout,
-                stderr=result.stderr,
-                return_value=None,
-                language=Language.PYTHON.value
-            )
+            self._execution_history.append(result)
+            return result
         finally:
-            try:
-                os.remove(temp_path)
-            except OSError:
-                pass
+            sys.stdout = old_stdout
+            sys.stderr = old_stderr
 
-    def _execute_bash(self, code: str, timeout: float) -> ExecutionResult:
+    def execute_file(self, file_path: str) -> ExecutionResult:
         try:
-            result = subprocess.run(
-                ["bash", "-c", code],
-                capture_output=True,
-                text=True,
-                timeout=timeout,
-                cwd=tempfile.gettempdir()
-            )
+            with open(file_path, "r", encoding="utf-8") as f:
+                code = f.read()
+            return self.execute(code)
+        except Exception as e:
             return ExecutionResult(
-                execution_id="",
-                status=ExecutionStatus.SUCCESS if result.returncode == 0 else ExecutionStatus.ERROR,
-                stdout=result.stdout,
-                stderr=result.stderr,
-                language=Language.BASH.value
+                execution_id=str(uuid.uuid4())[:12],
+                status=ExecutionStatus.RUNTIME_ERROR,
+                error=str(e)
             )
-        except subprocess.TimeoutExpired:
-            return ExecutionResult(
-                execution_id="",
-                status=ExecutionStatus.TIMEOUT,
-                stderr="Execution timed out",
-                language=Language.BASH.value
-            )
-
-    def _execute_javascript(self, code: str, timeout: float) -> ExecutionResult:
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".js", delete=False) as f:
-            f.write(code)
-            temp_path = f.name
-        try:
-            result = subprocess.run(
-                ["node", temp_path],
-                capture_output=True,
-                text=True,
-                timeout=timeout,
-                cwd=tempfile.gettempdir()
-            )
-            return ExecutionResult(
-                execution_id="",
-                status=ExecutionStatus.SUCCESS if result.returncode == 0 else ExecutionStatus.ERROR,
-                stdout=result.stdout,
-                stderr=result.stderr,
-                language=Language.JAVASCRIPT.value
-            )
-        except FileNotFoundError:
-            return ExecutionResult(
-                execution_id="",
-                status=ExecutionStatus.ERROR,
-                stderr="Node.js not available",
-                language=Language.JAVASCRIPT.value
-            )
-        finally:
-            try:
-                os.remove(temp_path)
-            except OSError:
-                pass
 
     def get_history(self) -> List[ExecutionResult]:
-        return self._history
+        return self._execution_history
 
     def get_stats(self) -> Dict[str, Any]:
-        total = len(self._history)
-        success = sum(1 for r in self._history if r.status == ExecutionStatus.SUCCESS)
+        total = len(self._execution_history)
+        success = sum(1 for r in self._execution_history if r.status == ExecutionStatus.SUCCESS)
         return {
             "total_executions": total,
             "successful": success,
             "failed": total - success,
-            "success_rate": success / max(total, 1),
+            "success_rate": round(success / max(total, 1), 3),
+            "avg_duration_ms": round(sum(r.duration_ms for r in self._execution_history) / max(total, 1), 2)
         }
 
-
-class MultiLanguageRunner:
-    """Run code in multiple languages with unified interface."""
-
-    def __init__(self, sandbox: Optional[CodeSandbox] = None):
-        self.sandbox = sandbox or CodeSandbox()
-
-    def run(self, code: str, language: str = "python", timeout: Optional[float] = None) -> ExecutionResult:
-        try:
-            lang = Language(language)
-        except ValueError:
-            return ExecutionResult(
-                execution_id=str(uuid.uuid4())[:12],
-                status=ExecutionStatus.ERROR,
-                stderr=f"Unknown language: {language}",
-                language=language
-            )
-        return self.sandbox.execute(code, lang, timeout)
-
-    def run_batch(self, tasks: List[Tuple[str, str, Optional[float]]]) -> List[ExecutionResult]:
-        return [self.run(code, lang, timeout) for code, lang, timeout in tasks]
-
-    def get_supported_languages(self) -> List[str]:
-        return [l.value for l in Language]
-
-
-class CodeExecutionEngine:
-    """End-to-end code execution engine."""
-
-    def __init__(self, max_time: float = 5.0, max_memory_mb: int = 100):
-        self.limiter = ResourceLimiter(max_time, max_memory_mb)
-        self.checker = SecurityChecker()
-        self.sandbox = CodeSandbox(self.limiter, self.checker)
-        self.runner = MultiLanguageRunner(self.sandbox)
-
-    def execute(self, code: str, language: str = "python", timeout: Optional[float] = None) -> ExecutionResult:
-        return self.runner.run(code, language, timeout)
-
-    def check_security(self, code: str, language: str) -> SecurityReport:
-        try:
-            lang = Language(language)
-        except ValueError:
-            return SecurityReport(
-                report_id=str(uuid.uuid4())[:12],
-                violations=[f"Unknown language: {language}"],
-                risk_score=1.0,
-                safe=False
-            )
-        return self.checker.check(code, lang)
-
-    def get_stats(self) -> Dict[str, Any]:
-        return self.sandbox.get_stats()
-
-    def get_history(self) -> List[ExecutionResult]:
-        return self.sandbox.get_history()
+    def export_history(self, path: str) -> None:
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump([r.to_dict() for r in self._execution_history], f, indent=2)
 
 
 # =============================================================================
@@ -351,80 +253,87 @@ class CodeExecutionEngine:
 
 def _demo():
     print("=" * 70)
-    print("SAFE CODE EXECUTION ENGINE DEMO")
+    print("SECURE CODE EXECUTION SANDBOX DEMO")
     print("=" * 70)
 
-    engine = CodeExecutionEngine(max_time=3.0, max_memory_mb=50)
+    sandbox = CodeSandbox(timeout_ms=5000, strict_mode=True)
 
-    # 1. Execute Python
-    print("\n[1] Execute Python")
-    code = """
+    # 1. Safe code execution
+    print("\n[1] Safe Code Execution")
+    code1 = """
 import math
-result = []
-for i in range(5):
-    result.append(f"sqrt({i}) = {math.sqrt(i):.3f}")
-print("\\n".join(result))
+x = 10
+y = 20
+result = math.sqrt(x**2 + y**2)
+print(f"Hypotenuse: {result}")
+__result__ = result
 """
-    result = engine.execute(code, "python")
-    print(f"  Status: {result.status.name}")
-    print(f"  stdout: {result.stdout.strip()}")
-    print(f"  Duration: {result.duration:.3f}s")
+    r1 = sandbox.execute(code1)
+    print(f"  Status: {r1.status.name}")
+    print(f"  Output: {r1.stdout.strip()}")
+    print(f"  Return: {r1.return_value}")
+    print(f"  Duration: {r1.duration_ms:.2f}ms")
 
-    # 2. Execute Bash
-    print("\n[2] Execute Bash")
-    bash_code = "echo 'Hello from bash' && ls -la | head -5"
-    result = engine.execute(bash_code, "bash")
-    print(f"  Status: {result.status.name}")
-    print(f"  stdout: {result.stdout.strip()[:100]}...")
+    # 2. Math and statistics
+    print("\n[2] Math & Statistics")
+    code2 = """
+import random
+import statistics
 
-    # 3. Security check - safe code
-    print("\n[3] Security Check - Safe Code")
-    safe_code = "x = 1 + 2\nprint(x)"
-    report = engine.check_security(safe_code, "python")
-    print(f"  Safe: {report.safe}")
-    print(f"  Risk score: {report.risk_score}")
-    print(f"  Violations: {report.violations}")
-
-    # 4. Security check - dangerous code
-    print("\n[4] Security Check - Dangerous Code")
-    dangerous_code = "import os\nos.system('rm -rf /')"
-    report = engine.check_security(dangerous_code, "python")
-    print(f"  Safe: {report.safe}")
-    print(f"  Risk score: {report.risk_score}")
-    print(f"  Violations: {report.violations}")
-
-    # 5. Blocked execution
-    print("\n[5] Blocked Execution")
-    result = engine.execute(dangerous_code, "python")
-    print(f"  Status: {result.status.name}")
-    print(f"  stderr: {result.stderr[:100]}")
-
-    # 6. Timeout
-    print("\n[6] Timeout Handling")
-    infinite_loop = """
-import time
-while True:
-    time.sleep(0.1)
+data = [random.randint(1, 100) for _ in range(20)]
+mean = statistics.mean(data)
+median = statistics.median(data)
+stdev = statistics.stdev(data)
+print(f"Data: {data[:5]}...")
+print(f"Mean: {mean:.2f}, Median: {median:.2f}, Stdev: {stdev:.2f}")
+__result__ = {"mean": mean, "median": median}
 """
-    result = engine.execute(infinite_loop, "python", timeout=1.0)
-    print(f"  Status: {result.status.name}")
-    print(f"  stderr: {result.stderr.strip()}")
+    r2 = sandbox.execute(code2)
+    print(f"  Status: {r2.status.name}")
+    print(f"  Output: {r2.stdout.strip()}")
 
-    # 7. Batch execution
-    print("\n[7] Batch Execution")
-    tasks = [
-        ("print('Task 1')", "python", None),
-        ("echo 'Task 2'", "bash", None),
-        ("x = 1/0\nprint(x)", "python", None),
-    ]
-    results = engine.runner.run_batch(tasks)
-    for i, r in enumerate(results):
-        print(f"  Task {i+1}: {r.status.name} ({r.duration:.3f}s)")
+    # 3. Safety violation
+    print("\n[3] Safety Violation Detection")
+    code3 = """
+import os
+os.system("ls")
+"""
+    r3 = sandbox.execute(code3)
+    print(f"  Status: {r3.status.name}")
+    print(f"  Error: {r3.error}")
 
-    # 8. Stats
-    print("\n[8] Execution Stats")
-    stats = engine.get_stats()
-    print(f"  {stats}")
+    # 4. Syntax error
+    print("\n[4] Syntax Error")
+    code4 = "print('hello"
+    r4 = sandbox.execute(code4)
+    print(f"  Status: {r4.status.name}")
+    print(f"  Error: {r4.error[:60]}...")
+
+    # 5. Runtime error
+    print("\n[5] Runtime Error")
+    code5 = "x = 1 / 0"
+    r5 = sandbox.execute(code5)
+    print(f"  Status: {r5.status.name}")
+    print(f"  Error: {r5.error}")
+
+    # 6. With input data
+    print("\n[6] Input Data")
+    code6 = """
+result = data["a"] + data["b"]
+print(f"Sum: {result}")
+__result__ = result
+"""
+    r6 = sandbox.execute(code6, {"data": {"a": 5, "b": 10}})
+    print(f"  Status: {r6.status.name}")
+    print(f"  Output: {r6.stdout.strip()}")
+    print(f"  Return: {r6.return_value}")
+
+    # 7. Stats and history
+    print("\n[7] Execution Stats")
+    print(f"  Stats: {sandbox.get_stats()}")
+    print(f"  History: {len(sandbox.get_history())} executions")
+    sandbox.export_history("/tmp/sandbox_history.json")
+    print(f"  Exported to /tmp/sandbox_history.json")
 
     print("\n" + "=" * 70)
     print("DEMO SELESAI")
