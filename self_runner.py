@@ -26,6 +26,7 @@ from super_ai.self_improvement import SelfImprovementEngine, CodePatch, PatchRes
 from super_ai.goal_formation import GoalFormationEngine, GoalStatus, GoalPriority
 from super_ai.alignment_engine import AlignmentEngine, Action, ActionCategory
 from super_ai.constitution import ConstitutionStore, AmendmentType
+from super_ai.auto_fix_native import AutoFixEngine, PreValidator
 
 
 @dataclass
@@ -69,6 +70,7 @@ class RealSelfDevelopmentRunner:
         self._goal_engine = GoalFormationEngine()
         self._align_engine = AlignmentEngine(constitution_store=ConstitutionStore(), threshold=0.7)
         self._constitution = ConstitutionStore(path=os.path.join(self.data_dir, "constitution.json"))
+        self._auto_fix = AutoFixEngine(repo_root=REPO_ROOT)
         self._ensure_dirs()
         self._load_state()
 
@@ -164,6 +166,22 @@ class RealSelfDevelopmentRunner:
             constitution_amendments=0, health_issues=[], errors=[],
         )
 
+        # ── 0. Auto-Fix: Pre-validate and fix errors before patching ────
+        print(f"[CYCLE-{cycle_id}] Running auto-fix pre-validation...")
+        pre_val = self._auto_fix.validate_all(self.TARGET_DIRS)
+        pre_issues = sum(1 for r in pre_val.values() if not r["valid"])
+        if pre_issues > 0:
+            print(f"  [AUTO-FIX] {pre_issues} files with issues detected")
+            for fp, r in pre_val.items():
+                if not r["valid"]:
+                    fix = self._auto_fix.auto_fix_file(fp)
+                    if fix.success:
+                        print(f"  [AUTO-FIX] ✅ Fixed {os.path.basename(fp)}")
+                    else:
+                        print(f"  [AUTO-FIX] ❌ Could not fix {os.path.basename(fp)}: {fix.error}")
+        else:
+            print(f"  [AUTO-FIX] ✅ All files pre-validated, no issues")
+
         # ── 1. Self-Improvement: Analyze real files ───────────────────────
         target_files = self._find_target_files()
         print(f"[CYCLE-{cycle_id}] Found {len(target_files)} target files")
@@ -208,6 +226,14 @@ class RealSelfDevelopmentRunner:
                             if test_passed:
                                 with open(filepath, "w") as f:
                                     f.write(modified)
+                                # Post-validate with auto-fix engine
+                                post_val = self._auto_fix.validate_file(filepath)
+                                if not post_val["valid"]:
+                                    # Rollback if post-validation fails
+                                    shutil.copy2(backup_path, filepath)
+                                    result.patches_rolled_back.append(patch.id)
+                                    print(f"  [ROLLBACK] {patch.id} — post-validation failed: {post_val['issue_count']} issues ❌")
+                                    continue
                                 result.patches_applied.append(patch.id)
                                 print(f"  [APPLY] {patch.id} -> {os.path.basename(filepath)} ✅")
                                 # Update constitution success
@@ -271,7 +297,17 @@ class RealSelfDevelopmentRunner:
         else:
             print(f"  [CONSTITUTION] ✅ Lock-in free")
 
-        # ── 5. Save state ─────────────────────────────────────────────────
+        # ── 5. Auto-Fix: Proactive healing and error registry ───────────
+        proactive = self._auto_fix.fixer.scan_logs()
+        if proactive:
+            print(f"  [PROACTIVE] {len(proactive)} log patterns detected")
+            for finding in proactive[:2]:
+                fix_result = self._auto_fix.fixer.apply_fix(finding["suggested_fix"])
+                print(f"    [FIX] {fix_result['fix']}: {fix_result.get('result', fix_result.get('error', ''))}")
+        else:
+            print(f"  [PROACTIVE] ✅ No log patterns detected")
+
+        # ── 6. Save state ─────────────────────────────────────────────────
         self._cycle_results.append(result)
         self._save_state()
         elapsed = time.time() - t0
@@ -331,7 +367,7 @@ if __name__ == "__main__":
     runner.start()
 
     if args.once:
-        time.sleep(5)  # Wait for one cycle to complete
+        time.sleep(15)  # Wait for one cycle to complete (pre-validation takes time)
         stats = runner.get_stats()
         print(f"\n[STATS] {json.dumps(stats, indent=2, default=str)}")
         runner.stop()
