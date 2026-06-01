@@ -410,10 +410,10 @@ body {
   <div class="progress-bar-container">
     <div class="progress-bar-label">
       <span>Overall Architecture Progress</span>
-      <span id="progress-text">17/18 Layers Complete</span>
+      <span id="progress-text">18/19 Layers Complete</span>
     </div>
     <div class="progress-bar">
-      <div class="progress-bar-fill" style="width: 94%"></div>
+      <div class="progress-bar-fill" style="width: 95%"></div>
     </div>
   </div>
 </div>
@@ -465,7 +465,8 @@ const layers = [
   { id: "L14", name: "Layer 14: Flow Agent (Skill Marketplace)", desc: "Progressive disclosure skills, Cadence validator, Skill Router, DeFi framework", status: "complete", modules: ["flow_agent_native.py", "skill_router.py", "cadence_validator.py"] },
   { id: "L15", name: "Layer 15: Pharos Agent (RealFi)", desc: "9 on-chain skills, Dual VM executor, SPN manager, RealFi compliance engine", status: "complete", modules: ["pharos_agent_native.py", "dual_vm.py", "spn_manager.py", "realfi_compliance.py"] },
   { id: "L16", name: "Layer 16: Mobile Deployment (Expo)", desc: "OTA updates, native module bridge, build pipeline, file router, dev client — cross-platform iOS/Android", status: "active", modules: ["expo_agent_native.py"] },
-  { id: "L17", name: "Layer 17: Super AI Readiness", desc: "Recursive self-improvement, emergent goal formation, alignment by design, value lock-in protection", status: "pending", modules: ["self_improvement.py", "goal_formation.py", "alignment_engine.py", "constitution.py"] },
+  { id: "L17", name: "Layer 17: Super AI Readiness", desc: "Recursive self-improvement, emergent goal formation, alignment by design, value lock-in protection", status: "complete", modules: ["self_improvement.py", "goal_formation.py", "alignment_engine.py", "constitution.py", "meta_crypto_engine.py"] },
+  { id: "L18", name: "Layer 18: Cognition Engine", desc: "39+ mental models reasoning engine, model router, cross-domain synthesis, introspection", status: "complete", modules: ["thinking_engine_native.py"] },
 ];
 
 const commits = [
@@ -479,6 +480,9 @@ const commits = [
   { msg: "feat(ai): Voice Anomaly Detector — STFPM + One-Class deepfake detection", hash: "984c0ff", type: "layer", branch: "main" },
   { msg: "feat(security): Auto Repo Hunter + Offensive Security Suite", hash: "a7b3d22", type: "security", branch: "main" },
   { msg: "feat(governance): Governance & Token Economy Layer", hash: "c4e9f11", type: "layer", branch: "main" },
+  { msg: "feat(cognition): thinking_engine_native.py — 50 mental models reasoning engine", hash: "a2d1d1d", type: "layer", branch: "main" },
+  { msg: "feat(super_ai+crypto): Layer 17 Super AI Readiness + meta-crypto engine", hash: "ad11f2e", type: "layer", branch: "main" },
+  { msg: "feat(viewer): live frontend framework dashboard", hash: "715354b", type: "layer", branch: "main" },
   { msg: "feat(hft): C++ HFT Engine — sub-microsecond order book", hash: "d2a8b55", type: "layer", branch: "main" },
   { msg: "feat(crypto): Rust Post-Quantum Cryptography Engine", hash: "b1f6c33", type: "layer", branch: "main" },
 ];
