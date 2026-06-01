@@ -1,0 +1,706 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MAGNATRIX-OS — Mission Control</title>
+<style>
+:root {
+  --bg: #0b0b12; --bg-card: #11111a; --bg-hover: #1a1a28;
+  --accent: #00f0ff; --accent2: #ff0055; --accent3: #00ff88; --accent4: #ffaa00; --accent5: #aa66ff;
+  --text: #e0e0e0; --text-dim: #888; --border: #222233;
+  --glow: rgba(0,240,255,0.15); --glow-red: rgba(255,0,85,0.15); --glow-green: rgba(0,255,136,0.15);
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+body { background:var(--bg); color:var(--text); font-family:'Segoe UI',system-ui,sans-serif; min-height:100vh; overflow-x:hidden; }
+
+/* Animated grid background */
+.bg-grid { position:fixed; top:0; left:0; width:100%; height:100%; pointer-events:none; z-index:0; opacity:0.4;
+  background-image:linear-gradient(rgba(0,240,255,0.03) 1px,transparent 1px),linear-gradient(90deg,rgba(0,240,255,0.03) 1px,transparent 1px); background-size:40px 40px; }
+
+/* Header */
+.header { position:relative; z-index:1; padding:16px 24px; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; background:linear-gradient(180deg,rgba(0,240,255,0.05) 0%,transparent 100%); }
+.header-brand { display:flex; align-items:center; gap:14px; }
+.header-brand h1 { font-size:1.6rem; font-weight:800; letter-spacing:-0.5px; background:linear-gradient(135deg,var(--accent) 0%,var(--accent3) 100%); -webkit-background-clip:text; -webkit-text-fill-color:transparent; }
+.header-brand .version { font-size:0.7rem; color:var(--text-dim); border:1px solid var(--border); padding:2px 8px; border-radius:4px; }
+.header-status { display:flex; align-items:center; gap:12px; }
+.badge { display:inline-flex; align-items:center; gap:6px; padding:4px 12px; border-radius:20px; font-size:0.72rem; font-weight:600; text-transform:uppercase; letter-spacing:0.5px; }
+.badge-live { background:rgba(0,255,136,0.12); color:var(--accent3); border:1px solid rgba(0,255,136,0.25); }
+.badge-live .dot { width:6px; height:6px; border-radius:50%; background:var(--accent3); animation:pulse 2s infinite; }
+@keyframes pulse { 0%,100%{opacity:1;} 50%{opacity:0.4;} }
+.badge-alert { background:rgba(255,0,85,0.12); color:var(--accent2); border:1px solid rgba(255,0,85,0.25); }
+
+/* Top nav tabs */
+.nav-tabs { position:relative; z-index:1; display:flex; gap:4px; padding:8px 24px 0; border-bottom:1px solid var(--border); background:var(--bg-card); }
+.nav-tab { padding:10px 20px; border-radius:8px 8px 0 0; color:var(--text-dim); font-size:0.85rem; font-weight:600; cursor:pointer; transition:all 0.2s; border:none; background:transparent; position:relative; }
+.nav-tab:hover { color:var(--text); background:rgba(255,255,255,0.03); }
+.nav-tab.active { color:var(--accent); background:var(--bg); border-bottom:2px solid var(--accent); }
+.nav-tab .tab-icon { margin-right:6px; font-size:1rem; }
+
+/* Panel containers */
+.panel { display:none; position:relative; z-index:1; padding:24px; max-width:1400px; margin:0 auto; min-height:calc(100vh - 120px); }
+.panel.active { display:block; animation:fadeIn 0.3s ease; }
+@keyframes fadeIn { from{opacity:0; transform:translateY(8px);} to{opacity:1; transform:translateY(0);} }
+
+/* Card component */
+.card { background:var(--bg-card); border:1px solid var(--border); border-radius:12px; padding:20px; transition:all 0.25s; }
+.card:hover { border-color:rgba(0,240,255,0.2); }
+.card-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; }
+.card-title { font-size:0.95rem; font-weight:700; color:var(--text); }
+.card-subtitle { font-size:0.75rem; color:var(--text-dim); margin-top:2px; }
+
+/* ============ MISSION CONTROL ============ */
+.mc-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:16px; margin-bottom:24px; }
+.mc-stat { text-align:center; padding:16px; }
+.mc-stat-value { font-size:1.8rem; font-weight:800; color:var(--accent); margin-top:4px; }
+.mc-stat-label { font-size:0.7rem; color:var(--text-dim); text-transform:uppercase; letter-spacing:1px; }
+.mc-stat-delta { font-size:0.7rem; color:var(--accent3); margin-top:2px; }
+.mc-stat.alert .mc-stat-value { color:var(--accent2); }
+.mc-stat.warn .mc-stat-value { color:var(--accent4); }
+
+.mc-main { display:grid; grid-template-columns:2fr 1fr; gap:20px; }
+.mc-ops-log { max-height:400px; overflow-y:auto; }
+.mc-ops-item { display:flex; gap:10px; padding:10px 0; border-bottom:1px solid rgba(255,255,255,0.05); font-size:0.8rem; }
+.mc-ops-time { color:var(--text-dim); font-family:monospace; font-size:0.72rem; flex-shrink:0; }
+.mc-ops-badge { padding:1px 8px; border-radius:4px; font-size:0.65rem; font-weight:700; text-transform:uppercase; flex-shrink:0; }
+.badge-info { background:rgba(0,240,255,0.1); color:var(--accent); }
+.badge-success { background:rgba(0,255,136,0.1); color:var(--accent3); }
+.badge-warn { background:rgba(255,170,0,0.1); color:var(--accent4); }
+.badge-error { background:rgba(255,0,85,0.1); color:var(--accent2); }
+.mc-ops-msg { color:var(--text); }
+
+.mc-alerts { max-height:400px; overflow-y:auto; }
+.mc-alert-item { display:flex; gap:10px; padding:10px; border-radius:8px; margin-bottom:8px; font-size:0.8rem; border-left:3px solid; }
+.mc-alert-item.critical { background:rgba(255,0,85,0.08); border-color:var(--accent2); }
+.mc-alert-item.warning { background:rgba(255,170,0,0.08); border-color:var(--accent4); }
+.mc-alert-item.info { background:rgba(0,240,255,0.08); border-color:var(--accent); }
+
+/* ============ CONTROL PANEL ============ */
+.cp-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:20px; }
+.cp-section-title { font-size:1rem; font-weight:700; margin-bottom:16px; color:var(--text); display:flex; align-items:center; gap:8px; }
+.cp-section-title::before { content:''; width:3px; height:18px; background:linear-gradient(180deg,var(--accent),var(--accent3)); border-radius:2px; }
+
+.toggle-row { display:flex; justify-content:space-between; align-items:center; padding:12px 0; border-bottom:1px solid rgba(255,255,255,0.05); }
+.toggle-row:last-child { border-bottom:none; }
+.toggle-label { font-size:0.85rem; }
+.toggle-label .desc { display:block; font-size:0.72rem; color:var(--text-dim); margin-top:2px; }
+.toggle-switch { position:relative; width:40px; height:22px; background:rgba(255,255,255,0.1); border-radius:11px; cursor:pointer; transition:background 0.2s; flex-shrink:0; }
+.toggle-switch.on { background:var(--accent3); }
+.toggle-switch::after { content:''; position:absolute; top:2px; left:2px; width:18px; height:18px; background:white; border-radius:50%; transition:transform 0.2s; }
+.toggle-switch.on::after { transform:translateX(18px); }
+
+.cp-meter { margin-bottom:16px; }
+.cp-meter-label { display:flex; justify-content:space-between; font-size:0.8rem; margin-bottom:6px; }
+.cp-meter-bar { width:100%; height:8px; background:rgba(255,255,255,0.05); border-radius:4px; overflow:hidden; }
+.cp-meter-fill { height:100%; border-radius:4px; transition:width 0.5s ease; }
+.cp-meter-fill.low { background:linear-gradient(90deg,var(--accent3),var(--accent)); }
+.cp-meter-fill.mid { background:linear-gradient(90deg,var(--accent4),var(--accent2)); }
+.cp-meter-fill.high { background:linear-gradient(90deg,var(--accent2),#ff0000); }
+
+.btn { padding:8px 16px; border-radius:8px; border:1px solid var(--border); background:var(--bg-hover); color:var(--text); font-size:0.8rem; font-weight:600; cursor:pointer; transition:all 0.2s; }
+.btn:hover { border-color:var(--accent); background:rgba(0,240,255,0.08); }
+.btn-primary { background:linear-gradient(135deg,rgba(0,240,255,0.15),rgba(0,255,136,0.15)); border-color:var(--accent); color:var(--accent); }
+.btn-danger { background:rgba(255,0,85,0.1); border-color:var(--accent2); color:var(--accent2); }
+.btn-group { display:flex; gap:8px; margin-top:12px; flex-wrap:wrap; }
+
+/* ============ SETTINGS ============ */
+.st-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:20px; }
+.st-field { margin-bottom:14px; }
+.st-field label { display:block; font-size:0.8rem; font-weight:600; color:var(--text-dim); margin-bottom:6px; text-transform:uppercase; letter-spacing:0.5px; }
+.st-field input, .st-field select, .st-field textarea {
+  width:100%; padding:10px 14px; background:rgba(255,255,255,0.03); border:1px solid var(--border);
+  border-radius:8px; color:var(--text); font-size:0.85rem; outline:none; transition:border 0.2s;
+}
+.st-field input:focus, .st-field select:focus, .st-field textarea:focus { border-color:var(--accent); }
+.st-field textarea { min-height:80px; resize:vertical; }
+.st-field input[type="checkbox"] { width:auto; margin-right:8px; }
+.st-checkbox-row { display:flex; align-items:center; gap:8px; font-size:0.85rem; margin-bottom:8px; }
+
+.st-layer-list { display:flex; flex-direction:column; gap:8px; }
+.st-layer-item { display:flex; justify-content:space-between; align-items:center; padding:10px 14px; background:rgba(255,255,255,0.02); border-radius:8px; border:1px solid var(--border); font-size:0.85rem; }
+.st-layer-item .status-dot { width:8px; height:8px; border-radius:50%; }
+.st-layer-item .status-dot.active { background:var(--accent3); box-shadow:0 0 8px rgba(0,255,136,0.4); }
+.st-layer-item .status-dot.inactive { background:var(--text-dim); }
+.st-layer-item .status-dot.error { background:var(--accent2); box-shadow:0 0 8px rgba(255,0,85,0.4); }
+
+/* ============ SYSTEM VIEW ============ */
+.sys-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(300px,1fr)); gap:16px; }
+.sys-card { cursor:pointer; position:relative; overflow:hidden; }
+.sys-card::before { content:''; position:absolute; top:0; left:0; width:100%; height:3px; background:linear-gradient(90deg,var(--accent),var(--accent3)); opacity:0.5; }
+.sys-card:hover { transform:translateY(-2px); box-shadow:0 8px 30px var(--glow); }
+.sys-card.status-complete { border-left:3px solid var(--accent3); }
+.sys-card.status-active { border-left:3px solid var(--accent); }
+.sys-card.status-pending { border-left:3px solid var(--accent4); }
+.sys-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; }
+.sys-name { font-weight:700; font-size:0.88rem; }
+.sys-status { font-size:0.65rem; padding:2px 8px; border-radius:8px; text-transform:uppercase; font-weight:700; }
+.sys-card.status-complete .sys-status { background:rgba(0,255,136,0.1); color:var(--accent3); }
+.sys-card.status-active .sys-status { background:rgba(0,240,255,0.1); color:var(--accent); }
+.sys-card.status-pending .sys-status { background:rgba(255,170,0,0.1); color:var(--accent4); }
+.sys-desc { font-size:0.78rem; color:var(--text-dim); line-height:1.5; margin-bottom:10px; }
+.sys-modules { display:flex; flex-wrap:wrap; gap:4px; }
+.sys-tag { font-size:0.65rem; padding:2px 8px; background:rgba(255,255,255,0.04); border-radius:4px; color:var(--text-dim); border:1px solid rgba(255,255,255,0.06); }
+
+/* Console / Terminal */
+.console { background:#0a0a0f; border:1px solid var(--border); border-radius:8px; padding:12px; font-family:'Courier New',monospace; font-size:0.78rem; color:var(--text-dim); max-height:200px; overflow-y:auto; }
+.console-line { margin-bottom:4px; }
+.console-line .ts { color:var(--accent); margin-right:8px; }
+.console-line .level-info { color:var(--accent); }
+.console-line .level-warn { color:var(--accent4); }
+.console-line .level-err { color:var(--accent2); }
+.console-line .level-success { color:var(--accent3); }
+
+/* Responsive */
+@media(max-width:900px) { .mc-grid{grid-template-columns:repeat(2,1fr);} .mc-main{grid-template-columns:1fr;} .cp-grid{grid-template-columns:1fr;} .st-grid{grid-template-columns:1fr;} }
+@media(max-width:600px) { .mc-grid{grid-template-columns:1fr;} .header{flex-direction:column; gap:8px; align-items:flex-start;} .nav-tabs{overflow-x:auto;} }
+
+::-webkit-scrollbar { width:6px; height:6px; }
+::-webkit-scrollbar-track { background:var(--bg); }
+::-webkit-scrollbar-thumb { background:var(--border); border-radius:3px; }
+::-webkit-scrollbar-thumb:hover { background:var(--accent); }
+</style>
+</head>
+<body>
+<div class="bg-grid"></div>
+
+<div class="header">
+  <div class="header-brand">
+    <h1>MAGNATRIX-OS</h1>
+    <span class="version">v2.1.0-beta</span>
+  </div>
+  <div class="header-status">
+    <span class="badge badge-live"><span class="dot"></span> System Online</span>
+    <span class="badge badge-alert" id="alert-badge" style="display:none">&#9888; <span id="alert-count">0</span> Alerts</span>
+  </div>
+</div>
+
+<div class="nav-tabs">
+  <button class="nav-tab active" onclick="switchTab('mission')" id="tab-mission"><span class="tab-icon">&#9673;</span> Mission Control</button>
+  <button class="nav-tab" onclick="switchTab('control')" id="tab-control"><span class="tab-icon">&#9635;</span> Control Panel</button>
+  <button class="nav-tab" onclick="switchTab('settings')" id="tab-settings"><span class="tab-icon">&#9881;</span> Settings</button>
+  <button class="nav-tab" onclick="switchTab('system')" id="tab-system"><span class="tab-icon">&#9672;</span> System Architecture</button>
+</div>
+
+<!-- ============ MISSION CONTROL ============ -->
+<div class="panel active" id="panel-mission">
+  <div class="mc-grid">
+    <div class="card mc-stat">
+      <div class="mc-stat-label">Native Modules</div>
+      <div class="mc-stat-value" id="mc-native">319</div>
+      <div class="mc-stat-delta">+5 today</div>
+    </div>
+    <div class="card mc-stat">
+      <div class="mc-stat-label">Active Layers</div>
+      <div class="mc-stat-value" id="mc-layers">18/19</div>
+      <div class="mc-stat-delta">94% coverage</div>
+    </div>
+    <div class="card mc-stat">
+      <div class="mc-stat-label">System Health</div>
+      <div class="mc-stat-value" id="mc-health">98%</div>
+      <div class="mc-stat-delta">All core green</div>
+    </div>
+    <div class="card mc-stat alert" id="mc-alerts-stat">
+      <div class="mc-stat-label">Active Alerts</div>
+      <div class="mc-stat-value" id="mc-alerts">0</div>
+      <div class="mc-stat-delta">No critical issues</div>
+    </div>
+  </div>
+
+  <div class="mc-main">
+    <div class="card">
+      <div class="card-header">
+        <div>
+          <div class="card-title">Operations Log</div>
+          <div class="card-subtitle">Real-time system activity</div>
+        </div>
+        <button class="btn btn-primary" onclick="clearOpsLog()">Clear</button>
+      </div>
+      <div class="mc-ops-log" id="ops-log"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <div>
+          <div class="card-title">Active Alerts</div>
+          <div class="card-subtitle">Requires attention</div>
+        </div>
+        <button class="btn" onclick="acknowledgeAll()">Ack All</button>
+      </div>
+      <div class="mc-alerts" id="alerts-container"></div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:20px;">
+    <div class="card-header">
+      <div>
+        <div class="card-title">System Console</div>
+        <div class="card-subtitle">Live output stream</div>
+      </div>
+    </div>
+    <div class="console" id="console"></div>
+  </div>
+</div>
+
+<!-- ============ CONTROL PANEL ============ -->
+<div class="panel" id="panel-control">
+  <div class="cp-grid">
+    <div class="card">
+      <div class="cp-section-title">Layer Toggles</div>
+      <div id="layer-toggles"></div>
+    </div>
+
+    <div class="card">
+      <div class="cp-section-title">Resource Monitor</div>
+      <div class="cp-meter">
+        <div class="cp-meter-label"><span>CPU Usage</span><span id="cpu-val">42%</span></div>
+        <div class="cp-meter-bar"><div class="cp-meter-fill low" id="cpu-bar" style="width:42%"></div></div>
+      </div>
+      <div class="cp-meter">
+        <div class="cp-meter-label"><span>Memory</span><span id="mem-val">1.2 GB / 4 GB</span></div>
+        <div class="cp-meter-bar"><div class="cp-meter-fill low" id="mem-bar" style="width:30%"></div></div>
+      </div>
+      <div class="cp-meter">
+        <div class="cp-meter-label"><span>Disk</span><span id="disk-val">8.5 GB / 50 GB</span></div>
+        <div class="cp-meter-bar"><div class="cp-meter-fill mid" id="disk-bar" style="width:17%"></div></div>
+      </div>
+      <div class="cp-meter">
+        <div class="cp-meter-label"><span>Network</span><span id="net-val">12 MB/s</span></div>
+        <div class="cp-meter-bar"><div class="cp-meter-fill low" id="net-bar" style="width:25%"></div></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="cp-section-title">Quick Actions</div>
+      <div class="btn-group">
+        <button class="btn btn-primary" onclick="actionRun('restart_core')">Restart Core</button>
+        <button class="btn btn-primary" onclick="actionRun('sync_brain')">Sync Brain</button>
+      </div>
+      <div class="btn-group">
+        <button class="btn" onclick="actionRun('flush_cache')">Flush Cache</button>
+        <button class="btn" onclick="actionRun('rotate_keys')">Rotate Keys</button>
+      </div>
+      <div class="btn-group">
+        <button class="btn btn-danger" onclick="actionRun('emergency_stop')">&#9888; Emergency Stop</button>
+      </div>
+      <div class="btn-group">
+        <button class="btn btn-primary" onclick="actionRun('run_self_improvement')">Run Self-Improvement</button>
+        <button class="btn" onclick="actionRun('evolve_crypto')">Evolve Crypto</button>
+      </div>
+      <div class="btn-group">
+        <button class="btn" onclick="actionRun('align_check')">Alignment Check</button>
+        <button class="btn" onclick="actionRun('constitution_audit')">Constitution Audit</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ SETTINGS ============ -->
+<div class="panel" id="panel-settings">
+  <div class="st-grid">
+    <div class="card">
+      <div class="cp-section-title">General Configuration</div>
+      <div class="st-field">
+        <label>System Name</label>
+        <input type="text" value="MAGNATRIX-OS" id="cfg-name">
+      </div>
+      <div class="st-field">
+        <label>Environment</label>
+        <select id="cfg-env">
+          <option value="production" selected>Production</option>
+          <option value="staging">Staging</option>
+          <option value="development">Development</option>
+        </select>
+      </div>
+      <div class="st-field">
+        <label>Log Level</label>
+        <select id="cfg-log">
+          <option value="debug">Debug</option>
+          <option value="info" selected>Info</option>
+          <option value="warn">Warning</option>
+          <option value="error">Error</option>
+        </select>
+      </div>
+      <div class="st-field">
+        <label>Auto-Push Commits</label>
+        <div class="st-checkbox-row"><input type="checkbox" checked id="cfg-autopush"><span>Automatically push to remote after commit</span></div>
+      </div>
+      <div class="st-field">
+        <label>Telemetry</label>
+        <div class="st-checkbox-row"><input type="checkbox" id="cfg-telemetry"><span>Enable telemetry (zero by default)</span></div>
+      </div>
+      <div class="btn-group">
+        <button class="btn btn-primary" onclick="saveSettings()">Save Configuration</button>
+        <button class="btn" onclick="resetSettings()">Reset to Default</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="cp-section-title">Security & Privacy</div>
+      <div class="st-field">
+        <label>Encryption Mode</label>
+        <select id="cfg-enc">
+          <option value="aes256" selected>AES-256-GCM</option>
+          <option value="chacha20">ChaCha20-Poly1305</option>
+          <option value="post-quantum">Post-Quantum (Kyber)</option>
+        </select>
+      </div>
+      <div class="st-field">
+        <label>Key Rotation Interval</label>
+        <select id="cfg-keyrot">
+          <option value="1h">1 Hour</option>
+          <option value="6h">6 Hours</option>
+          <option value="24h" selected>24 Hours</option>
+          <option value="7d">7 Days</option>
+        </select>
+      </div>
+      <div class="st-field">
+        <label>Alignment Threshold</label>
+        <input type="range" min="0" max="100" value="70" id="cfg-align" oninput="document.getElementById('align-val').textContent=this.value+'%'">
+        <div style="text-align:center;font-size:0.8rem;color:var(--accent);margin-top:4px;" id="align-val">70%</div>
+      </div>
+      <div class="st-field">
+        <label>Constitution Articles</label>
+        <div class="st-checkbox-row"><input type="checkbox" checked id="cfg-safety"><span>Safety First (A001)</span></div>
+        <div class="st-checkbox-row"><input type="checkbox" checked id="cfg-privacy"><span>Privacy by Default (A002)</span></div>
+        <div class="st-checkbox-row"><input type="checkbox" checked id="cfg-fairness"><span>Fairness (A003)</span></div>
+        <div class="st-checkbox-row"><input type="checkbox" checked id="cfg-autonomy"><span>Autonomy (A004)</span></div>
+        <div class="st-checkbox-row"><input type="checkbox" checked id="cfg-truth"><span>Truth (A005)</span></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="cp-section-title">Layer Management</div>
+      <div class="st-layer-list" id="layer-settings"></div>
+    </div>
+
+    <div class="card">
+      <div class="cp-section-title">National Finance (Indonesia)</div>
+      <div class="st-field">
+        <label>Default CBDC Wallet Tier</label>
+        <select id="cfg-cbdc">
+          <option value="basic">Basic</option>
+          <option value="standard" selected>Standard</option>
+          <option value="premium">Premium</option>
+          <option value="sovereign">Sovereign</option>
+        </select>
+      </div>
+      <div class="st-field">
+        <label>Syariah Compliance</label>
+        <div class="st-checkbox-row"><input type="checkbox" checked id="cfg-syariah"><span>Enable Syariah DeFi filters</span></div>
+      </div>
+      <div class="st-field">
+        <label>Cross-Border Bridge</label>
+        <div class="st-checkbox-row"><input type="checkbox" checked id="cfg-asean"><span>Enable ASEAN multi-CBDC bridge</span></div>
+      </div>
+      <div class="st-field">
+        <label>QRIS Integration</label>
+        <div class="st-checkbox-row"><input type="checkbox" checked id="cfg-qris"><span>Enable QRIS/BI-FAST bridge</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ SYSTEM ARCHITECTURE ============ -->
+<div class="panel" id="panel-system">
+  <div class="card" style="margin-bottom:20px;">
+    <div class="card-header">
+      <div>
+        <div class="card-title">Architecture Overview</div>
+        <div class="card-subtitle">19-layer agentic operating system</div>
+      </div>
+    </div>
+    <div class="cp-meter" style="margin-top:10px;">
+      <div class="cp-meter-label"><span>Overall Progress</span><span id="sys-progress-text">18/19 Layers (94%)</span></div>
+      <div class="cp-meter-bar"><div class="cp-meter-fill low" style="width:94%"></div></div>
+    </div>
+  </div>
+  <div class="sys-grid" id="sys-layers"></div>
+</div>
+
+<script>
+
+/* ===== DATA ===== */
+const layers = [
+  { id:"L0", name:"Kernel + Syscall Interface", desc:"Core OS kernel abstraction, syscall bridge, process scheduling, memory management hooks", status:"complete", modules:["kernel_native.py","syscall_bridge.py","scheduler.py"] },
+  { id:"L0.5", name:"COLLECTIVE BRAIN", desc:"Federated intelligence layer — HERMES + Kimi Claw + GQRIS + Android Claw swarm coordination", status:"complete", modules:["collective_brain.py","federation_engine.py","swarm_router.py"] },
+  { id:"L1", name:"C++ HFT Engine", desc:"Ultra-low latency trading engine, order book, market data, risk management — target 65-90% win rate", status:"complete", modules:["hft_engine.cpp","order_book.cpp","market_data.cpp","risk_manager.cpp"] },
+  { id:"L2", name:"Rust Cryptography", desc:"Post-quantum crypto, zero-knowledge proofs, secure enclave, key management", status:"complete", modules:["crypto_core.rs","zkp_engine.rs","secure_enclave.rs","key_vault.rs"] },
+  { id:"L3", name:"Tri-Language Bridge", desc:"Python ↔ C++ ↔ Rust interop, gRPC transport, shared memory, FFI bindings", status:"complete", modules:["tri_language_bridge.py","grpc_transport.py","ffi_bindings.py"] },
+  { id:"L4", name:"P2P Mesh Network", desc:"Decentralized peer discovery, WebRTC data channels, gossip protocol, NAT traversal", status:"complete", modules:["p2p_mesh.py","webrtc_node.py","gossip_protocol.py","nat_traversal.py"] },
+  { id:"L5", name:"Local LLM Inference", desc:"On-device LLM, model quantization, inference engine, prompt cache — no cloud dependency", status:"complete", modules:["llm_engine.py","model_quantizer.py","inference_cache.py","prompt_manager.py"] },
+  { id:"L6", name:"GUI Dashboard", desc:"Cross-platform UI, real-time data visualization, WebSocket feeds, control panel", status:"complete", modules:["gui_dashboard.py","websocket_feed.py","chart_engine.py","control_panel.py"] },
+  { id:"L7", name:"Agent Core Engine", desc:"Agent lifecycle, task orchestration, memory persistence, tool registry, goal decomposition", status:"complete", modules:["agent_core.py","task_orchestrator.py","memory_engine.py","tool_registry.py"] },
+  { id:"L8", name:"Offensive Security", desc:"Auto repo hunter, exploit scanner, vulnerability analyzer, red team automation", status:"complete", modules:["repo_hunter.py","exploit_scanner.py","vuln_analyzer.py","red_team.py"] },
+  { id:"L9", name:"AI/ML Engine", desc:"Voice anomaly detection (STFPM + One-Class), deepfake detection, signal processing", status:"complete", modules:["voice_anomaly_detector_native.py","stfpm_engine.py","deepfake_detector.py"] },
+  { id:"L10", name:"Blockchain & Web3", desc:"Core blockchain, PoW/PoS/BFT consensus, Web3 integration, ERC standards, wallet", status:"complete", modules:["blockchain_native.py","consensus_native.py","web3_native.py","token_engine_native.py"] },
+  { id:"L11", name:"National Finance (Indonesia)", desc:"CBDC e-Rupiah, RWA tokenization, Syariah DeFi, cross-border ASEAN, QRIS, sovereign assets", status:"complete", modules:["cbdc_native.py","rwa_indonesia_native.py","syariah_finance_native.py","cross_border_native.py","qrbi_native.py","sovereign_token_native.py"] },
+  { id:"L12", name:"Agent Connect Protocol", desc:"AGENTS.md parser, CLAUDE.md master instructions, MCP server/client, cross-tool adapter", status:"complete", modules:["agent_connect_native.py","AGENTS.md","CLAUDE.md"] },
+  { id:"L13", name:"Solana Agent (CLAWD)", desc:"OODA Loop, x402 payment, verifiable execution, attestation engine, ClawdRouter", status:"complete", modules:["solana_agent_native.py","clawd_router.py","x402_payment.py"] },
+  { id:"L14", name:"Flow Agent (Skill Marketplace)", desc:"Progressive disclosure skills, Cadence validator, Skill Router, DeFi framework", status:"complete", modules:["flow_agent_native.py","skill_router.py","cadence_validator.py"] },
+  { id:"L15", name:"Pharos Agent (RealFi)", desc:"9 on-chain skills, Dual VM executor, SPN manager, RealFi compliance engine", status:"complete", modules:["pharos_agent_native.py","dual_vm.py","spn_manager.py","realfi_compliance.py"] },
+  { id:"L16", name:"Mobile Deployment (Expo)", desc:"OTA updates, native module bridge, build pipeline, file router, dev client — cross-platform iOS/Android", status:"active", modules:["expo_agent_native.py"] },
+  { id:"L17", name:"Super AI Readiness", desc:"Recursive self-improvement, emergent goal formation, alignment by design, value lock-in protection", status:"complete", modules:["self_improvement.py","goal_formation.py","alignment_engine.py","constitution.py","meta_crypto_engine.py"] },
+  { id:"L18", name:"Cognition Engine", desc:"39+ mental models reasoning engine, model router, cross-domain synthesis, introspection", status:"complete", modules:["thinking_engine_native.py"] },
+];
+
+const toggleLayers = [
+  { name:"Kernel (L0)", key:"kernel", desc:"Core OS kernel and syscall interface", on:true },
+  { name:"COLLECTIVE BRAIN (L0.5)", key:"brain", desc:"Federated swarm intelligence", on:true },
+  { name:"HFT Engine (L1)", key:"hft", desc:"Ultra-low latency trading", on:true },
+  { name:"Crypto (L2)", key:"crypto", desc:"Post-quantum cryptography", on:true },
+  { name:"Tri-Language Bridge (L3)", key:"bridge", desc:"Python/C++/Rust interop", on:true },
+  { name:"P2P Mesh (L4)", key:"p2p", desc:"Decentralized network", on:true },
+  { name:"Local LLM (L5)", key:"llm", desc:"On-device inference", on:true },
+  { name:"GUI Dashboard (L6)", key:"gui", desc:"Cross-platform UI", on:true },
+  { name:"Agent Core (L7)", key:"agent", desc:"Agent lifecycle engine", on:true },
+  { name:"Offensive Security (L8)", key:"security", desc:"Auto repo hunter + red team", on:true },
+  { name:"AI/ML Voice (L9)", key:"ai", desc:"Voice anomaly detection", on:true },
+  { name:"Blockchain (L10)", key:"blockchain", desc:"Core chain + Web3", on:true },
+  { name:"National Finance (L11)", key:"finance", desc:"CBDC, RWA, Syariah, QRIS", on:true },
+  { name:"Agent Connect (L12)", key:"protocol", desc:"AGENTS.md + MCP + adapter", on:true },
+  { name:"Solana CLAWD (L13)", key:"solana", desc:"x402 + OODA + attestation", on:true },
+  { name:"Flow Skills (L14)", key:"flow", desc:"Progressive skill marketplace", on:true },
+  { name:"Pharos RealFi (L15)", key:"pharos", desc:"Dual VM + RealFi compliance", on:true },
+  { name:"Mobile Expo (L16)", key:"mobile", desc:"Cross-platform deployment", on:false },
+  { name:"Super AI (L17)", key:"superai", desc:"Self-improvement + alignment + constitution", on:true },
+  { name:"Cognition (L18)", key:"cognition", desc:"Mental models reasoning engine", on:true },
+];
+
+let opsLog = [];
+let alerts = [];
+let consoleLines = [];
+
+/* ===== TAB SWITCHING ===== */
+function switchTab(name) {
+  document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('tab-'+name).classList.add('active');
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.getElementById('panel-'+name).classList.add('active');
+}
+
+/* ===== MISSION CONTROL ===== */
+function addOpsLog(level, msg) {
+  const now = new Date().toLocaleTimeString('id-ID',{hour12:false});
+  opsLog.unshift({time:now, level, msg});
+  if (opsLog.length > 50) opsLog.pop();
+  renderOpsLog();
+}
+
+function renderOpsLog() {
+  const c = document.getElementById('ops-log');
+  c.innerHTML = opsLog.map(o => `
+    <div class="mc-ops-item">
+      <span class="mc-ops-time">${o.time}</span>
+      <span class="mc-ops-badge badge-${o.level}">${o.level}</span>
+      <span class="mc-ops-msg">${o.msg}</span>
+    </div>
+  `).join('');
+}
+
+function clearOpsLog() { opsLog = []; renderOpsLog(); }
+
+function addAlert(level, msg) {
+  const id = 'ALERT-' + Math.random().toString(36).substr(2,6);
+  alerts.push({id, level, msg, time: new Date().toLocaleTimeString('id-ID',{hour12:false})});
+  renderAlerts();
+  updateAlertBadge();
+  addOpsLog(level === 'critical' ? 'error' : level, 'Alert triggered: ' + msg);
+}
+
+function renderAlerts() {
+  const c = document.getElementById('alerts-container');
+  if (alerts.length === 0) { c.innerHTML = '<div style="color:var(--text-dim);font-size:0.8rem;text-align:center;padding:20px;">No active alerts</div>'; return; }
+  c.innerHTML = alerts.map(a => `
+    <div class="mc-alert-item ${a.level}">
+      <span class="mc-ops-time">${a.time}</span>
+      <span class="mc-ops-msg">${a.msg}</span>
+    </div>
+  `).join('');
+}
+
+function acknowledgeAll() { alerts = []; renderAlerts(); updateAlertBadge(); addOpsLog('success', 'All alerts acknowledged'); }
+
+function updateAlertBadge() {
+  const badge = document.getElementById('alert-badge');
+  const count = document.getElementById('alert-count');
+  const stat = document.getElementById('mc-alerts');
+  const statWrap = document.getElementById('mc-alerts-stat');
+  stat.textContent = alerts.length;
+  if (alerts.length > 0) { badge.style.display = 'inline-flex'; count.textContent = alerts.length; statWrap.classList.add('alert'); }
+  else { badge.style.display = 'none'; statWrap.classList.remove('alert'); }
+}
+
+function logConsole(level, msg) {
+  const now = new Date().toLocaleTimeString('id-ID',{hour12:false});
+  consoleLines.push({ts:now, level, msg});
+  if (consoleLines.length > 100) consoleLines.shift();
+  const c = document.getElementById('console');
+  c.innerHTML = consoleLines.map(l => `<div class="console-line"><span class="ts">${l.ts}</span><span class="level-${l.level}">[${l.level.toUpperCase()}]</span> ${l.msg}</div>`).join('');
+  c.scrollTop = c.scrollHeight;
+}
+
+/* ===== CONTROL PANEL ===== */
+function renderLayerToggles() {
+  const c = document.getElementById('layer-toggles');
+  c.innerHTML = toggleLayers.map(l => `
+    <div class="toggle-row">
+      <div class="toggle-label">${l.name}<span class="desc">${l.desc}</span></div>
+      <div class="toggle-switch ${l.on ? 'on' : ''}" onclick="toggleLayer('${l.key}')" id="toggle-${l.key}"></div>
+    </div>
+  `).join('');
+}
+
+function toggleLayer(key) {
+  const l = toggleLayers.find(x => x.key === key);
+  if (!l) return;
+  l.on = !l.on;
+  const el = document.getElementById('toggle-' + key);
+  el.classList.toggle('on', l.on);
+  addOpsLog(l.on ? 'success' : 'warn', `Layer ${l.name} ${l.on ? 'enabled' : 'disabled'}`);
+  logConsole(l.on ? 'success' : 'warn', `Layer ${l.name} state changed to ${l.on ? 'ON' : 'OFF'}`);
+}
+
+function actionRun(action) {
+  const actions = {
+    restart_core: 'Restarting core services...',
+    sync_brain: 'Synchronizing COLLECTIVE BRAIN federation...',
+    flush_cache: 'Flushing inference cache...',
+    rotate_keys: 'Rotating cryptographic keys...',
+    emergency_stop: 'EMERGENCY STOP initiated — all non-critical layers halted',
+    run_self_improvement: 'Running recursive self-improvement cycle...',
+    evolve_crypto: 'Evolving cryptographic primitives (2 generations)...',
+    align_check: 'Running alignment check against constitution...',
+    constitution_audit: 'Auditing constitution history and lock-in guard...',
+  };
+  const msg = actions[action] || 'Unknown action: ' + action;
+  addOpsLog(action === 'emergency_stop' ? 'error' : 'info', msg);
+  logConsole(action === 'emergency_stop' ? 'error' : 'info', msg);
+  if (action === 'emergency_stop') {
+    toggleLayers.forEach(l => { if (l.key !== 'kernel') l.on = false; });
+    renderLayerToggles();
+    addAlert('critical', 'Emergency stop activated — all non-critical layers halted');
+  }
+  if (action === 'evolve_crypto') {
+    setTimeout(() => { addOpsLog('success', 'Crypto evolution complete — best score 0.929'); logConsole('success', 'Meta-crypto engine: best primitive HAS-3-4a6fca score=0.929'); }, 2000);
+  }
+  if (action === 'run_self_improvement') {
+    setTimeout(() => { addOpsLog('success', 'Self-improvement: 3 patches generated, 1 applied, 0 regressions'); logConsole('success', 'SelfImprovementEngine: cycle complete, 0 rollbacks'); }, 2500);
+  }
+  if (action === 'align_check') {
+    setTimeout(() => { addOpsLog('success', 'Alignment check passed — avg score 0.94, 0 interventions'); logConsole('success', 'AlignmentEngine: all actions within threshold'); }, 1500);
+  }
+  if (action === 'constitution_audit') {
+    setTimeout(() => { addOpsLog('success', 'Constitution audit: 6 articles, 0 lock-in issues, 1 emergency override in history'); logConsole('success', 'ConstitutionStore: lock_in_free=true, audit_entries=6'); }, 1500);
+  }
+}
+
+/* ===== SETTINGS ===== */
+function renderLayerSettings() {
+  const c = document.getElementById('layer-settings');
+  c.innerHTML = layers.map(l => {
+    const dotClass = l.status === 'complete' ? 'active' : l.status === 'active' ? 'active' : 'inactive';
+    return `
+      <div class="st-layer-item">
+        <div style="display:flex;align-items:center;gap:10px;">
+          <span class="status-dot ${dotClass}"></span>
+          <span>${l.id}: ${l.name.split(': ')[1] || l.name}</span>
+        </div>
+        <span style="font-size:0.72rem;color:var(--text-dim);text-transform:uppercase;">${l.status}</span>
+      </div>
+    `;
+  }).join('');
+}
+
+function saveSettings() {
+  addOpsLog('success', 'Settings saved — configuration persisted to .magnatrix.config.json');
+  logConsole('success', 'Configuration updated: env=' + document.getElementById('cfg-env').value + ', align=' + document.getElementById('cfg-align').value + '%');
+}
+
+function resetSettings() {
+  document.getElementById('cfg-name').value = 'MAGNATRIX-OS';
+  document.getElementById('cfg-env').value = 'production';
+  document.getElementById('cfg-log').value = 'info';
+  document.getElementById('cfg-autopush').checked = true;
+  document.getElementById('cfg-telemetry').checked = false;
+  document.getElementById('cfg-enc').value = 'aes256';
+  document.getElementById('cfg-keyrot').value = '24h';
+  document.getElementById('cfg-align').value = 70;
+  document.getElementById('align-val').textContent = '70%';
+  document.getElementById('cfg-safety').checked = true;
+  document.getElementById('cfg-privacy').checked = true;
+  document.getElementById('cfg-fairness').checked = true;
+  document.getElementById('cfg-autonomy').checked = true;
+  document.getElementById('cfg-truth').checked = true;
+  addOpsLog('info', 'Settings reset to defaults');
+}
+
+/* ===== SYSTEM ARCHITECTURE ===== */
+function renderSystemLayers() {
+  const c = document.getElementById('sys-layers');
+  c.innerHTML = layers.map(l => `
+    <div class="card sys-card status-${l.status}">
+      <div class="sys-header">
+        <div class="sys-name">${l.id}: ${l.name.split(': ')[1] || l.name}</div>
+        <div class="sys-status">${l.status}</div>
+      </div>
+      <div class="sys-desc">${l.desc}</div>
+      <div class="sys-modules">
+        ${l.modules.map(m => `<span class="sys-tag">${m}</span>`).join('')}
+      </div>
+    </div>
+  `).join('');
+}
+
+/* ===== INIT ===== */
+function init() {
+  renderLayerToggles();
+  renderLayerSettings();
+  renderSystemLayers();
+  renderOpsLog();
+  renderAlerts();
+  updateAlertBadge();
+
+  // Seed initial ops log
+  addOpsLog('success', 'MAGNATRIX-OS Mission Control initialized');
+  addOpsLog('info', 'System health check: 98% — all core services operational');
+  addOpsLog('info', 'COLLECTIVE BRAIN federation: 4 agents connected');
+  addOpsLog('success', 'Layer 18 (Cognition) activated — 50 mental models loaded');
+  addOpsLog('success', 'Layer 17 (Super AI) verified — alignment score 0.94');
+  addOpsLog('info', 'Git sync: 18 commits ahead of origin, push pending');
+  logConsole('success', 'Mission Control v2.1.0-beta loaded');
+  logConsole('info', '19 layers registered, 18 active, 1 pending');
+  logConsole('info', 'Zero telemetry enabled — no data leaving local environment');
+
+  // Simulate live metrics
+  setInterval(() => {
+    const cpu = Math.floor(30 + Math.random() * 40);
+    document.getElementById('cpu-val').textContent = cpu + '%';
+    document.getElementById('cpu-bar').style.width = cpu + '%';
+    document.getElementById('cpu-bar').className = 'cp-meter-fill ' + (cpu > 80 ? 'high' : cpu > 50 ? 'mid' : 'low');
+  }, 3000);
+  setInterval(() => {
+    const mem = (1.0 + Math.random() * 0.8).toFixed(1);
+    const pct = Math.floor((mem/4)*100);
+    document.getElementById('mem-val').textContent = mem + ' GB / 4 GB';
+    document.getElementById('mem-bar').style.width = pct + '%';
+  }, 5000);
+  setInterval(() => {
+    const net = Math.floor(5 + Math.random() * 20);
+    document.getElementById('net-val').textContent = net + ' MB/s';
+    document.getElementById('net-bar').style.width = Math.min(100, net*3) + '%';
+  }, 4000);
+
+  // Random console events
+  const events = [
+    () => logConsole('info', 'P2P mesh: heartbeat from node ' + Math.floor(Math.random()*100)),
+    () => logConsole('info', 'HFT engine: order latency ' + (Math.random()*50).toFixed(2) + 'us'),
+    () => logConsole('info', 'Blockchain: new block height ' + Math.floor(100000 + Math.random()*10000)),
+    () => logConsole('info', 'Self-improvement: profiler cycle ' + Math.floor(Math.random()*100)),
+  ];
+  setInterval(() => { if (Math.random() > 0.6) events[Math.floor(Math.random()*events.length)](); }, 8000);
+}
+
+init();
+</script>
+</body>
+</html>
