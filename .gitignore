@@ -38,6 +38,8 @@ logs/
 # Temporary
 tmp/
 temp/
+# Runtime state
+.constitution.json
 *.tmp
 
 # Secrets
