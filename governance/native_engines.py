@@ -14,10 +14,13 @@ Core patterns:
 - Combined: unified safety layer dengan policy-driven governance
 """
 
-import asyncio, json, time, uuid, hashlib
+import asyncio, json, time, uuid, hashlib, sys
 from dataclasses import dataclass, field, asdict
 from typing import Dict, List, Optional, Callable, Any
 from enum import Enum
+
+sys.path.insert(0, "/mnt/agents/MAGNATRIX-OS")
+from security.safe_eval_native import SafeEvaluator
 from collections import defaultdict
 
 class PolicyType(Enum):
@@ -80,7 +83,8 @@ class GovernanceEngine:
     def _evaluate_rule(self,rule:Dict,action:str,context:Dict)->bool:
         condition=rule.get("condition","")
         try:
-            return eval(condition,{"action":action,"context":context})
+            evaluator = SafeEvaluator(extra_names={"action": action, "context": context})
+            return evaluator.eval(condition)
         except: return False
     def get_audit_trail(self,agent_id:str=None,limit:int=100)->List[Dict]:
         records=self.audit_log
@@ -150,6 +154,4 @@ if __name__=="__main__":
         print(f"Blocked: {result2.value}")
         # Alignment check
         align=engine.safety.alignment_check("agent-1","optimize_system","improve performance")
-        print(f"Aligned: {align['aligned']}, risk: {align['risk_score']:.2f}")
-        print(f"Status: {engine.get_status()}")
-    asyncio.run(demo())
+        print(f"Aligned: {align['aligned']}, r

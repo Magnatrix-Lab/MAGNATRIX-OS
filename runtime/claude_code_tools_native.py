@@ -192,9 +192,11 @@ class NativeBashTool(NativeTool):
 
         t0 = time.time()
         try:
+            import shlex
+            cmd_list = shlex.split(command) if isinstance(command, str) else command
             proc = subprocess.run(
-                command,
-                shell=True,
+                cmd_list,
+                shell=False,
                 capture_output=True,
                 text=True,
                 timeout=timeout,

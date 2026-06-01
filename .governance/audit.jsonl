@@ -1,0 +1,5 @@
+{"timestamp": 1780281131.877715, "action": "proposal_created", "actor": "alice", "details": {"proposal_id": "ca1d7a6dc6f3a79b", "title": "Upgrade kernel"}}
+{"timestamp": 1780281131.8781, "action": "vote_cast", "actor": "bob", "details": {"proposal_id": "ca1d7a6dc6f3a79b", "vote": "for"}}
+{"timestamp": 1780281131.8784025, "action": "vote_cast", "actor": "charlie", "details": {"proposal_id": "ca1d7a6dc6f3a79b", "vote": "against"}}
+{"timestamp": 1780281131.8786607, "action": "vote_cast", "actor": "dave", "details": {"proposal_id": "ca1d7a6dc6f3a79b", "vote": "abstain"}}
+{"timestamp": 1780281131.8789613, "action": "proposal_passed", "actor": "system", "details": {"proposal_id": "ca1d7a6dc6f3a79b", "stats": {"for": 10.0, "against": 5.0, "total": 17.0, "status": "passed"}}}

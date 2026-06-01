@@ -438,9 +438,11 @@ class NativeTerminalMultiplexer:
             sess["last_cmd"] = command
 
         try:
+            import shlex
+            cmd_list = shlex.split(command) if isinstance(command, str) else command
             result = subprocess.run(
-                command,
-                shell=True,
+                cmd_list,
+                shell=False,
                 cwd=sess["cwd"],
                 env=sess["env"],
                 capture_output=True,

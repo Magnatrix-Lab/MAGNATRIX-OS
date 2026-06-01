@@ -291,7 +291,8 @@ def cmd_dashboard(args):
     elif sys.platform == "linux":
         subprocess.run(["xdg-open", url])
     elif sys.platform == "win32":
-        subprocess.run(["start", url], shell=True)
+        import os
+        os.startfile(url)
 
 def interactive_shell():
     """Interactive shell mode."""

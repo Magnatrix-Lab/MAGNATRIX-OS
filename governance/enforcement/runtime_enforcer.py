@@ -8,11 +8,14 @@ Runtime-injected constraints yang aktif monitor setiap agent action.
 Policy enforcement hooks, capability guards, real-time constraint checks.
 """
 
-import asyncio, json, time, uuid
+import asyncio, json, time, uuid, sys
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Any, Callable
 from enum import Enum
 from collections import defaultdict
+
+sys.path.insert(0, "/mnt/agents/MAGNATRIX-OS")
+from security.safe_eval_native import SafeEvaluator
 
 class EnforcementLevel(Enum):
     AUDIT = "audit"; WARN = "warn"; BLOCK = "block"; KILL = "kill"
@@ -64,7 +67,8 @@ class RuntimeEnforcer:
                 continue
 
             try:
-                triggered = eval(constraint.condition, {"ctx": context, "params": params})
+                evaluator = SafeEvaluator(extra_names={"ctx": context, "params": params})
+                triggered = evaluator.eval(constraint.condition)
             except Exception:
                 triggered = False
 

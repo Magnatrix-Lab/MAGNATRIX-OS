@@ -246,9 +246,11 @@ class CoreTools:
         timeout = arguments.get("timeout", 60)
         cwd = arguments.get("cwd")
         try:
+            import shlex
+            cmd_list = shlex.split(cmd) if isinstance(cmd, str) else cmd
             result = subprocess.run(
-                cmd,
-                shell=True,
+                cmd_list,
+                shell=False,
                 capture_output=True,
                 text=True,
                 timeout=timeout,
@@ -599,9 +601,11 @@ class MCPClient:
                 logger.error("MCP stdio endpoint missing (command to run)")
                 return False
             try:
+                import shlex
+                endpoint_list = shlex.split(self.endpoint) if isinstance(self.endpoint, str) else self.endpoint
                 self._proc = subprocess.Popen(
-                    self.endpoint,
-                    shell=True,
+                    endpoint_list,
+                    shell=False,
                     stdin=subprocess.PIPE,
                     stdout=subprocess.PIPE,
                     stderr=subprocess.PIPE,
