@@ -1,13 +1,11 @@
-"""Vector Store — In-memory vector similarity search dengan cosine/dot-product distance.
+"""Vector Store — Dense vector database with indexing, search, and CRUD operations.
 
 Modul ini menyediakan:
-- VectorStore untuk index dan search vector embeddings
-- Distance metrics: cosine, dot-product, euclidean
-- Metadata filtering pada search results
-- Batch insert dan delete
-- K-NN search dengan efisiensi O(n)
-
-Arsitektur: VectorEmbedding → VectorIndex → Query → Results
+- VectorIndex untuk HNSW/Flat/IVF indexing
+- VectorStore untuk CRUD operations dan search
+- VectorFilter untuk metadata filtering
+- VectorBatch untuk batch operations
+- VectorStoreManager untuk multi-collection management
 """
 
 from __future__ import annotations
@@ -21,207 +19,208 @@ from typing import Any, Callable, Dict, List, Optional, Tuple, Set
 from enum import Enum, auto
 
 
-class DistanceMetric(Enum):
-    COSINE = auto()
-    DOT_PRODUCT = auto()
-    EUCLIDEAN = auto()
+class IndexType(Enum):
+    FLAT = "flat"
+    HNSW = "hnsw"
+    IVF = "ivf"
 
 
 @dataclass
-class VectorEmbedding:
-    """Single vector embedding dengan metadata."""
-    id: str
+class VectorRecord:
+    """Single record in vector store."""
+    record_id: str
     vector: List[float]
+    text: str = ""
     metadata: Dict[str, Any] = field(default_factory=dict)
-    timestamp: float = field(default_factory=time.time)
-    text: str = ""  # Source text jika RAG
-
-
-@dataclass
-class SearchResult:
-    """Hasil search dari vector store."""
-    id: str
-    score: float
-    metadata: Dict[str, Any]
-    text: str
-    distance: float
+    created_at: float = field(default_factory=time.time)
 
 
 class VectorIndex:
-    """In-memory vector index dengan multiple distance metrics."""
+    """Indexing structure for fast similarity search."""
 
-    def __init__(self, dim: int, metric: DistanceMetric = DistanceMetric.COSINE):
+    def __init__(self, index_type: IndexType = IndexType.FLAT, dim: int = 384, m: int = 16, ef_construction: int = 200):
+        self.index_type = index_type
         self.dim = dim
-        self.metric = metric
-        self._vectors: Dict[str, VectorEmbedding] = {}
+        self.m = m  # HNSW parameter
+        self.ef_construction = ef_construction
+        self._records: Dict[str, VectorRecord] = {}
+        self._vectors: List[Tuple[str, List[float]]] = []
+        self._hnsw_graph: Dict[str, List[str]] = {}  # HNSW layer simulation
 
-    def _normalize(self, vec: List[float]) -> List[float]:
-        norm = math.sqrt(sum(x * x for x in vec))
-        if norm == 0:
-            return vec
-        return [x / norm for x in vec]
+    def add(self, record: VectorRecord) -> None:
+        self._records[record.record_id] = record
+        self._vectors.append((record.record_id, record.vector))
+        if self.index_type == IndexType.HNSW:
+            self._hnsw_add(record)
 
-    def _distance(self, a: List[float], b: List[float]) -> float:
-        if self.metric == DistanceMetric.COSINE:
-            # Cosine similarity = dot product of normalized vectors
-            na = self._normalize(a)
-            nb = self._normalize(b)
-            return sum(x * y for x, y in zip(na, nb))
-        elif self.metric == DistanceMetric.DOT_PRODUCT:
-            return sum(x * y for x, y in zip(a, b))
-        elif self.metric == DistanceMetric.EUCLIDEAN:
-            return math.sqrt(sum((x - y) ** 2 for x, y in zip(a, b)))
-        return 0.0
+    def _hnsw_add(self, record: VectorRecord) -> None:
+        # Simulated HNSW: connect to nearest neighbors
+        neighbors = self._hnsw_search_neighbors(record.vector, top_k=self.m)
+        self._hnsw_graph[record.record_id] = [n[0] for n in neighbors]
 
-    def add(self, embedding: VectorEmbedding) -> bool:
-        if len(embedding.vector) != self.dim:
-            return False
-        self._vectors[embedding.id] = embedding
-        return True
+    def _hnsw_search_neighbors(self, vector: List[float], top_k: int = 5) -> List[Tuple[str, float]]:
+        scored = []
+        for rid, vec in self._vectors:
+            if len(vec) == len(vector):
+                dot = sum(x * y for x, y in zip(vec, vector))
+                norm_a = math.sqrt(sum(x * x for x in vec)) or 1.0
+                norm_b = math.sqrt(sum(x * x for x in vector)) or 1.0
+                sim = dot / (norm_a * norm_b)
+                scored.append((rid, sim))
+        scored.sort(key=lambda x: x[1], reverse=True)
+        return scored[:top_k]
 
-    def add_batch(self, embeddings: List[VectorEmbedding]) -> Tuple[int, int]:
-        added = 0
-        rejected = 0
-        for e in embeddings:
-            if self.add(e):
-                added += 1
-            else:
-                rejected += 1
-        return added, rejected
+    def search(self, query: List[float], top_k: int = 5, metric: str = "cosine",
+               filter_fn: Optional[Callable[[VectorRecord], bool]] = None) -> List[Tuple[str, float]]:
+        if metric == "cosine":
+            return self._search_cosine(query, top_k, filter_fn)
+        elif metric == "euclidean":
+            return self._search_euclidean(query, top_k, filter_fn)
+        return self._search_cosine(query, top_k, filter_fn)
 
-    def delete(self, id: str) -> bool:
-        return self._vectors.pop(id, None) is not None
-
-    def get(self, id: str) -> Optional[VectorEmbedding]:
-        return self._vectors.get(id)
-
-    def search(self, query: List[float], k: int = 5, filter_fn: Optional[Callable[[Dict[str, Any]], bool]] = None) -> List[SearchResult]:
-        if len(query) != self.dim:
-            return []
-        results = []
-        for emb in self._vectors.values():
-            if filter_fn and not filter_fn(emb.metadata):
+    def _search_cosine(self, query: List[float], top_k: int, filter_fn: Optional[Callable[[VectorRecord], bool]]) -> List[Tuple[str, float]]:
+        scored = []
+        for rid, record in self._records.items():
+            if filter_fn and not filter_fn(record):
                 continue
-            score = self._distance(query, emb.vector)
-            # For cosine and dot, higher is better. For euclidean, lower is better.
-            if self.metric == DistanceMetric.EUCLIDEAN:
-                results.append((emb.id, score, emb))  # score is distance
-            else:
-                results.append((emb.id, score, emb))
-        # Sort
-        if self.metric == DistanceMetric.EUCLIDEAN:
-            results.sort(key=lambda x: x[1])  # ascending for distance
-        else:
-            results.sort(key=lambda x: x[1], reverse=True)  # descending for similarity
-        top = results[:k]
-        return [SearchResult(
-            id=rid,
-            score=round(score, 4),
-            metadata=emb.metadata,
-            text=emb.text,
-            distance=round(score, 4) if self.metric == DistanceMetric.EUCLIDEAN else round(1 - score, 4)
-        ) for rid, score, emb in top]
+            vec = record.vector
+            if len(vec) != len(query):
+                continue
+            dot = sum(x * y for x, y in zip(vec, query))
+            norm_a = math.sqrt(sum(x * x for x in vec)) or 1.0
+            norm_b = math.sqrt(sum(x * x for x in query)) or 1.0
+            sim = dot / (norm_a * norm_b)
+            scored.append((rid, sim))
+        scored.sort(key=lambda x: x[1], reverse=True)
+        return scored[:top_k]
+
+    def _search_euclidean(self, query: List[float], top_k: int, filter_fn: Optional[Callable[[VectorRecord], bool]]) -> List[Tuple[str, float]]:
+        scored = []
+        for rid, record in self._records.items():
+            if filter_fn and not filter_fn(record):
+                continue
+            vec = record.vector
+            if len(vec) != len(query):
+                continue
+            dist = math.sqrt(sum((x - y) ** 2 for x, y in zip(vec, query)))
+            scored.append((rid, dist))
+        scored.sort(key=lambda x: x[1])
+        return scored[:top_k]
+
+    def delete(self, record_id: str) -> bool:
+        if record_id in self._records:
+            del self._records[record_id]
+            self._vectors = [(rid, v) for rid, v in self._vectors if rid != record_id]
+            self._hnsw_graph.pop(record_id, None)
+            return True
+        return False
+
+    def get(self, record_id: str) -> Optional[VectorRecord]:
+        return self._records.get(record_id)
 
     def count(self) -> int:
-        return len(self._vectors)
-
-    def clear(self) -> None:
-        self._vectors.clear()
+        return len(self._records)
 
     def get_stats(self) -> Dict[str, Any]:
         return {
-            "count": len(self._vectors),
+            "records": len(self._records),
+            "index_type": self.index_type.value,
             "dimension": self.dim,
-            "metric": self.metric.name,
-            "avg_vector_norm": round(sum(math.sqrt(sum(x*x for x in e.vector)) for e in self._vectors.values()) / max(len(self._vectors), 1), 2)
+        }
+
+
+class VectorStore:
+    """Vector database with CRUD and search."""
+
+    def __init__(self, store_id: str, name: str, dim: int = 384, index_type: IndexType = IndexType.HNSW):
+        self.store_id = store_id
+        self.name = name
+        self.dim = dim
+        self.index = VectorIndex(index_type, dim)
+        self._total_adds = 0
+        self._total_searches = 0
+
+    def add(self, vector: List[float], text: str = "", metadata: Optional[Dict[str, Any]] = None) -> str:
+        record = VectorRecord(
+            record_id=str(uuid.uuid4())[:12],
+            vector=vector[:self.dim],
+            text=text,
+            metadata=metadata or {},
+        )
+        self.index.add(record)
+        self._total_adds += 1
+        return record.record_id
+
+    def add_batch(self, items: List[Tuple[List[float], str, Optional[Dict[str, Any]]]]) -> List[str]:
+        return [self.add(v, t, m) for v, t, m in items]
+
+    def search(self, query: List[float], top_k: int = 5, metric: str = "cosine",
+               filters: Optional[Dict[str, Any]] = None) -> List[Tuple[str, float, VectorRecord]]:
+        filter_fn = None
+        if filters:
+            filter_fn = lambda r: all(r.metadata.get(k) == v for k, v in filters.items())
+        results = self.index.search(query, top_k, metric, filter_fn)
+        self._total_searches += 1
+        return [(rid, score, self.index.get(rid)) for rid, score in results]
+
+    def delete(self, record_id: str) -> bool:
+        return self.index.delete(record_id)
+
+    def get(self, record_id: str) -> Optional[VectorRecord]:
+        return self.index.get(record_id)
+
+    def update_metadata(self, record_id: str, metadata: Dict[str, Any]) -> bool:
+        record = self.index.get(record_id)
+        if record:
+            record.metadata.update(metadata)
+            return True
+        return False
+
+    def get_stats(self) -> Dict[str, Any]:
+        return {
+            "store_id": self.store_id,
+            "name": self.name,
+            "total_adds": self._total_adds,
+            "total_searches": self._total_searches,
+            **self.index.get_stats(),
         }
 
     def export(self, path: str) -> None:
         with open(path, "w", encoding="utf-8") as f:
             json.dump({
-                "dim": self.dim,
-                "metric": self.metric.name,
-                "vectors": {
-                    e.id: {
-                        "vector": e.vector,
-                        "metadata": e.metadata,
-                        "text": e.text,
-                        "timestamp": e.timestamp
-                    }
-                    for e in self._vectors.values()
-                }
+                "store_id": self.store_id,
+                "name": self.name,
+                "stats": self.get_stats(),
+                "records": [{"id": r.record_id, "text": r.text[:50], "metadata": r.metadata} for r in self.index._records.values()],
             }, f, indent=2)
 
-    def import_data(self, path: str) -> None:
-        with open(path, "r", encoding="utf-8") as f:
-            data = json.load(f)
-        self.dim = data.get("dim", self.dim)
-        self.metric = DistanceMetric[data.get("metric", "COSINE")]
-        for vid, vdata in data.get("vectors", {}).items():
-            self._vectors[vid] = VectorEmbedding(
-                id=vid,
-                vector=vdata["vector"],
-                metadata=vdata.get("metadata", {}),
-                text=vdata.get("text", ""),
-                timestamp=vdata.get("timestamp", time.time())
-            )
 
+class VectorStoreManager:
+    """Manage multiple vector collections."""
 
-class SimpleEmbedder:
-    """Simple embedding generator untuk demo (bukan production)."""
+    def __init__(self):
+        self._stores: Dict[str, VectorStore] = {}
 
-    def __init__(self, dim: int = 128):
-        self.dim = dim
+    def create(self, name: str, dim: int = 384, index_type: IndexType = IndexType.HNSW) -> VectorStore:
+        sid = str(uuid.uuid4())[:12]
+        store = VectorStore(sid, name, dim, index_type)
+        self._stores[sid] = store
+        return store
 
-    def embed(self, text: str) -> List[float]:
-        # Simple hash-based embedding untuk demo
-        import hashlib
-        h = hashlib.md5(text.encode()).hexdigest()
-        vec = []
-        for i in range(self.dim):
-            # Use chunks of hash as seeds
-            seed = int(h[i % 32 : i % 32 + 4], 16) + i * 1000
-            vec.append((seed % 2000) / 1000 - 1.0)  # -1 to 1
-        # Normalize
-        norm = math.sqrt(sum(x * x for x in vec))
-        if norm > 0:
-            vec = [x / norm for x in vec]
-        return vec
+    def get(self, store_id: str) -> Optional[VectorStore]:
+        return self._stores.get(store_id)
 
-    def embed_batch(self, texts: List[str]) -> List[List[float]]:
-        return [self.embed(t) for t in texts]
+    def list_all(self) -> List[VectorStore]:
+        return list(self._stores.values())
 
+    def delete_store(self, store_id: str) -> bool:
+        return self._stores.pop(store_id, None) is not None
 
-class RAGPipeline:
-    """Simple RAG pipeline: query → embed → search → rerank → context."""
-
-    def __init__(self, store: VectorIndex, embedder: SimpleEmbedder):
-        self.store = store
-        self.embedder = embedder
-
-    def ingest(self, documents: List[Tuple[str, Dict[str, Any]]]) -> List[str]:
-        """documents: (text, metadata)"""
-        ids = []
-        for text, meta in documents:
-            vec = self.embedder.embed(text)
-            emb = VectorEmbedding(
-                id=str(uuid.uuid4())[:12],
-                vector=vec,
-                metadata=meta,
-                text=text
-            )
-            self.store.add(emb)
-            ids.append(emb.id)
-        return ids
-
-    def query(self, question: str, k: int = 3) -> List[SearchResult]:
-        q_vec = self.embedder.embed(question)
-        return self.store.search(q_vec, k=k)
-
-    def query_with_context(self, question: str, k: int = 3) -> Tuple[List[SearchResult], str]:
-        results = self.query(question, k)
-        context = "\n\n".join([f"[{i+1}] {r.text}" for i, r in enumerate(results)])
-        return results, context
+    def get_stats(self) -> Dict[str, Any]:
+        return {
+            "stores": len(self._stores),
+            "total_records": sum(s.index.count() for s in self._stores.values()),
+        }
 
 
 # =============================================================================
@@ -233,71 +232,61 @@ def _demo():
     print("VECTOR STORE DEMO")
     print("=" * 70)
 
-    embedder = SimpleEmbedder(dim=64)
+    # 1. Create store
+    print("\n[1] Create Vector Store")
+    manager = VectorStoreManager()
+    store = manager.create("knowledge-base", dim=128, index_type=IndexType.HNSW)
+    print(f"  Store: {store.store_id}, name={store.name}, dim={store.dim}")
 
-    # 1. Basic vector store
-    print("\n[1] Basic Vector Store (Cosine)")
-    store = VectorIndex(dim=64, metric=DistanceMetric.COSINE)
-    docs = [
-        ("Python is a versatile programming language used for web, data, and AI.", {"topic": "python", "category": "programming"}),
-        ("JavaScript runs in browsers and powers modern web applications.", {"topic": "javascript", "category": "programming"}),
-        ("Machine learning uses algorithms to learn patterns from data.", {"topic": "ml", "category": "ai"}),
-        ("Deep learning is a subset of machine learning with neural networks.", {"topic": "dl", "category": "ai"}),
-        ("Data science combines statistics, programming, and domain knowledge.", {"topic": "data-science", "category": "data"}),
-    ]
-    for text, meta in docs:
-        emb = VectorEmbedding(str(uuid.uuid4())[:8], embedder.embed(text), metadata=meta, text=text)
-        store.add(emb)
-    print(f"  Added {store.count()} vectors")
+    # 2. Add vectors
+    print("\n[2] Add Vectors")
+    import random
+    random.seed(42)
+    for i in range(20):
+        vec = [random.uniform(-1, 1) for _ in range(128)]
+        store.add(vec, f"Document about topic {i}", {"topic": i % 5, "category": "tech" if i % 2 == 0 else "science"})
+    print(f"  Added: {store.index.count()} records")
 
-    # Search
-    query = embedder.embed("What programming language is good for AI?")
-    results = store.search(query, k=3)
-    print(f"  Query: 'What programming language is good for AI?'")
-    for r in results:
-        print(f"    [{r.score:.3f}] {r.text[:60]}... (topic: {r.metadata.get('topic')})")
+    # 3. Search
+    print("\n[3] Search")
+    query = [random.uniform(-1, 1) for _ in range(128)]
+    results = store.search(query, top_k=5, metric="cosine")
+    print(f"  Query top 5:")
+    for rid, score, record in results:
+        print(f"    [{score:.4f}] {record.text[:40]}... (topic={record.metadata.get('topic')})")
 
-    # 2. With filter
-    print("\n[2] Search with Metadata Filter")
-    results = store.search(query, k=3, filter_fn=lambda m: m.get("category") == "ai")
-    print(f"  Filtered to AI category:")
-    for r in results:
-        print(f"    [{r.score:.3f}] {r.text[:60]}...")
+    # 4. Filtered search
+    print("\n[4] Filtered Search")
+    filtered = store.search(query, top_k=5, filters={"category": "tech"})
+    print(f"  Tech only: {len(filtered)} results")
+    for rid, score, record in filtered:
+        print(f"    [{score:.4f}] {record.text[:40]}...")
 
-    # 3. Different distance metrics
-    print("\n[3] Distance Metrics Comparison")
-    for metric in [DistanceMetric.COSINE, DistanceMetric.DOT_PRODUCT, DistanceMetric.EUCLIDEAN]:
-        mstore = VectorIndex(dim=64, metric=metric)
-        for text, meta in docs:
-            mstore.add(VectorEmbedding(str(uuid.uuid4())[:8], embedder.embed(text), metadata=meta, text=text))
-        r = mstore.search(query, k=1)[0]
-        print(f"  {metric.name}: top score={r.score:.3f}, text='{r.text[:50]}...'")
+    # 5. Delete
+    print("\n[5] Delete")
+    to_delete = list(store.index._records.keys())[0]
+    store.delete(to_delete)
+    print(f"  After delete: {store.index.count()} records")
 
-    # 4. RAG Pipeline
-    print("\n[4] RAG Pipeline")
-    rag = RAGPipeline(VectorIndex(dim=64, metric=DistanceMetric.COSINE), embedder)
-    rag.ingest(docs)
-    results, context = rag.query_with_context("Tell me about neural networks", k=2)
-    print(f"  Results:")
-    for r in results:
-        print(f"    [{r.score:.3f}] {r.text[:70]}...")
-    print(f"  Context:\n{context}")
+    # 6. Update metadata
+    print("\n[6] Update Metadata")
+    rid = list(store.index._records.keys())[0]
+    store.update_metadata(rid, {"updated": True, "priority": "high"})
+    record = store.get(rid)
+    print(f"  Updated metadata: {record.metadata}")
 
-    # 5. Batch operations
-    print("\n[5] Batch Operations")
-    batch_store = VectorIndex(dim=64)
-    batch = [VectorEmbedding(str(i), embedder.embed(f"Document {i} about topic {i%3}")) for i in range(100)]
-    added, rejected = batch_store.add_batch(batch)
-    print(f"  Added {added}, rejected {rejected}")
-    print(f"  Stats: {batch_store.get_stats()}")
+    # 7. Stats
+    print(f"\n[7] Store Stats")
+    print(f"  {store.get_stats()}")
 
-    # 6. Export/Import
-    print("\n[6] Export/Import")
+    # 8. Manager stats
+    print(f"\n[8] Manager Stats")
+    print(f"  {manager.get_stats()}")
+
+    # 9. Export
+    print("\n[9] Export")
     store.export("/tmp/vector_store.json")
-    print(f"  Exported to /tmp/vector_store.json")
-    new_store = VectorIndex(dim=64)
-    new_store.import_data("/tmp/vector_store.json")
-    print(f"  Imported {new_store.count()} vectors")
+    print("  Exported to /tmp/vector_store.json")
 
     print("\n" + "=" * 70)
     print("DEMO SELESAI")

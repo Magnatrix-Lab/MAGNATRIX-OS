@@ -1,11 +1,11 @@
-"""Data Ingestion Pipeline — ETL pipeline untuk LLM data: extract, transform, validate, load.
+"""Data Pipeline — Ingestion, transformation, validation, and ETL workflow.
 
 Modul ini menyediakan:
-- DataExtractor untuk multiple sources (file, API, stream, database)
-- DataTransformer dengan filter, map, reduce operations
-- DataValidator dengan schema validation
-- DataLoader untuk batch loading
-- Pipeline orchestrator dengan dependency tracking
+- DataSource untuk multiple input formats (JSON, CSV, text, API)
+- DataTransformer untuk cleaning, normalization, enrichment
+- DataValidator untuk schema validation dan quality checks
+- Pipeline untuk chain ingestion → transform → validate → output
+- PipelineRunner untuk execution dengan monitoring
 """
 
 from __future__ import annotations
@@ -13,314 +13,286 @@ from __future__ import annotations
 import json
 import time
 import uuid
-import re
+import csv
+import io
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, List, Optional, Tuple, Set
+from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 from enum import Enum, auto
 
 
-class DataSourceType(Enum):
-    FILE = auto()
-    API = auto()
-    STREAM = auto()
-    DATABASE = auto()
-    MEMORY = auto()
-
-
 class DataFormat(Enum):
-    JSON = auto()
-    CSV = auto()
-    TEXT = auto()
-    MARKDOWN = auto()
-    XML = auto()
+    JSON = "json"
+    CSV = "csv"
+    TEXT = "text"
+    API = "api"
+    STREAM = "stream"
 
 
-class PipelineStatus(Enum):
-    PENDING = auto()
-    RUNNING = auto()
-    COMPLETED = auto()
-    FAILED = auto()
-    PAUSED = auto()
+class ValidationSeverity(Enum):
+    INFO = auto()
+    WARNING = auto()
+    ERROR = auto()
 
 
 @dataclass
 class DataRecord:
-    """Single record dalam pipeline."""
+    """Single record in pipeline."""
     record_id: str
-    source: str
     data: Dict[str, Any]
+    source: str = ""
     format: DataFormat = DataFormat.JSON
-    timestamp: float = field(default_factory=time.time)
     metadata: Dict[str, Any] = field(default_factory=dict)
-    valid: bool = True
-    errors: List[str] = field(default_factory=list)
+    created_at: float = field(default_factory=time.time)
 
 
 @dataclass
-class PipelineStage:
-    """Single stage dalam pipeline."""
-    stage_id: str
-    name: str
-    operation: Callable[[DataRecord], DataRecord]
-    filter_fn: Optional[Callable[[DataRecord], bool]] = None
+class ValidationResult:
+    """Validation result for a record."""
+    record_id: str
+    passed: bool
+    issues: List[Dict[str, Any]] = field(default_factory=list)
+
+    def add_issue(self, field: str, message: str, severity: ValidationSeverity = ValidationSeverity.WARNING) -> None:
+        self.issues.append({"field": field, "message": message, "severity": severity.name})
+        if severity == ValidationSeverity.ERROR:
+            self.passed = False
 
 
-class DataExtractor:
-    """Extract data dari berbagai sources."""
+class DataSource:
+    """Read data from various sources."""
 
-    def __init__(self):
-        self._sources: Dict[str, Tuple[DataSourceType, Callable[[], List[DataRecord]]]] = {}
+    def __init__(self, source_id: str, name: str):
+        self.source_id = source_id
+        self.name = name
 
-    def register_source(self, name: str, source_type: DataSourceType, extractor_fn: Callable[[], List[DataRecord]]) -> None:
-        self._sources[name] = (source_type, extractor_fn)
-
-    def extract(self, source_name: str) -> List[DataRecord]:
-        _, fn = self._sources.get(source_name, (None, lambda: []))
-        return fn()
-
-    def extract_all(self) -> List[DataRecord]:
-        records = []
-        for name, (_, fn) in self._sources.items():
-            records.extend(fn())
-        return records
-
-    @staticmethod
-    def from_file(path: str, format: DataFormat = DataFormat.JSON) -> List[DataRecord]:
-        records = []
+    def read_json(self, content: str) -> List[DataRecord]:
         try:
-            with open(path, "r", encoding="utf-8") as f:
-                if format == DataFormat.JSON:
-                    data = json.load(f)
-                    if isinstance(data, list):
-                        for item in data:
-                            records.append(DataRecord(str(uuid.uuid4())[:8], path, item, format))
-                    else:
-                        records.append(DataRecord(str(uuid.uuid4())[:8], path, data, format))
-                elif format == DataFormat.TEXT:
-                    content = f.read()
-                    records.append(DataRecord(str(uuid.uuid4())[:8], path, {"content": content}, format))
+            data = json.loads(content)
+            if isinstance(data, list):
+                return [DataRecord(str(uuid.uuid4())[:8], item, self.name, DataFormat.JSON) for item in data]
+            return [DataRecord(str(uuid.uuid4())[:8], data, self.name, DataFormat.JSON)]
         except Exception as e:
-            records.append(DataRecord(str(uuid.uuid4())[:8], path, {"error": str(e)}, format, valid=False, errors=[str(e)]))
-        return records
+            return [DataRecord(str(uuid.uuid4())[:8], {"error": str(e), "raw": content[:100]}, self.name, DataFormat.JSON)]
 
-    @staticmethod
-    def from_text(text: str, source: str = "inline") -> List[DataRecord]:
-        return [DataRecord(str(uuid.uuid4())[:8], source, {"content": text}, DataFormat.TEXT)]
+    def read_csv(self, content: str) -> List[DataRecord]:
+        try:
+            reader = csv.DictReader(io.StringIO(content))
+            return [DataRecord(str(uuid.uuid4())[:8], row, self.name, DataFormat.CSV) for row in reader]
+        except Exception as e:
+            return [DataRecord(str(uuid.uuid4())[:8], {"error": str(e)}, self.name, DataFormat.CSV)]
+
+    def read_text(self, content: str) -> List[DataRecord]:
+        lines = [l.strip() for l in content.split("\n") if l.strip()]
+        return [DataRecord(str(uuid.uuid4())[:8], {"text": line}, self.name, DataFormat.TEXT) for line in lines]
+
+    def read_api(self, fetch_fn: Callable[[], Dict[str, Any]]) -> List[DataRecord]:
+        try:
+            data = fetch_fn()
+            if isinstance(data, list):
+                return [DataRecord(str(uuid.uuid4())[:8], item, self.name, DataFormat.API) for item in data]
+            return [DataRecord(str(uuid.uuid4())[:8], data, self.name, DataFormat.API)]
+        except Exception as e:
+            return [DataRecord(str(uuid.uuid4())[:8], {"error": str(e)}, self.name, DataFormat.API)]
 
 
 class DataTransformer:
-    """Transform data dengan map/filter/reduce operations."""
+    """Transform data records."""
 
     def __init__(self):
-        self._operations: List[Tuple[str, Callable[[DataRecord], DataRecord]]] = []
+        self._transforms: List[Tuple[str, Callable[[Dict[str, Any]], Dict[str, Any]]]] = []
 
-    def add_map(self, name: str, fn: Callable[[Dict[str, Any]], Dict[str, Any]]) -> DataTransformer:
-        self._operations.append((name, lambda r: DataRecord(r.record_id, r.source, fn(r.data), r.format, r.timestamp, r.metadata, r.valid, r.errors)))
+    def add_transform(self, name: str, fn: Callable[[Dict[str, Any]], Dict[str, Any]]) -> DataTransformer:
+        self._transforms.append((name, fn))
         return self
 
-    def add_filter(self, name: str, fn: Callable[[DataRecord], bool]) -> DataTransformer:
-        self._operations.append((name, lambda r: r if fn(r) else DataRecord(r.record_id, r.source, r.data, r.format, r.timestamp, r.metadata, False, r.errors + [f"Filtered by {name}"])))
-        return self
-
-    def add_clean(self, name: str, fn: Callable[[Dict[str, Any]], Dict[str, Any]]) -> DataTransformer:
-        self._operations.append((name, lambda r: DataRecord(r.record_id, r.source, fn(r.data), r.format, r.timestamp, r.metadata, r.valid, r.errors)))
-        return self
-
-    def transform(self, records: List[DataRecord]) -> List[DataRecord]:
-        results = []
-        for record in records:
-            current = record
-            for name, op in self._operations:
-                current = op(current)
-            results.append(current)
-        return results
+    def transform(self, record: DataRecord) -> DataRecord:
+        current = dict(record.data)
+        for name, fn in self._transforms:
+            try:
+                current = fn(current)
+            except Exception as e:
+                current["_transform_error"] = f"{name}: {str(e)}"
+                break
+        record.data = current
+        return record
 
     def transform_batch(self, records: List[DataRecord]) -> List[DataRecord]:
-        return self.transform(records)
+        return [self.transform(r) for r in records]
 
     @staticmethod
-    def clean_text(data: Dict[str, Any]) -> Dict[str, Any]:
-        if "content" in data and isinstance(data["content"], str):
-            text = data["content"]
-            # Remove extra whitespace
-            text = re.sub(r'\s+', ' ', text)
-            # Remove special characters but keep basic punctuation
-            text = re.sub(r'[^\w\s.,;:!?()-]', '', text)
-            data["content"] = text.strip()
+    def normalize_keys(data: Dict[str, Any]) -> Dict[str, Any]:
+        return {k.lower().strip().replace(" ", "_"): v for k, v in data.items()}
+
+    @staticmethod
+    def trim_strings(data: Dict[str, Any]) -> Dict[str, Any]:
+        return {k: v.strip() if isinstance(v, str) else v for k, v in data.items()}
+
+    @staticmethod
+    def add_timestamp(data: Dict[str, Any]) -> Dict[str, Any]:
+        data["_processed_at"] = time.time()
         return data
 
     @staticmethod
-    def extract_metadata(data: Dict[str, Any]) -> Dict[str, Any]:
-        if "content" in data and isinstance(data["content"], str):
-            text = data["content"]
-            data["word_count"] = len(text.split())
-            data["char_count"] = len(text)
-        return data
+    def remove_empty(data: Dict[str, Any]) -> Dict[str, Any]:
+        return {k: v for k, v in data.items() if v not in (None, "", [], {})}
+
+    @staticmethod
+    def default_pipeline() -> DataTransformer:
+        t = DataTransformer()
+        t.add_transform("normalize_keys", DataTransformer.normalize_keys)
+        t.add_transform("trim_strings", DataTransformer.trim_strings)
+        t.add_transform("remove_empty", DataTransformer.remove_empty)
+        t.add_transform("add_timestamp", DataTransformer.add_timestamp)
+        return t
 
 
 class DataValidator:
     """Validate data records against schema."""
 
     def __init__(self):
-        self._schemas: Dict[str, Dict[str, Any]] = {}
+        self._rules: List[Tuple[str, str, Callable[[Any], bool], str]] = []
 
-    def register_schema(self, name: str, schema: Dict[str, Any]) -> None:
-        self._schemas[name] = schema
+    def add_rule(self, field: str, rule_name: str, check_fn: Callable[[Any], bool], message: str) -> None:
+        self._rules.append((field, rule_name, check_fn, message))
 
-    def validate(self, record: DataRecord, schema_name: str) -> DataRecord:
-        schema = self._schemas.get(schema_name)
-        if not schema:
-            return record
-        errors = []
-        for field, spec in schema.items():
-            if field not in record.data:
-                if spec.get("required", False):
-                    errors.append(f"Missing required field: {field}")
-                continue
-            value = record.data[field]
-            expected_type = spec.get("type")
-            if expected_type == "string" and not isinstance(value, str):
-                errors.append(f"Field {field} should be string, got {type(value).__name__}")
-            elif expected_type == "number" and not isinstance(value, (int, float)):
-                errors.append(f"Field {field} should be number, got {type(value).__name__}")
-            elif expected_type == "integer" and not isinstance(value, int):
-                errors.append(f"Field {field} should be integer, got {type(value).__name__}")
-            elif expected_type == "boolean" and not isinstance(value, bool):
-                errors.append(f"Field {field} should be boolean, got {type(value).__name__}")
-            elif expected_type == "array" and not isinstance(value, list):
-                errors.append(f"Field {field} should be array, got {type(value).__name__}")
-            elif expected_type == "object" and not isinstance(value, dict):
-                errors.append(f"Field {field} should be object, got {type(value).__name__}")
-        if errors:
-            record.valid = False
-            record.errors.extend(errors)
-        return record
+    def validate(self, record: DataRecord) -> ValidationResult:
+        result = ValidationResult(record.record_id, True)
+        for field, rule_name, check_fn, message in self._rules:
+            value = record.data.get(field)
+            try:
+                if not check_fn(value):
+                    result.add_issue(field, f"{rule_name}: {message}", ValidationSeverity.ERROR)
+            except Exception as e:
+                result.add_issue(field, f"{rule_name}: Exception {str(e)}", ValidationSeverity.ERROR)
+        return result
 
-    def validate_batch(self, records: List[DataRecord], schema_name: str) -> List[DataRecord]:
-        return [self.validate(r, schema_name) for r in records]
-
-
-class DataLoader:
-    """Load data ke destination."""
-
-    def __init__(self, batch_size: int = 100):
-        self.batch_size = batch_size
-        self._destinations: Dict[str, Callable[[List[DataRecord]], int]] = {}
-
-    def register_destination(self, name: str, loader_fn: Callable[[List[DataRecord]], int]) -> None:
-        self._destinations[name] = loader_fn
-
-    def load(self, records: List[DataRecord], destination: str) -> Tuple[int, int]:
-        loader = self._destinations.get(destination)
-        if not loader:
-            return 0, 0
-        valid_records = [r for r in records if r.valid]
-        batches = [valid_records[i:i+self.batch_size] for i in range(0, len(valid_records), self.batch_size)]
-        total_loaded = 0
-        for batch in batches:
-            total_loaded += loader(batch)
-        return total_loaded, len(valid_records) - total_loaded
+    def validate_batch(self, records: List[DataRecord]) -> List[ValidationResult]:
+        return [self.validate(r) for r in records]
 
     @staticmethod
-    def to_json_file(records: List[DataRecord], path: str) -> int:
-        try:
-            with open(path, "w", encoding="utf-8") as f:
-                json.dump([r.data for r in records], f, indent=2)
-            return len(records)
-        except Exception:
-            return 0
+    def required(field: str) -> Tuple[str, str, Callable[[Any], bool], str]:
+        return (field, "required", lambda v: v is not None and v != "", "Field is required")
+
+    @staticmethod
+    def min_length(field: str, length: int) -> Tuple[str, str, Callable[[Any], bool], str]:
+        return (field, "min_length", lambda v: isinstance(v, str) and len(v) >= length, f"Min length {length}")
+
+    @staticmethod
+    def is_numeric(field: str) -> Tuple[str, str, Callable[[Any], bool], str]:
+        return (field, "is_numeric", lambda v: isinstance(v, (int, float)) or (isinstance(v, str) and v.replace(".", "").isdigit()), "Must be numeric")
+
+    @staticmethod
+    def in_range(field: str, min_val: float, max_val: float) -> Tuple[str, str, Callable[[Any], bool], str]:
+        return (field, "in_range", lambda v: isinstance(v, (int, float)) and min_val <= v <= max_val, f"Must be between {min_val} and {max_val}")
 
 
-class DataPipeline:
-    """Orchestrate ETL pipeline."""
+class Pipeline:
+    """Data processing pipeline."""
 
     def __init__(self, pipeline_id: str, name: str):
         self.pipeline_id = pipeline_id
         self.name = name
-        self.extractor = DataExtractor()
-        self.transformer = DataTransformer()
-        self.validator = DataValidator()
-        self.loader = DataLoader()
-        self._stages: List[PipelineStage] = []
-        self._status = PipelineStatus.PENDING
-        self._records: List[DataRecord] = []
-        self._logs: List[Dict[str, Any]] = []
-        self._stats = {"extracted": 0, "transformed": 0, "valid": 0, "invalid": 0, "loaded": 0}
+        self.source: Optional[DataSource] = None
+        self.transformer: DataTransformer = DataTransformer()
+        self.validator: DataValidator = DataValidator()
+        self._output: List[DataRecord] = []
+        self._errors: List[Dict[str, Any]] = []
 
-    def add_stage(self, stage: PipelineStage) -> None:
-        self._stages.append(stage)
+    def set_source(self, source: DataSource) -> Pipeline:
+        self.source = source
+        return self
 
-    def run(self, source: str, destination: Optional[str] = None, schema_name: Optional[str] = None) -> Dict[str, Any]:
-        self._status = PipelineStatus.RUNNING
+    def set_transformer(self, transformer: DataTransformer) -> Pipeline:
+        self.transformer = transformer
+        return self
+
+    def set_validator(self, validator: DataValidator) -> Pipeline:
+        self.validator = validator
+        return self
+
+    def run(self, input_data: Union[str, Dict[str, Any], Callable[[], Dict[str, Any]]], fmt: DataFormat = DataFormat.JSON) -> Dict[str, Any]:
         start = time.time()
-
-        # Extract
-        self._records = self.extractor.extract(source)
-        self._stats["extracted"] = len(self._records)
-        self._log("extract", f"Extracted {len(self._records)} records")
+        # Read
+        if fmt == DataFormat.JSON and isinstance(input_data, str):
+            records = self.source.read_json(input_data) if self.source else []
+        elif fmt == DataFormat.CSV and isinstance(input_data, str):
+            records = self.source.read_csv(input_data) if self.source else []
+        elif fmt == DataFormat.TEXT and isinstance(input_data, str):
+            records = self.source.read_text(input_data) if self.source else []
+        elif fmt == DataFormat.API and callable(input_data):
+            records = self.source.read_api(input_data) if self.source else []
+        else:
+            records = [DataRecord(str(uuid.uuid4())[:8], input_data, "direct", fmt)]
 
         # Transform
-        self._records = self.transformer.transform(self._records)
-        self._stats["transformed"] = len(self._records)
-        self._log("transform", f"Transformed {len(self._records)} records")
+        records = self.transformer.transform_batch(records)
 
         # Validate
-        if schema_name:
-            self._records = self.validator.validate_batch(self._records, schema_name)
-        self._stats["valid"] = sum(1 for r in self._records if r.valid)
-        self._stats["invalid"] = sum(1 for r in self._records if not r.valid)
-        self._log("validate", f"Valid: {self._stats['valid']}, Invalid: {self._stats['invalid']}")
+        validations = self.validator.validate_batch(records)
+        valid_records = []
+        for record, validation in zip(records, validations):
+            if validation.passed:
+                valid_records.append(record)
+            else:
+                self._errors.append({
+                    "record_id": record.record_id,
+                    "issues": validation.issues,
+                })
 
-        # Custom stages
-        for stage in self._stages:
-            processed = []
-            for record in self._records:
-                if stage.filter_fn and not stage.filter_fn(record):
-                    continue
-                processed.append(stage.operation(record))
-            self._records = processed
-            self._log("stage", f"Stage {stage.name}: {len(processed)} records")
-
-        # Load
-        if destination:
-            loaded, failed = self.loader.load(self._records, destination)
-            self._stats["loaded"] = loaded
-            self._log("load", f"Loaded {loaded}, Failed {failed}")
-
-        self._status = PipelineStatus.COMPLETED
+        self._output = valid_records
         duration = time.time() - start
-        self._log("complete", f"Pipeline completed in {duration:.2f}s")
-
         return {
             "pipeline_id": self.pipeline_id,
-            "status": self._status.name,
-            "duration": round(duration, 2),
-            "stats": self._stats,
-            "records": len(self._records)
+            "name": self.name,
+            "input_count": len(records),
+            "output_count": len(valid_records),
+            "error_count": len(self._errors),
+            "duration": round(duration, 3),
         }
 
-    def get_records(self, valid_only: bool = True) -> List[DataRecord]:
-        if valid_only:
-            return [r for r in self._records if r.valid]
-        return self._records
+    def get_output(self) -> List[DataRecord]:
+        return self._output
 
-    def _log(self, stage: str, message: str) -> None:
-        self._logs.append({"timestamp": time.time(), "stage": stage, "message": message})
+    def get_errors(self) -> List[Dict[str, Any]]:
+        return self._errors
 
-    def get_logs(self) -> List[Dict[str, Any]]:
-        return self._logs
+    def export_output(self, path: str) -> None:
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump([r.data for r in self._output], f, indent=2)
+
+
+class PipelineRunner:
+    """Run multiple pipelines with monitoring."""
+
+    def __init__(self):
+        self._pipelines: Dict[str, Pipeline] = {}
+        self._runs: List[Dict[str, Any]] = []
+
+    def add_pipeline(self, pipeline: Pipeline) -> None:
+        self._pipelines[pipeline.pipeline_id] = pipeline
+
+    def run(self, pipeline_id: str, input_data: Union[str, Dict[str, Any]], fmt: DataFormat = DataFormat.JSON) -> Dict[str, Any]:
+        pipeline = self._pipelines.get(pipeline_id)
+        if not pipeline:
+            return {"error": "Pipeline not found"}
+        result = pipeline.run(input_data, fmt)
+        self._runs.append(result)
+        return result
+
+    def run_batch(self, pipeline_id: str, items: List[Tuple[Union[str, Dict[str, Any]], DataFormat]]) -> List[Dict[str, Any]]:
+        return [self.run(pipeline_id, data, fmt) for data, fmt in items]
 
     def get_stats(self) -> Dict[str, Any]:
-        return {**self._stats, "status": self._status.name, "total_logs": len(self._logs)}
-
-    def export_results(self, path: str) -> None:
-        with open(path, "w", encoding="utf-8") as f:
-            json.dump({
-                "pipeline_id": self.pipeline_id,
-                "stats": self._stats,
-                "records": [r.data for r in self._records if r.valid],
-                "logs": self._logs
-            }, f, indent=2)
+        if not self._runs:
+            return {}
+        total = len(self._runs)
+        return {
+            "total_runs": total,
+            "avg_input": sum(r.get("input_count", 0) for r in self._runs) / total,
+            "avg_output": sum(r.get("output_count", 0) for r in self._runs) / total,
+            "avg_errors": sum(r.get("error_count", 0) for r in self._runs) / total,
+            "avg_duration": sum(r.get("duration", 0) for r in self._runs) / total,
+        }
 
 
 # =============================================================================
@@ -329,76 +301,94 @@ class DataPipeline:
 
 def _demo():
     print("=" * 70)
-    print("DATA INGESTION PIPELINE DEMO")
+    print("DATA PIPELINE DEMO")
     print("=" * 70)
 
-    # 1. Extract dari file
-    print("\n[1] Extract from File")
-    # Create sample file
-    sample_data = [
-        {"name": "Alice", "age": 30, "city": "Boston", "role": "engineer"},
-        {"name": "Bob", "age": 25, "city": "New York", "role": "designer"},
-        {"name": "Charlie", "age": 35, "city": "San Francisco", "role": "manager"},
-        {"name": "Diana", "age": 28, "city": "Boston", "role": "engineer"},
-    ]
-    with open("/tmp/sample_data.json", "w", encoding="utf-8") as f:
-        json.dump(sample_data, f)
-
-    extractor = DataExtractor()
-    extractor.register_source("sample", DataSourceType.FILE, lambda: DataExtractor.from_file("/tmp/sample_data.json", DataFormat.JSON))
-    records = extractor.extract("sample")
-    print(f"  Extracted {len(records)} records")
-
-    # 2. Transform
-    print("\n[2] Transform")
-    transformer = DataTransformer()
-    transformer.add_filter("age_filter", lambda r: r.data.get("age", 0) >= 25)
-    transformer.add_map("uppercase_name", lambda d: {**d, "name": d.get("name", "").upper()})
-    transformer.add_clean("metadata", DataTransformer.extract_metadata)
-    records = transformer.transform(records)
-    print(f"  After transform: {len(records)} records")
-    for r in records:
-        print(f"    {r.data}")
-
-    # 3. Validate
-    print("\n[3] Validate")
-    validator = DataValidator()
-    validator.register_schema("person", {
-        "name": {"type": "string", "required": True},
-        "age": {"type": "integer", "required": True},
-        "city": {"type": "string", "required": False},
-    })
-    records = validator.validate_batch(records, "person")
-    valid = [r for r in records if r.valid]
-    invalid = [r for r in records if not r.valid]
-    print(f"  Valid: {len(valid)}, Invalid: {len(invalid)}")
-
-    # 4. Pipeline
-    print("\n[4] Full Pipeline")
-    pipeline = DataPipeline("pipe-1", "Employee Pipeline")
-    pipeline.extractor.register_source("employees", DataSourceType.MEMORY, lambda: [
-        DataRecord(str(i), "memory", d, DataFormat.JSON)
-        for i, d in enumerate([
-            {"name": "John", "age": 30, "dept": "Engineering"},
-            {"name": "Jane", "age": 25, "dept": "Design"},
-            {"name": "Jack", "age": "invalid", "dept": "Sales"},  # Invalid age
-            {"name": "Jill", "age": 35, "dept": "Engineering"},
-        ])
+    # 1. JSON ingestion
+    print("\n[1] JSON Ingestion")
+    source = DataSource("src-1", "API Source")
+    json_data = json.dumps([
+        {"name": "Alice", "age": 30, "city": "New York"},
+        {"name": "Bob", "age": 25, "city": "London"},
+        {"name": "Charlie", "age": 35, "city": "Tokyo"},
     ])
-    pipeline.transformer.add_filter("age_filter", lambda r: isinstance(r.data.get("age"), int) and r.data["age"] >= 25)
-    pipeline.validator.register_schema("employee", {
-        "name": {"type": "string", "required": True},
-        "age": {"type": "integer", "required": True},
-        "dept": {"type": "string", "required": True},
-    })
-    result = pipeline.run("employees", schema_name="employee")
-    print(f"  Pipeline result: {result}")
-    print(f"  Valid records: {len(pipeline.get_records())}")
+    records = source.read_json(json_data)
+    print(f"  Read {len(records)} JSON records")
+    for r in records:
+        print(f"    {r.record_id}: {r.data}")
 
-    # 5. Export
-    print("\n[5] Export Results")
-    pipeline.export_results("/tmp/pipeline_results.json")
-    print(f"  Exported to /tmp/pipeline_results.json")
+    # 2. CSV ingestion
+    print("\n[2] CSV Ingestion")
+    csv_data = "name,age,city\nAlice,30,New York\nBob,25,London\nCharlie,35,Tokyo"
+    records = source.read_csv(csv_data)
+    print(f"  Read {len(records)} CSV records")
+    for r in records:
+        print(f"    {r.record_id}: {r.data}")
+
+    # 3. Transformation
+    print("\n[3] Transformation")
+    transformer = DataTransformer.default_pipeline()
+    record = DataRecord("r1", {"Name": " Alice ", "Age": "30", "City": "New York"})
+    transformed = transformer.transform(record)
+    print(f"  Before: {record.data}")
+    print(f"  After: {transformed.data}")
+
+    # 4. Validation
+    print("\n[4] Validation")
+    validator = DataValidator()
+    validator.add_rule(*DataValidator.required("name"))
+    validator.add_rule(*DataValidator.min_length("name", 2))
+    validator.add_rule(*DataValidator.is_numeric("age"))
+    validator.add_rule(*DataValidator.in_range("age", 0, 150))
+
+    test_records = [
+        DataRecord("v1", {"name": "Alice", "age": 30}),
+        DataRecord("v2", {"name": "", "age": 30}),
+        DataRecord("v3", {"name": "Bob", "age": "not a number"}),
+        DataRecord("v4", {"name": "Charlie", "age": 200}),
+    ]
+    for r in test_records:
+        result = validator.validate(r)
+        print(f"  {r.record_id}: {'PASS' if result.passed else 'FAIL'} - {len(result.issues)} issues")
+
+    # 5. Full pipeline
+    print("\n[5] Full Pipeline")
+    pipeline = Pipeline("p1", "User Data Pipeline")
+    pipeline.set_source(source)
+    pipeline.set_transformer(transformer)
+    pipeline.set_validator(validator)
+    result = pipeline.run(json_data, DataFormat.JSON)
+    print(f"  Pipeline: {result['name']}")
+    print(f"  Input: {result['input_count']}, Output: {result['output_count']}, Errors: {result['error_count']}")
+    print(f"  Duration: {result['duration']:.3f}s")
+    for r in pipeline.get_output():
+        print(f"    {r.record_id}: {r.data}")
+
+    # 6. Pipeline runner
+    print("\n[6] Pipeline Runner")
+    runner = PipelineRunner()
+    runner.add_pipeline(pipeline)
+    results = runner.run_batch("p1", [
+        (json_data, DataFormat.JSON),
+        (csv_data, DataFormat.CSV),
+    ])
+    for r in results:
+        print(f"  Run: {r.get('input_count', 0)} in, {r.get('output_count', 0)} out, {r.get('error_count', 0)} errors")
+    print(f"  Runner stats: {runner.get_stats()}")
+
+    # 7. Custom transform
+    print("\n[7] Custom Transform")
+    custom = DataTransformer()
+    custom.add_transform("uppercase", lambda d: {k: v.upper() if isinstance(v, str) else v for k, v in d.items()})
+    custom.add_transform("add_id", lambda d: {**d, "id": str(uuid.uuid4())[:8]})
+    record = DataRecord("c1", {"name": "test", "value": "hello"})
+    result = custom.transform(record)
+    print(f"  Custom transform: {result.data}")
+
+    # 8. Export
+    print("\n[8] Export")
+    pipeline.export_output("/tmp/pipeline_output.json")
+    print("  Exported to /tmp/pipeline_output.json")
 
     print("\n" + "=" * 70)
     print("DEMO SELESAI")
