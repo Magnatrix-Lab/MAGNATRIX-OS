@@ -1,11 +1,11 @@
-"""Prompt Template Engine — Advanced prompt engineering, versioning, optimization.
+"""Prompt Engine — Template management, variable substitution, prompt versioning, and optimization.
 
 Modul ini menyediakan:
-- TemplateRegistry dengan variable substitution dan conditional blocks
-- Prompt versioning dengan history tracking
-- Few-shot example manager dengan similarity selection
-- Chain-of-thought template builder
-- Prompt optimizer dengan auto-format detection
+- PromptTemplate untuk template dengan variable substitution
+- PromptRegistry untuk versioned prompt storage
+- PromptOptimizer untuk prompt optimization via A/B testing
+- PromptChain untuk chain multiple prompts
+- PromptEngine untuk centralized prompt management
 """
 
 from __future__ import annotations
@@ -19,224 +19,291 @@ from typing import Any, Callable, Dict, List, Optional, Tuple, Set
 from enum import Enum, auto
 
 
-class PromptFormat(Enum):
-    RAW = auto()
-    CHAT = auto()
-    INSTRUCT = auto()
-    FEW_SHOT = auto()
-    CHAIN_OF_THOUGHT = auto()
-    SYSTEM_USER = auto()
+class PromptType(Enum):
+    SYSTEM = "system"
+    USER = "user"
+    ASSISTANT = "assistant"
+    FEW_SHOT = "few_shot"
+    CHAIN = "chain"
 
 
 @dataclass
 class PromptTemplate:
-    """Template definisi dengan metadata."""
+    """Template with variables and metadata."""
     template_id: str
     name: str
-    template_str: str
-    format: PromptFormat = PromptFormat.RAW
+    prompt_type: PromptType
+    template: str
     variables: List[str] = field(default_factory=list)
-    version: str = "1.0"
-    tags: List[str] = field(default_factory=list)
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    description: str = ""
+    version: int = 1
     created_at: float = field(default_factory=time.time)
+    metadata: Dict[str, Any] = field(default_factory=dict)
     usage_count: int = 0
+    avg_score: float = 0.0
 
     def __post_init__(self):
         if not self.variables:
-            self.variables = self._extract_vars()
+            self.variables = self._extract_variables()
 
-    def _extract_vars(self) -> List[str]:
-        pattern = re.compile(r'\{\{(\w+)\}\}')
-        return list(dict.fromkeys(pattern.findall(self.template_str)))
+    def _extract_variables(self) -> List[str]:
+        # Extract {variable} patterns
+        return list(set(re.findall(r'\{([a-zA-Z_][a-zA-Z0-9_]*)\}', self.template)))
 
-    def render(self, **kwargs: Any) -> str:
-        result = self.template_str
+    def render(self, **kwargs) -> str:
+        result = self.template
         for var in self.variables:
-            val = kwargs.get(var, f"{{{{{var}}}}}")
-            result = result.replace(f"{{{{{var}}}}}", str(val))
+            val = kwargs.get(var, f"{{{var}}}")
+            result = result.replace(f"{{{var}}}", str(val))
         self.usage_count += 1
         return result
+
+    def render_safe(self, **kwargs) -> Tuple[str, List[str]]:
+        """Render and return list of missing variables."""
+        result = self.template
+        missing = []
+        for var in self.variables:
+            if var in kwargs:
+                result = result.replace(f"{{{var}}}", str(kwargs[var]))
+            else:
+                missing.append(var)
+        self.usage_count += 1
+        return result, missing
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "template_id": self.template_id,
+            "name": self.name,
+            "type": self.prompt_type.value,
+            "version": self.version,
+            "variables": self.variables,
+            "usage_count": self.usage_count,
+            "avg_score": self.avg_score,
+        }
 
 
 @dataclass
 class PromptVersion:
-    """Single version entry dalam history."""
-    version: str
-    template_str: str
-    changed_at: float
-    change_note: str = ""
+    """Version record for a prompt."""
+    version_id: str
+    template_id: str
+    template: str
+    version: int
+    changes: str = ""
+    created_at: float = field(default_factory=time.time)
+    score: float = 0.0
 
 
-@dataclass
-class FewShotExample:
-    """Single few-shot example pair."""
-    example_id: str
-    input_text: str
-    output_text: str
-    score: float = 1.0
-    tags: List[str] = field(default_factory=list)
-
-
-class TemplateRegistry:
-    """Register dan manage prompt templates."""
+class PromptRegistry:
+    """Store and manage prompt templates with versioning."""
 
     def __init__(self):
         self._templates: Dict[str, PromptTemplate] = {}
-        self._history: Dict[str, List[PromptVersion]] = {}
+        self._versions: Dict[str, List[PromptVersion]] = {}
+        self._by_name: Dict[str, str] = {}  # name -> template_id
 
-    def register(self, template: PromptTemplate) -> PromptTemplate:
+    def register(self, template: PromptTemplate) -> None:
         self._templates[template.template_id] = template
-        self._history.setdefault(template.template_id, [])
-        self._history[template.template_id].append(PromptVersion(
-            version=template.version,
-            template_str=template.template_str,
-            changed_at=template.created_at,
-            change_note="Initial"
-        ))
-        return template
+        self._by_name[template.name] = template.template_id
+        self._versions.setdefault(template.template_id, [])
 
     def get(self, template_id: str) -> Optional[PromptTemplate]:
         return self._templates.get(template_id)
 
-    def update(self, template_id: str, new_str: str, change_note: str = "") -> Optional[PromptTemplate]:
-        t = self._templates.get(template_id)
-        if not t:
-            return None
-        new_ver = str(float(t.version) + 0.1)
-        t.template_str = new_str
-        t.version = new_ver
-        t.variables = t._extract_vars()
-        self._history[template_id].append(PromptVersion(
-            version=new_ver, template_str=new_str, changed_at=time.time(), change_note=change_note
-        ))
-        return t
+    def get_by_name(self, name: str) -> Optional[PromptTemplate]:
+        tid = self._by_name.get(name)
+        return self._templates.get(tid) if tid else None
 
-    def rollback(self, template_id: str, version: str) -> Optional[PromptTemplate]:
-        t = self._templates.get(template_id)
-        if not t:
+    def create_version(self, template_id: str, new_template: str, changes: str = "") -> Optional[PromptTemplate]:
+        old = self._templates.get(template_id)
+        if not old:
             return None
-        for v in self._history.get(template_id, []):
+        # Save old version
+        self._versions[template_id].append(PromptVersion(
+            version_id=str(uuid.uuid4())[:12],
+            template_id=template_id,
+            template=old.template,
+            version=old.version,
+            changes=changes,
+            score=old.avg_score,
+        ))
+        # Update template
+        old.template = new_template
+        old.version += 1
+        old.variables = old._extract_variables()
+        return old
+
+    def get_versions(self, template_id: str) -> List[PromptVersion]:
+        return self._versions.get(template_id, [])
+
+    def rollback(self, template_id: str, version: int) -> Optional[PromptTemplate]:
+        versions = self._versions.get(template_id, [])
+        for v in versions:
             if v.version == version:
-                t.template_str = v.template_str
-                t.version = v.version
-                t.variables = t._extract_vars()
-                return t
+                template = self._templates.get(template_id)
+                if template:
+                    template.template = v.template
+                    template.version = version
+                    template.variables = template._extract_variables()
+                    return template
         return None
 
     def list_all(self) -> List[PromptTemplate]:
         return list(self._templates.values())
 
-    def search_by_tag(self, tag: str) -> List[PromptTemplate]:
-        return [t for t in self._templates.values() if tag in t.tags]
-
-    def export(self, path: str) -> None:
-        data = {
-            tid: {
-                "template_id": t.template_id, "name": t.name, "template_str": t.template_str,
-                "format": t.format.name, "variables": t.variables, "version": t.version,
-                "tags": t.tags, "metadata": t.metadata, "usage_count": t.usage_count
-            }
-            for tid, t in self._templates.items()
-        }
-        with open(path, "w", encoding="utf-8") as f:
-            json.dump(data, f, indent=2)
-
-
-class FewShotManager:
-    """Manage few-shot examples dengan similarity-based selection."""
-
-    def __init__(self, max_examples: int = 5):
-        self.max_examples = max_examples
-        self._examples: List[FewShotExample] = []
-
-    def add(self, input_text: str, output_text: str, tags: Optional[List[str]] = None, score: float = 1.0) -> FewShotExample:
-        ex = FewShotExample(
-            example_id=str(uuid.uuid4())[:8],
-            input_text=input_text,
-            output_text=output_text,
-            score=score,
-            tags=tags or []
-        )
-        self._examples.append(ex)
-        return ex
-
-    def _similarity(self, a: str, b: str) -> float:
-        # Simple Jaccard similarity on words
-        sa, sb = set(a.lower().split()), set(b.lower().split())
-        if not sa or not sb:
-            return 0.0
-        return len(sa & sb) / len(sa | sb)
-
-    def select(self, query: str, n: Optional[int] = None, tag: Optional[str] = None) -> List[FewShotExample]:
-        candidates = self._examples
-        if tag:
-            candidates = [e for e in candidates if tag in e.tags]
-        scored = [(self._similarity(query, e.input_text) * e.score, e) for e in candidates]
-        scored.sort(key=lambda x: x[0], reverse=True)
-        n = n or self.max_examples
-        return [e for _, e in scored[:n]]
-
-    def build_prompt(self, query: str, template: str = "Input: {input}\nOutput: {output}", n: Optional[int] = None) -> str:
-        selected = self.select(query, n)
-        parts = []
-        for ex in selected:
-            parts.append(template.replace("{input}", ex.input_text).replace("{output}", ex.output_text))
-        return "\n\n".join(parts)
-
     def get_stats(self) -> Dict[str, Any]:
-        return {"total_examples": len(self._examples), "tags": list(set(t for e in self._examples for t in e.tags))}
-
-
-class ChainOfThoughtBuilder:
-    """Build chain-of-thought prompts dengan reasoning steps."""
-
-    def __init__(self):
-        self._steps: List[str] = []
-        self._separator: str = "\n\n"
-
-    def add_step(self, instruction: str, reasoning_template: str = "Let's think step by step.") -> ChainOfThoughtBuilder:
-        self._steps.append(f"{instruction}\n{reasoning_template}")
-        return self
-
-    def build(self, final_question: str) -> str:
-        parts = self._steps + [f"Now, answer this:\n{final_question}"]
-        return self._separator.join(parts)
-
-    def build_with_examples(self, examples: List[Tuple[str, str, str]], final_question: str) -> str:
-        """examples: (question, reasoning, answer)"""
-        parts = []
-        for q, r, a in examples:
-            parts.append(f"Q: {q}\nReasoning: {r}\nA: {a}")
-        parts.append(f"Q: {final_question}\nReasoning: Let's think step by step.")
-        return self._separator.join(parts)
+        total = len(self._templates)
+        total_usage = sum(t.usage_count for t in self._templates.values())
+        return {
+            "templates": total,
+            "versions": sum(len(v) for v in self._versions.values()),
+            "total_usage": total_usage,
+            "avg_score": sum(t.avg_score for t in self._templates.values()) / max(total, 1),
+        }
 
 
 class PromptOptimizer:
-    """Auto-detect format dan optimize prompt structure."""
+    """Optimize prompts via A/B testing and scoring."""
 
-    def detect_format(self, text: str) -> PromptFormat:
-        if re.search(r'^(system|user|assistant):', text, re.MULTILINE | re.IGNORECASE):
-            return PromptFormat.SYSTEM_USER
-        if "Q:" in text and "A:" in text:
-            return PromptFormat.FEW_SHOT
-        if "Let's think step by step" in text or "Reasoning:" in text:
-            return PromptFormat.CHAIN_OF_THOUGHT
-        if text.startswith("### Instruction:") or text.startswith("<|im_start|>"):
-            return PromptFormat.INSTRUCT
-        return PromptFormat.RAW
+    def __init__(self):
+        self._experiments: Dict[str, List[Dict[str, Any]]] = {}
 
-    def optimize(self, text: str) -> str:
-        fmt = self.detect_format(text)
-        if fmt == PromptFormat.RAW:
-            # Add structure if missing
-            if len(text) > 200 and "\n" not in text[:200]:
-                text = text.replace(". ", ".\n", 1)
-        return text.strip()
+    def run_experiment(self, template_id: str, variants: List[str], evaluator: Callable[[str], float]) -> Dict[str, Any]:
+        """Test prompt variants and pick best."""
+        scores = []
+        for variant in variants:
+            score = evaluator(variant)
+            scores.append({"variant": variant[:100], "score": score})
+        best = max(scores, key=lambda x: x["score"])
+        self._experiments[template_id] = scores
+        return {
+            "template_id": template_id,
+            "variants_tested": len(variants),
+            "best_score": best["score"],
+            "best_variant": best["variant"],
+            "all_scores": scores,
+        }
 
-    def estimate_tokens(self, text: str) -> int:
-        # Simple estimation: ~4 chars per token for English
-        return len(text) // 4 + 1
+    def optimize(self, template: PromptTemplate, optimizer_fn: Optional[Callable[[str], str]] = None) -> str:
+        optimizer_fn = optimizer_fn or self._default_optimizer
+        return optimizer_fn(template.template)
+
+    def _default_optimizer(self, template: str) -> str:
+        # Simple: add more specific instructions
+        return template + "\n\nBe specific and concise in your response."
+
+    def get_experiments(self, template_id: str) -> List[Dict[str, Any]]:
+        return self._experiments.get(template_id, [])
+
+
+class PromptChain:
+    """Chain multiple prompts together."""
+
+    def __init__(self, chain_id: str, name: str):
+        self.chain_id = chain_id
+        self.name = name
+        self._steps: List[Tuple[str, Dict[str, str]]] = []  # (template_id, variable_mapping)
+        self._results: List[Dict[str, Any]] = []
+
+    def add_step(self, template_id: str, var_mapping: Optional[Dict[str, str]] = None) -> PromptChain:
+        self._steps.append((template_id, var_mapping or {}))
+        return self
+
+    def execute(self, registry: PromptRegistry, initial_vars: Dict[str, Any]) -> List[Dict[str, Any]]:
+        context = dict(initial_vars)
+        results = []
+        for template_id, mapping in self._steps:
+            template = registry.get(template_id)
+            if not template:
+                results.append({"error": f"Template not found: {template_id}"})
+                continue
+            # Map context variables to template variables
+            render_vars = {}
+            for template_var, context_key in mapping.items():
+                render_vars[template_var] = context.get(context_key, "")
+            # Also include any matching context keys directly
+            for var in template.variables:
+                if var not in render_vars and var in context:
+                    render_vars[var] = context[var]
+            output, missing = template.render_safe(**render_vars)
+            result = {
+                "template_id": template_id,
+                "output": output,
+                "missing": missing,
+            }
+            results.append(result)
+            # Store output in context for next steps
+            context[f"output_{template_id}"] = output
+        self._results = results
+        return results
+
+    def get_results(self) -> List[Dict[str, Any]]:
+        return self._results
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "chain_id": self.chain_id,
+            "name": self.name,
+            "steps": len(self._steps),
+            "results": len(self._results),
+        }
+
+
+class PromptEngine:
+    """Centralized prompt management."""
+
+    def __init__(self):
+        self.registry = PromptRegistry()
+        self.optimizer = PromptOptimizer()
+        self._chains: Dict[str, PromptChain] = {}
+
+    def create_template(self, name: str, template: str, prompt_type: PromptType = PromptType.USER,
+                        description: str = "") -> PromptTemplate:
+        pt = PromptTemplate(
+            template_id=str(uuid.uuid4())[:12],
+            name=name,
+            prompt_type=prompt_type,
+            template=template,
+            description=description,
+        )
+        self.registry.register(pt)
+        return pt
+
+    def create_chain(self, name: str) -> PromptChain:
+        chain = PromptChain(str(uuid.uuid4())[:12], name)
+        self._chains[chain.chain_id] = chain
+        return chain
+
+    def render(self, template_id: str, **kwargs) -> str:
+        template = self.registry.get(template_id)
+        if not template:
+            return f"[Template not found: {template_id}]"
+        return template.render(**kwargs)
+
+    def get_template(self, name: str) -> Optional[PromptTemplate]:
+        return self.registry.get_by_name(name)
+
+    def optimize_template(self, template_id: str) -> Optional[str]:
+        template = self.registry.get(template_id)
+        if not template:
+            return None
+        optimized = self.optimizer.optimize(template)
+        self.registry.create_version(template_id, optimized, "Auto-optimized")
+        return optimized
+
+    def get_stats(self) -> Dict[str, Any]:
+        return {
+            **self.registry.get_stats(),
+            "chains": len(self._chains),
+        }
+
+    def export_all(self, path: str) -> None:
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump({
+                "templates": [t.to_dict() for t in self.registry.list_all()],
+                "chains": [c.to_dict() for c in self._chains.values()],
+                "stats": self.get_stats(),
+            }, f, indent=2)
 
 
 # =============================================================================
@@ -245,76 +312,89 @@ class PromptOptimizer:
 
 def _demo():
     print("=" * 70)
-    print("PROMPT TEMPLATE ENGINE DEMO")
+    print("PROMPT ENGINE DEMO")
     print("=" * 70)
 
-    # 1. Template Registry
-    print("\n[1] Template Registry")
-    registry = TemplateRegistry()
-    t1 = PromptTemplate(
-        template_id="summarize-v1",
-        name="Summarize Text",
-        template_str="Summarize the following text in {{max_words}} words:\n\n{{text}}",
-        format=PromptFormat.INSTRUCT,
-        tags=["summarization", "nlp"]
-    )
-    registry.register(t1)
-    print(f"  Registered: {t1.name} (vars: {t1.variables})")
-    rendered = t1.render(max_words=50, text="The quick brown fox jumps over the lazy dog. This is a classic pangram.")
-    print(f"  Rendered: {rendered[:80]}...")
+    engine = PromptEngine()
 
-    # Update dan rollback
-    registry.update("summarize-v1", "Summarize:\n{{text}}\n(max {{max_words}} words)", "Simplified")
-    print(f"  Updated to v{t1.version}")
-    registry.rollback("summarize-v1", "1.0")
-    print(f"  Rolled back to v{t1.version}")
+    # 1. Create templates
+    print("\n[1] Create Templates")
+    t1 = engine.create_template("greeting", "Hello {name}! Welcome to {service}.", PromptType.USER)
+    t2 = engine.create_template("qa", "Question: {question}\nContext: {context}\nAnswer:", PromptType.USER)
+    t3 = engine.create_template("summarize", "Summarize the following text in {length} sentences:\n{text}", PromptType.USER)
+    t4 = engine.create_template("system_prompt", "You are a helpful assistant. Respond in {language}.", PromptType.SYSTEM)
+    print(f"  Created: {t1.template_id}, vars={t1.variables}")
+    print(f"  Created: {t2.template_id}, vars={t2.variables}")
+    print(f"  Created: {t3.template_id}, vars={t3.variables}")
+    print(f"  Created: {t4.template_id}, vars={t4.variables}")
 
-    # 2. Few-Shot Manager
-    print("\n[2] Few-Shot Manager")
-    fsm = FewShotManager(max_examples=3)
-    fsm.add("What is 2+2?", "4", tags=["math"])
-    fsm.add("What is 5*3?", "15", tags=["math"])
-    fsm.add("What is 10-7?", "3", tags=["math"])
-    fsm.add("What is the capital of France?", "Paris", tags=["geography"])
-    prompt = fsm.build_prompt("What is 8/2?", n=2)
-    print(f"  Few-shot prompt:\n{prompt}")
+    # 2. Render
+    print("\n[2] Render Templates")
+    print(f"  Greeting: {engine.render(t1.template_id, name='Alice', service='MAGNATRIX')}")
+    print(f"  QA: {engine.render(t2.template_id, question='What is AI?', context='AI is...')}")
+    print(f"  Summarize: {engine.render(t3.template_id, text='Long text here...', length='3')}")
+    print(f"  System: {engine.render(t4.template_id, language='Indonesian')}")
 
-    # 3. Chain of Thought
-    print("\n[3] Chain of Thought Builder")
-    cot = ChainOfThoughtBuilder()
-    cot.add_step("First, identify the key numbers in the problem.")
-    cot.add_step("Next, determine the operation needed.")
-    cot.add_step("Finally, calculate the result.")
-    full = cot.build("If a train travels 60 km/h for 2.5 hours, how far does it go?")
-    print(f"  CoT prompt:\n{full}")
+    # 3. Safe render with missing
+    print("\n[3] Safe Render")
+    output, missing = t1.render_safe(name="Bob")
+    print(f"  Output: {output}")
+    print(f"  Missing: {missing}")
 
-    # CoT with examples
-    cot2 = ChainOfThoughtBuilder()
-    cot_prompt = cot2.build_with_examples([
-        ("2+3", "I need to add 2 and 3. 2+3=5", "5"),
-        ("10-4", "I need to subtract 4 from 10. 10-4=6", "6"),
-    ], "7*8")
-    print(f"  CoT with examples:\n{cot_prompt}")
+    # 4. Versioning
+    print("\n[4] Versioning")
+    engine.registry.create_version(t1.template_id, "Hi {name}! Welcome to {service}. Enjoy your stay!", "More friendly")
+    print(f"  Version: {t1.version}")
+    print(f"  Template: {t1.template}")
+    versions = engine.registry.get_versions(t1.template_id)
+    print(f"  Versions: {len(versions)}")
+    for v in versions:
+        print(f"    v{v.version}: {v.template[:40]}...")
 
-    # 4. Prompt Optimizer
-    print("\n[4] Prompt Optimizer")
-    opt = PromptOptimizer()
-    texts = [
-        "system: You are helpful\nuser: Hello",
-        "Q: What is 2+2? A: 4\nQ: What is 3+3?",
-        "Let's think step by step. What is the meaning of life?",
-        "Just a plain raw text without any formatting applied here",
+    # 5. Rollback
+    print("\n[5] Rollback")
+    engine.registry.rollback(t1.template_id, 1)
+    print(f"  After rollback v1: {t1.template}")
+
+    # 6. Prompt chain
+    print("\n[6] Prompt Chain")
+    chain = engine.create_chain("Research Pipeline")
+    chain.add_step(t2.template_id, {"question": "topic", "context": "background"})
+    chain.add_step(t3.template_id, {"text": f"output_{t2.template_id}", "length": "3"})
+    results = chain.execute(engine.registry, {
+        "topic": "What is quantum computing?",
+        "background": "Quantum computing uses quantum mechanics...",
+    })
+    for i, r in enumerate(results):
+        print(f"  Step {i}: {r['output'][:50]}...")
+
+    # 7. Optimization
+    print("\n[7] Prompt Optimization")
+    optimized = engine.optimize_template(t2.template_id)
+    print(f"  Optimized: {optimized[:80]}...")
+    print(f"  Version now: {engine.registry.get(t2.template_id).version}")
+
+    # 8. A/B test
+    print("\n[8] A/B Test")
+    variants = [
+        "Answer: {question}",
+        "Question: {question}\nPlease answer concisely:",
+        "Q: {question}\nA:",
     ]
-    for text in texts:
-        fmt = opt.detect_format(text)
-        print(f"  Detected: {fmt.name} for '{text[:40]}...'")
+    def evaluator(t):
+        return 1.0 if "concisely" in t else 0.5
+    result = engine.optimizer.run_experiment(t2.template_id, variants, evaluator)
+    print(f"  Best: {result['best_variant'][:50]}...")
+    print(f"  Score: {result['best_score']}")
 
-    # 5. Export
-    print("\n[5] Export Registry")
-    registry.register(PromptTemplate("qa-v1", "Q&A", "Q: {{question}}\nA: ", tags=["qa"]))
-    registry.register(PromptTemplate("code-v1", "Code Gen", "Write {{language}} code for: {{task}}", tags=["code"]))
-    registry.export("/tmp/prompt_registry.json")
-    print(f"  Exported {len(registry.list_all())} templates to /tmp/prompt_registry.json")
+    # 9. Stats
+    print(f"\n[9] Stats")
+    print(f"  {engine.get_stats()}")
+
+    # 10. Export
+    print("\n[10] Export")
+    engine.export_all("/tmp/prompts.json")
+    print("  Exported to /tmp/prompts.json")
 
     print("\n" + "=" * 70)
     print("DEMO SELESAI")
