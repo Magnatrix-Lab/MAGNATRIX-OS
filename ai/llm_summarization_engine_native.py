@@ -1,118 +1,76 @@
-#!/usr/bin/env python3
-"""
-MAGNATRIX-OS — Summarization Engine
-ai/llm_summarization_engine_native.py
-
-Features:
-- Extractive summarization (top N sentences by score)
-- Sentence importance scoring (TF-IDF based)
-- Abstractive summarization simulation (key phrase extraction + reassembly)
-- Length control (max words, max sentences)
-- Multi-document summarization
-
-Style: Native Python, stdlib only, dataclasses, type hints, enums.
-"""
-
+"""LLM Summarization Engine — Native Python (stdlib only)."""
 from __future__ import annotations
-
 import re
-from collections import Counter, defaultdict
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
-import logging
+from typing import Dict, Any, List, Optional
+from enum import Enum, auto
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
-logger = logging.getLogger("summarization")
-
+class SummarizationMethod(Enum):
+    EXTRACTIVE = auto()
+    ABLATIVE = auto()
+    KEYPOINT = auto()
 
 class SummarizationEngine:
-    """Extractive and abstractive summarization."""
+    def __init__(self) -> None:
+        self._stopwords = {"the", "a", "an", "is", "are", "was", "were", "be", "been", "being", "have", "has", "had", "do", "does", "did", "will", "would", "could", "should", "may", "might", "must", "shall", "can", "need", "dare", "ought", "used", "to", "of", "in", "for", "on", "with", "at", "by", "from", "as", "into", "through", "during", "before", "after", "above", "below", "between", "under", "again", "further", "then", "once", "here", "there", "when", "where", "why", "how", "all", "each", "few", "more", "most", "other", "some", "such", "no", "nor", "not", "only", "own", "same", "so", "than", "too", "very", "just", "and", "but", "if", "or", "because", "until", "while", "about", "against", "up", "down", "out", "off", "over", "under", "again", "further", "then", "once"}
 
-    STOP_WORDS = {"the", "a", "is", "are", "was", "were", "to", "of", "and", "in", "that", "it", "for", "on", "with", "as", "this", "but", "or", "an", "be", "i", "you", "he", "she", "we", "they"}
-
-    def _sentences(self, text: str) -> List[str]:
-        return [s.strip() for s in re.split(r'(?<=[.!?])\s+', text) if s.strip()]
-
-    def _word_freq(self, text: str) -> Counter:
-        words = [w.lower() for w in re.findall(r'\w+', text) if w.lower() not in self.STOP_WORDS]
-        return Counter(words)
-
-    def extractive(self, text: str, num_sentences: int = 3) -> str:
-        sentences = self._sentences(text)
-        if len(sentences) <= num_sentences:
-            return text
-        word_freq = self._word_freq(text)
-        scores = []
-        for sent in sentences:
-            words = [w.lower() for w in re.findall(r'\w+', sent)]
-            score = sum(word_freq.get(w, 0) for w in words) / max(len(words), 1)
-            scores.append((score, sent))
-        scores.sort(key=lambda x: x[0], reverse=True)
-        top = [s for _, s in scores[:num_sentences]]
-        # Reorder by original position
-        ordered = sorted(top, key=lambda s: text.index(s))
-        return " ".join(ordered)
-
-    def abstractive(self, text: str, max_words: int = 50) -> str:
-        freq = self._word_freq(text)
-        top_words = [w for w, _ in freq.most_common(10)]
-        sentences = self._sentences(text)
+    def extractive(self, text: str, ratio: float = 0.3) -> str:
+        sentences = re.split(r'(?<=[.!?])\s+', text)
         if not sentences:
             return ""
-        # Take first sentence + key phrases
-        first = sentences[0]
-        phrases = ", ".join(top_words[:5])
-        result = f"{first} Key points: {phrases}."
-        words = result.split()
-        if len(words) > max_words:
-            result = " ".join(words[:max_words]) + "..."
-        return result
+        scores = []
+        for s in sentences:
+            words = [w.lower() for w in re.findall(r'\w+', s) if w.lower() not in self._stopwords]
+            scores.append(len(words))
+        n = max(1, int(len(sentences) * ratio))
+        ranked = sorted(enumerate(scores), key=lambda x: x[1], reverse=True)[:n]
+        ranked.sort(key=lambda x: x[0])
+        return " ".join(sentences[i] for i, _ in ranked)
 
-    def multi_doc(self, texts: List[str], num_sentences: int = 2) -> str:
-        combined = " ".join(texts)
-        return self.extractive(combined, num_sentences)
+    def abstractive(self, text: str) -> str:
+        sentences = re.split(r'(?<=[.!?])\s+', text)
+        if not sentences:
+            return ""
+        words = []
+        for s in sentences:
+            words.extend(re.findall(r'\w+', s))
+        freq = {}
+        for w in words:
+            w = w.lower()
+            if w not in self._stopwords and len(w) > 3:
+                freq[w] = freq.get(w, 0) + 1
+        top = sorted(freq.items(), key=lambda x: x[1], reverse=True)[:5]
+        return "Key concepts: " + ", ".join(w for w, _ in top)
 
-    def get_stats(self) -> Dict[str, Any]:
-        return {"engine": "SummarizationEngine", "modes": ["extractive", "abstractive", "multi_doc"]}
+    def keypoints(self, text: str) -> List[str]:
+        sentences = re.split(r'(?<=[.!?])\s+', text)
+        points = []
+        for s in sentences:
+            if any(marker in s.lower() for marker in ["first", "second", "third", "important", "key", "main", "primary", "crucial", "essential"]):
+                points.append(s)
+        return points[:5]
 
+    def summarize(self, text: str, method: SummarizationMethod = SummarizationMethod.EXTRACTIVE, ratio: float = 0.3) -> str:
+        if method == SummarizationMethod.EXTRACTIVE:
+            return self.extractive(text, ratio)
+        elif method == SummarizationMethod.ABLATIVE:
+            return self.abstractive(text)
+        elif method == SummarizationMethod.KEYPOINT:
+            return "\n".join("- " + p for p in self.keypoints(text))
+        return ""
 
-# ────────────────────────────────
-# Demo / Self-Test
-# ────────────────────────────────
+    def get_stats(self, text: str, summary: str) -> Dict[str, Any]:
+        return {"original_tokens": len(text.split()), "summary_tokens": len(summary.split()), "compression": 1.0 - len(summary.split()) / len(text.split()) if text else 0.0}
 
 def run() -> None:
-    print("=" * 60)
-    print("MAGNATRIX-OS — Summarization Engine")
-    print("ai/llm_summarization_engine_native.py")
-    print("=" * 60)
-
-    engine = SummarizationEngine()
-
-    text = """Python is a high-level programming language. It is widely used for web development, data science, and artificial intelligence. Python has a simple syntax that makes it easy to learn. Many developers prefer Python for its readability and extensive libraries. Machine learning frameworks like TensorFlow and PyTorch are built with Python. The language continues to grow in popularity."""
-
-    print(f"\nOriginal ({len(text.split())} words):\n{text[:100]}...")
-
-    print("\n[1] Extractive Summary")
-    summary = engine.extractive(text, num_sentences=2)
-    print(f"  {summary}")
-
-    print("\n[2] Abstractive Summary")
-    summary = engine.abstractive(text, max_words=30)
-    print(f"  {summary}")
-
-    print("\n[3] Multi-Document Summary")
-    docs = [
-        "Python is popular for AI. It has many libraries.",
-        "JavaScript runs in browsers. React is a framework.",
-        "Go is fast and compiled. It is used for microservices.",
-    ]
-    summary = engine.multi_doc(docs, num_sentences=2)
-    print(f"  {summary}")
-
-    print("\n" + "=" * 60)
-    print("All demos completed successfully.")
-    print("=" * 60)
-
+    print("Summarization Engine test")
+    e = SummarizationEngine()
+    text = "The first important point is that AI is transforming industries. The second key idea is that ethical considerations are crucial. The third main concept is that human oversight remains essential. Some additional details are not as important but provide context."
+    print("  Extractive: " + e.summarize(text, SummarizationMethod.EXTRACTIVE, 0.4))
+    print("  Abstractive: " + e.summarize(text, SummarizationMethod.ABLATIVE))
+    print("  Keypoints:")
+    print(e.summarize(text, SummarizationMethod.KEYPOINT))
+    print("Summarization Engine test complete.")
 
 if __name__ == "__main__":
     run()
