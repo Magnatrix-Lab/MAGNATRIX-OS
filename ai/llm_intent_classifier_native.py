@@ -1,107 +1,45 @@
-"""
-llm_intent_classifier_native.py
-MAGNATRIX-OS Intent Classifier Engine
-Native Python, stdlib only.
-Provides rule-based and keyword intent classification, entity extraction, and confidence scoring.
-"""
-
+"""Intent Classifier - Intent detection for MAGNATRIX-OS."""
 from __future__ import annotations
-
-import re
 from dataclasses import dataclass, field
-from enum import Enum, auto
-from typing import Any, Dict, List, Optional, Tuple
-
+from typing import List, Dict, Tuple
+from collections import Counter
+import re
+import math
 
 @dataclass
-class Intent:
-    name: str
-    confidence: float
-    entities: Dict[str, Any] = field(default_factory=dict)
-    matched_patterns: List[str] = field(default_factory=list)
+class IntentClassifier:
+    intents: Dict[str, List[str]] = field(default_factory=dict)
+    vocab: Dict[str, int] = field(default_factory=dict)
 
-    def to_dict(self) -> Dict[str, Any]:
-        return {"name": self.name, "confidence": self.confidence, "entities": self.entities}
+    def train(self, examples: Dict[str, List[str]]) -> None:
+        self.intents = examples
+        all_words = []
+        for utterances in examples.values():
+            for u in utterances:
+                all_words.extend(re.findall(r"[a-zA-Z0-9]+", u.lower()))
+        self.vocab = {w: i for i, w in enumerate(set(all_words))}
 
+    def classify(self, text: str) -> Tuple[str, float]:
+        words = set(re.findall(r"[a-zA-Z0-9]+", text.lower()))
+        best_intent = "unknown"
+        best_score = -1
+        for intent, utterances in self.intents.items():
+            intent_words = set()
+            for u in utterances:
+                intent_words.update(re.findall(r"[a-zA-Z0-9]+", u.lower()))
+            score = len(words & intent_words) / max(len(words), 1)
+            if score > best_score:
+                best_score = score
+                best_intent = intent
+        return best_intent, best_score
 
-class IntentClassifierEngine:
-    """Rule-based intent classification with entity extraction."""
+    def stats(self) -> dict:
+        return {"intents": len(self.intents), "vocab": len(self.vocab)}
 
-    def __init__(self) -> None:
-        self._intents: Dict[str, Dict[str, Any]] = {}  # intent_name -> {patterns, entity_extractors}
-        self._fallback_intent = "unknown"
+def run():
+    ic = IntentClassifier()
+    ic.train({"greeting": ["hello", "hi", "hey there"], "goodbye": ["bye", "see you", "goodbye"], "help": ["help me", "I need help", "assist me"]})
+    print("Classify 'hi there':", ic.classify("hi there"))
+    print("Stats:", ic.stats())
 
-    def register_intent(self, name: str, patterns: List[str], entity_extractors: Optional[Dict[str, str]] = None) -> None:
-        self._intents[name] = {
-            "patterns": [re.compile(p, re.IGNORECASE) for p in patterns],
-            "entity_extractors": entity_extractors or {},
-        }
-
-    def classify(self, text: str) -> Intent:
-        text_lower = text.lower()
-        best_intent = self._fallback_intent
-        best_confidence = 0.0
-        matched_patterns = []
-        entities = {}
-
-        for intent_name, config in self._intents.items():
-            matches = 0
-            for pattern in config["patterns"]:
-                if pattern.search(text):
-                    matches += 1
-                    matched_patterns.append(pattern.pattern)
-
-            if matches > 0:
-                confidence = min(1.0, matches / len(config["patterns"]) + 0.1 * matches)
-                if confidence > best_confidence:
-                    best_confidence = confidence
-                    best_intent = intent_name
-                    # Extract entities
-                    for entity_name, extractor_pattern in config["entity_extractors"].items():
-                        match = re.search(extractor_pattern, text, re.IGNORECASE)
-                        if match:
-                            entities[entity_name] = match.group(1) if match.groups() else match.group(0)
-
-        return Intent(name=best_intent, confidence=best_confidence, entities=entities, matched_patterns=matched_patterns)
-
-    def batch_classify(self, texts: List[str]) -> List[Intent]:
-        return [self.classify(t) for t in texts]
-
-    def get_intents(self) -> List[str]:
-        return list(self._intents.keys())
-
-    def get_stats(self) -> Dict[str, Any]:
-        return {"intents": len(self._intents), "total_patterns": sum(len(c["patterns"]) for c in self._intents.values())}
-
-
-def run() -> None:
-    print("=" * 60)
-    print("MAGNATRIX-OS Intent Classifier Engine")
-    print("=" * 60)
-
-    engine = IntentClassifierEngine()
-
-    engine.register_intent("greeting", [r"hello", r"hi", r"hey", r"good morning", r"good afternoon"])
-    engine.register_intent("farewell", [r"bye", r"goodbye", r"see you", r"later"])
-    engine.register_intent("weather", [r"weather", r"temperature", r"forecast", r"rain"], {"location": r"in (\w+)"})
-    engine.register_intent("search", [r"search", r"find", r"look up", r"lookup"], {"query": r"for (.+)"})
-
-    tests = [
-        "Hello there!",
-        "What's the weather in Paris?",
-        "Search for best pizza recipes",
-        "Goodbye!",
-        "Random unrelated text",
-    ]
-
-    for text in tests:
-        intent = engine.classify(text)
-        print(f"\n  '{text}' -> {intent.name} (conf={intent.confidence:.2f})")
-        if intent.entities:
-            print(f"    Entities: {intent.entities}")
-
-    print("\nIntent Classifier test complete.")
-
-
-if __name__ == "__main__":
-    run()
+if __name__ == "__main__": run()

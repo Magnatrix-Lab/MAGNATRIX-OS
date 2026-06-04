@@ -1,91 +1,58 @@
-"""LLM Chart Generator — Native Python (stdlib only)."""
+"""Chart Generator - ASCII chart generation for MAGNATRIX-OS."""
 from __future__ import annotations
 from dataclasses import dataclass, field
-from typing import Dict, Any, List, Optional, Tuple
+from typing import List, Dict, Tuple
 from enum import Enum, auto
+import math
 
 class ChartType(Enum):
-    LINE = auto()
-    BAR = auto()
-    PIE = auto()
-    SCATTER = auto()
-    AREA = auto()
-    HISTOGRAM = auto()
+    BAR = auto(); LINE = auto(); HISTOGRAM = auto()
 
 @dataclass
-class DataPoint:
-    label: str
-    value: float
-    color: str = "#000000"
-    metadata: Dict[str, Any] = field(default_factory=dict)
-
 class ChartGenerator:
-    def __init__(self) -> None:
-        self._charts: List[Dict[str, Any]] = []
-
-    def create_line_chart(self, data: List[DataPoint], title: str = "", width: int = 60, height: int = 10) -> str:
-        if not data:
-            return ""
-        max_val = max(d.value for d in data)
-        lines = ["  " + title, "  " + "-" * width]
-        for point in data:
-            bar_len = int((point.value / max_val) * (width - 5)) if max_val > 0 else 0
-            lines.append("  " + point.label[:10].ljust(10) + " " + "#" * bar_len + " " + str(point.value))
+    chart_type: ChartType = ChartType.BAR
+    width: int = 60
+    height: int = 20
+    
+    def generate_bar(self, data: List[Tuple[str, float]]) -> str:
+        if not data: return ""
+        max_val = max(v for _, v in data)
+        lines = []
+        for label, value in data:
+            bar_len = int((value / max_val) * self.width) if max_val > 0 else 0
+            lines.append(f"{label:>10} | {'█' * bar_len} {value:.2f}")
         return "\n".join(lines)
-
-    def create_bar_chart(self, data: List[DataPoint], title: str = "", width: int = 40) -> str:
-        if not data:
-            return ""
-        max_val = max(d.value for d in data)
-        lines = ["  " + title, "  " + "=" * width]
-        for point in data:
-            bar_len = int((point.value / max_val) * width) if max_val > 0 else 0
-            lines.append("  " + point.label[:15].ljust(15) + " |" + "=" * bar_len + " " + str(point.value))
+    
+    def generate_histogram(self, data: List[float], bins: int = 10) -> str:
+        if not data: return ""
+        min_val, max_val = min(data), max(data)
+        bin_width = (max_val - min_val) / bins if max_val > min_val else 1
+        counts = [0] * bins
+        for v in data:
+            idx = min(int((v - min_val) / bin_width), bins - 1)
+            counts[idx] += 1
+        max_count = max(counts)
+        lines = []
+        for i, count in enumerate(counts):
+            bar_len = int((count / max_count) * self.width) if max_count > 0 else 0
+            label = f"{min_val + i * bin_width:.2f}"
+            lines.append(f"{label:>10} | {'█' * bar_len} {count}")
         return "\n".join(lines)
+    
+    def generate(self, data) -> str:
+        if self.chart_type == ChartType.BAR and isinstance(data, list) and data and isinstance(data[0], tuple):
+            return self.generate_bar(data)
+        elif self.chart_type == ChartType.HISTOGRAM and isinstance(data, list):
+            return self.generate_histogram(data)
+        return ""
+    
+    def stats(self, data) -> dict:
+        return {"chart_type": self.chart_type.name, "width": self.width, "height": self.height}
 
-    def create_pie_chart(self, data: List[DataPoint], title: str = "") -> str:
-        if not data:
-            return ""
-        total = sum(d.value for d in data)
-        lines = ["  " + title, "  " + "-" * 40]
-        for point in data:
-            pct = (point.value / total * 100) if total > 0 else 0
-            bar = int(pct / 5)
-            lines.append("  " + point.label[:15].ljust(15) + " " + "=" * bar + " " + str(round(pct, 1)) + "%")
-        return "\n".join(lines)
+def run():
+    cg = ChartGenerator(ChartType.BAR, 40)
+    data = [("A", 10), ("B", 25), ("C", 15), ("D", 30)]
+    print(cg.generate(data))
+    print("Stats:", cg.stats(data))
 
-    def create_scatter_plot(self, data: List[Tuple[float, float]], title: str = "", width: int = 40, height: int = 20) -> str:
-        if not data:
-            return ""
-        x_vals = [d[0] for d in data]
-        y_vals = [d[1] for d in data]
-        min_x, max_x = min(x_vals), max(x_vals)
-        min_y, max_y = min(y_vals), max(y_vals)
-        grid = [[" " for _ in range(width)] for _ in range(height)]
-        for x, y in data:
-            col = int((x - min_x) / (max_x - min_x) * (width - 1)) if max_x != min_x else 0
-            row = int((y - min_y) / (max_y - min_y) * (height - 1)) if max_y != min_y else 0
-            row = height - 1 - row
-            grid[row][col] = "*"
-        lines = ["  " + title]
-        for r in grid:
-            lines.append("  " + "".join(r))
-        return "\n".join(lines)
-
-    def get_stats(self) -> Dict[str, Any]:
-        return {"charts": len(self._charts)}
-
-def run() -> None:
-    print("Chart Generator test")
-    e = ChartGenerator()
-    data = [DataPoint("A", 30, "#FF0000"), DataPoint("B", 50, "#00FF00"), DataPoint("C", 20, "#0000FF"), DataPoint("D", 40, "#FFFF00")]
-    print("  Line Chart:\n" + e.create_line_chart(data, "Sales"))
-    print("  Bar Chart:\n" + e.create_bar_chart(data, "Revenue"))
-    print("  Pie Chart:\n" + e.create_pie_chart(data, "Share"))
-    scatter = [(1, 2), (3, 5), (5, 3), (7, 8), (9, 6)]
-    print("  Scatter Plot:\n" + e.create_scatter_plot(scatter, "Correlation"))
-    print("  Stats: " + str(e.get_stats()))
-    print("Chart Generator test complete.")
-
-if __name__ == "__main__":
-    run()
+if __name__ == "__main__": run()

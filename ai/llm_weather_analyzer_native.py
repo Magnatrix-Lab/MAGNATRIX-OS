@@ -1,98 +1,47 @@
-"""LLM Weather Analyzer — Native Python (stdlib only)."""
+"""Weather Analyzer - Weather data analysis for MAGNATRIX-OS."""
 from __future__ import annotations
-import math
 from dataclasses import dataclass, field
-from typing import Dict, Any, List, Optional
+from typing import List, Dict, Tuple
 from enum import Enum, auto
+import math
+from collections import defaultdict
 
-class WeatherCondition(Enum):
-    SUNNY = auto()
-    CLOUDY = auto()
-    RAINY = auto()
-    STORMY = auto()
-    SNOWY = auto()
-    FOGGY = auto()
+class WeatherMetric(Enum):
+    TEMPERATURE = auto(); HUMIDITY = auto(); PRESSURE = auto(); WIND = auto()
 
 @dataclass
-class WeatherReading:
-    timestamp: str
-    temperature: float
-    humidity: float
-    pressure: float
-    wind_speed: float
-    wind_direction: float
-    condition: WeatherCondition
-    metadata: Dict[str, Any] = field(default_factory=dict)
-
 class WeatherAnalyzer:
-    def __init__(self) -> None:
-        self._readings: List[WeatherReading] = []
+    data: List[Dict] = field(default_factory=list)
+    
+    def add_reading(self, timestamp: str, metric: WeatherMetric, value: float, location: str = "") -> None:
+        self.data.append({"timestamp": timestamp, "metric": metric.name, "value": value, "location": location})
+    
+    def average(self, metric: WeatherMetric, location: str = None) -> float:
+        values = [d["value"] for d in self.data if d["metric"] == metric.name and (location is None or d["location"] == location)]
+        return sum(values) / len(values) if values else 0.0
+    
+    def trend(self, metric: WeatherMetric) -> List[Tuple[str, float]]:
+        readings = sorted([d for d in self.data if d["metric"] == metric.name], key=lambda x: x["timestamp"])
+        return [(r["timestamp"], r["value"]) for r in readings]
+    
+    def stats(self, metric: WeatherMetric) -> dict:
+        values = [d["value"] for d in self.data if d["metric"] == metric.name]
+        if not values: return {}
+        return {
+            "metric": metric.name,
+            "average": round(sum(values) / len(values), 2),
+            "min": round(min(values), 2),
+            "max": round(max(values), 2),
+            "readings": len(values)
+        }
 
-    def add_reading(self, reading: WeatherReading) -> None:
-        self._readings.append(reading)
+def run():
+    wa = WeatherAnalyzer()
+    wa.add_reading("2024-01-01", WeatherMetric.TEMPERATURE, 20.5, "NYC")
+    wa.add_reading("2024-01-02", WeatherMetric.TEMPERATURE, 22.0, "NYC")
+    wa.add_reading("2024-01-03", WeatherMetric.TEMPERATURE, 19.5, "NYC")
+    wa.add_reading("2024-01-01", WeatherMetric.HUMIDITY, 60.0, "NYC")
+    print("Temp avg:", wa.average(WeatherMetric.TEMPERATURE, "NYC"))
+    print("Stats:", wa.stats(WeatherMetric.TEMPERATURE))
 
-    def get_avg_temperature(self, last_n: int = 24) -> float:
-        recent = self._readings[-last_n:]
-        if not recent:
-            return 0.0
-        return sum(r.temperature for r in recent) / len(recent)
-
-    def get_high_low(self, last_n: int = 24) -> tuple:
-        recent = self._readings[-last_n:]
-        if not recent:
-            return (0.0, 0.0)
-        return (max(r.temperature for r in recent), min(r.temperature for r in recent))
-
-    def get_dominant_condition(self, last_n: int = 24) -> WeatherCondition:
-        recent = self._readings[-last_n:]
-        if not recent:
-            return WeatherCondition.SUNNY
-        counts = {}
-        for r in recent:
-            counts[r.condition] = counts.get(r.condition, 0) + 1
-        return max(counts.items(), key=lambda x: x[1])[0]
-
-    def heat_index(self, temperature: float, humidity: float) -> float:
-        if temperature < 27 or humidity < 40:
-            return temperature
-        c = [-42.379, 2.04901523, 10.14333127, -0.22475541, -6.83783e-3, -5.481717e-2, 1.22874e-3, 8.5282e-4, -1.99e-6]
-        T = temperature
-        R = humidity
-        HI = c[0] + c[1]*T + c[2]*R + c[3]*T*R + c[4]*T*T + c[5]*R*R + c[6]*T*T*R + c[7]*T*R*R + c[8]*T*T*R*R
-        return HI
-
-    def wind_chill(self, temperature: float, wind_speed: float) -> float:
-        if temperature > 10 or wind_speed < 4.8:
-            return temperature
-        return 13.12 + 0.6215*temperature - 11.37*wind_speed**0.16 + 0.3965*temperature*wind_speed**0.16
-
-    def get_forecast_trend(self) -> str:
-        if len(self._readings) < 2:
-            return "insufficient data"
-        recent = self._readings[-10:]
-        temps = [r.temperature for r in recent]
-        if temps[-1] > temps[0] + 3:
-            return "warming"
-        elif temps[-1] < temps[0] - 3:
-            return "cooling"
-        return "stable"
-
-    def get_stats(self) -> Dict[str, Any]:
-        return {"readings": len(self._readings), "avg_temp": self.get_avg_temperature(), "high_low": self.get_high_low(), "dominant": self.get_dominant_condition().name}
-
-def run() -> None:
-    print("Weather Analyzer test")
-    e = WeatherAnalyzer()
-    for i in range(24):
-        temp = 25 + 5 * math.sin(i * 0.3)
-        e.add_reading(WeatherReading("h" + str(i), temp, 60 + i, 1013, 10, 180, WeatherCondition.SUNNY if i % 3 else WeatherCondition.CLOUDY))
-    print("  Avg temp: " + str(e.get_avg_temperature()))
-    print("  High/Low: " + str(e.get_high_low()))
-    print("  Dominant: " + e.get_dominant_condition().name)
-    print("  Heat index: " + str(e.heat_index(35, 70)))
-    print("  Trend: " + e.get_forecast_trend())
-    print("  Stats: " + str(e.get_stats()))
-    print("Weather Analyzer test complete.")
-
-if __name__ == "__main__":
-    run()
+if __name__ == "__main__": run()
