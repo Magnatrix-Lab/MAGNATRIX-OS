@@ -1,134 +1,43 @@
-#!/usr/bin/env python3
-"""
-MAGNATRIX-OS — Grammar Checker Engine
-ai/llm_grammar_checker_native.py
-
-Features:
-- Rule-based grammar checking (subject-verb agreement, article usage)
-- Spelling correction (common misspellings)
-- Punctuation fixer (missing commas, periods)
-- Style suggestions (passive voice, wordiness)
-- Error highlighting with corrections
-
-Style: Native Python, stdlib only, dataclasses, type hints, enums.
-"""
-
+"""Grammar Checker - Context-free grammar validator for MAGNATRIX-OS."""
 from __future__ import annotations
-
-import re
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
-import logging
-
-logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
-logger = logging.getLogger("grammar_checker")
-
+from typing import List, Dict, Set
+from enum import Enum, auto
 
 @dataclass
-class GrammarError:
-    text: str
-    error_type: str
-    suggestion: str
-    position: int
-    severity: str
+class GrammarChecker:
+    rules: Dict[str, List[List[str]]] = field(default_factory=dict)
+    start: str = "S"
 
+    def add_rule(self, lhs: str, rhs: List[str]) -> None:
+        if lhs not in self.rules: self.rules[lhs] = []
+        self.rules[lhs].append(rhs)
 
-class GrammarCheckerEngine:
-    """Grammar, spelling, and style checking."""
+    def validate(self, tokens: List[str]) -> bool:
+        return self._derive(self.start, tokens, 0) == len(tokens)
 
-    MISSPELLINGS = {
-        "teh": "the", "recieve": "receive", "occured": "occurred", "seperate": "separate",
-        "definately": "definitely", "accomodate": "accommodate", "beleive": "believe",
-    }
+    def _derive(self, symbol: str, tokens: List[str], pos: int) -> int:
+        if pos >= len(tokens): return -1
+        if symbol not in self.rules:
+            return pos + 1 if pos < len(tokens) and symbol == tokens[pos] else -1
+        for rhs in self.rules[symbol]:
+            new_pos = pos
+            valid = True
+            for s in rhs:
+                new_pos = self._derive(s, tokens, new_pos)
+                if new_pos < 0: valid = False; break
+            if valid: return new_pos
+        return -1
 
-    GRAMMAR_PATTERNS = [
-        (r"\b(a)\s+([aeiouAEIOU])", "article", "Use 'an' before vowels"),
-        (r"\b(an)\s+([^aeiouAEIOU\s])", "article", "Use 'a' before consonants"),
-        (r"\b(they)\s+(is|was)\b", "subject-verb", "'they' requires plural verb"),
-        (r"\b(she|he)\s+(are|were)\b", "subject-verb", "singular subject requires singular verb"),
-    ]
+    def stats(self) -> dict:
+        return {"rules": len(self.rules), "start": self.start}
 
-    STYLE_PATTERNS = [
-        (r"\b(very|really|quite|extremely)\s+(\w+)", "wordiness", "Consider removing intensifier"),
-        (r"\b(is|was|were)\s+(\w+)ed\b", "passive", "Consider active voice"),
-    ]
+def run():
+    gc = GrammarChecker()
+    gc.add_rule("S", ["NP", "VP"]); gc.add_rule("NP", ["DET", "N"]); gc.add_rule("VP", ["V", "NP"])
+    gc.add_rule("DET", ["the"]); gc.add_rule("N", ["cat"]); gc.add_rule("N", ["dog"]); gc.add_rule("V", ["sees"])
+    tokens = ["the", "cat", "sees", "the", "dog"]
+    print("Valid:", gc.validate(tokens))
+    print("Stats:", gc.stats())
 
-    def __init__(self):
-        self._errors: List[GrammarError] = []
-
-    def check_spelling(self, text: str) -> List[GrammarError]:
-        errors = []
-        words = re.findall(r'\w+', text)
-        for i, word in enumerate(words):
-            lower = word.lower()
-            if lower in self.MISSPELLINGS:
-                errors.append(GrammarError(word, "spelling", self.MISSPELLINGS[lower], i, "high"))
-        return errors
-
-    def check_grammar(self, text: str) -> List[GrammarError]:
-        errors = []
-        for pattern, err_type, suggestion in self.GRAMMAR_PATTERNS:
-            for match in re.finditer(pattern, text, re.IGNORECASE):
-                errors.append(GrammarError(match.group(0), err_type, suggestion, match.start(), "high"))
-        return errors
-
-    def check_style(self, text: str) -> List[GrammarError]:
-        errors = []
-        for pattern, err_type, suggestion in self.STYLE_PATTERNS:
-            for match in re.finditer(pattern, text, re.IGNORECASE):
-                errors.append(GrammarError(match.group(0), err_type, suggestion, match.start(), "medium"))
-        return errors
-
-    def check(self, text: str) -> List[GrammarError]:
-        errors = []
-        errors.extend(self.check_spelling(text))
-        errors.extend(self.check_grammar(text))
-        errors.extend(self.check_style(text))
-        self._errors.extend(errors)
-        return errors
-
-    def fix(self, text: str) -> str:
-        errors = self.check(text)
-        fixed = text
-        for err in sorted(errors, key=lambda e: e.position, reverse=True):
-            fixed = fixed[:err.position] + err.suggestion + fixed[err.position + len(err.text):]
-        return fixed
-
-    def get_stats(self) -> Dict[str, Any]:
-        by_type = {}
-        for e in self._errors:
-            by_type[e.error_type] = by_type.get(e.error_type, 0) + 1
-        return {"total_errors": len(self._errors), "by_type": by_type}
-
-
-# ────────────────────────────────
-# Demo / Self-Test
-# ────────────────────────────────
-
-def run() -> None:
-    print("=" * 60)
-    print("MAGNATRIX-OS — Grammar Checker Engine")
-    print("ai/llm_grammar_checker_native.py")
-    print("=" * 60)
-
-    engine = GrammarCheckerEngine()
-
-    text = "Teh quick brown fox recieve a gift. They is very happy. An cat is cute."
-    print(f"\nOriginal: {text}")
-
-    errors = engine.check(text)
-    print(f"\nFound {len(errors)} errors:")
-    for e in errors:
-        print(f"  [{e.severity}] '{e.text}' at pos {e.position}: {e.error_type} → {e.suggestion}")
-
-    fixed = engine.fix(text)
-    print(f"\nFixed: {fixed}")
-    print(f"\nStats: {engine.get_stats()}")
-
-    print("\n" + "=" * 60)
-    print("All demos completed successfully.")
-    print("=" * 60)
-
-
-if __name__ == "__main__":
-    run()
+if __name__ == "__main__": run()
