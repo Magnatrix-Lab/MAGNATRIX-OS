@@ -1,73 +1,46 @@
-"""LLM Load Balancer — Native Python (stdlib only)."""
+"""Load Balancer - Traffic distribution for MAGNATRIX-OS."""
 from __future__ import annotations
-import random
 from dataclasses import dataclass, field
-from typing import Dict, Any, List, Optional
+from typing import List, Dict, Optional
 from enum import Enum, auto
+import random
 
-class BackendStatus(Enum):
-    HEALTHY = auto()
-    DEGRADED = auto()
-    UNHEALTHY = auto()
+class LBStrategy(Enum):
+    ROUND_ROBIN = auto(); LEAST_CONNECTIONS = auto(); RANDOM = auto()
 
 @dataclass
-class Backend:
-    id: str
-    capacity: int
-    current_load: int = 0
-    status: BackendStatus = BackendStatus.HEALTHY
-    metadata: Dict[str, Any] = field(default_factory=dict)
-
 class LoadBalancer:
-    def __init__(self) -> None:
-        self._backends: List[Backend] = []
-        self._index: int = 0
+    strategy: LBStrategy = LBStrategy.ROUND_ROBIN
+    backends: List[Dict] = field(default_factory=list)
+    current_index: int = 0
 
-    def add_backend(self, backend: Backend) -> None:
-        self._backends.append(backend)
+    def add_backend(self, backend_id: str, weight: int = 1) -> None:
+        self.backends.append({"id": backend_id, "weight": weight, "connections": 0, "healthy": True})
 
-    def remove_backend(self, backend_id: str) -> bool:
-        for i, b in enumerate(self._backends):
-            if b.id == backend_id:
-                self._backends.pop(i)
-                return True
-        return False
+    def get_backend(self) -> Optional[str]:
+        healthy = [b for b in self.backends if b["healthy"]]
+        if not healthy: return None
+        if self.strategy == LBStrategy.ROUND_ROBIN:
+            result = healthy[self.current_index % len(healthy)]
+            self.current_index += 1
+            return result["id"]
+        elif self.strategy == LBStrategy.LEAST_CONNECTIONS:
+            return min(healthy, key=lambda b: b["connections"])["id"]
+        elif self.strategy == LBStrategy.RANDOM:
+            return random.choice(healthy)["id"]
+        return None
 
-    def round_robin(self) -> Optional[Backend]:
-        healthy = [b for b in self._backends if b.status == BackendStatus.HEALTHY]
-        if not healthy:
-            return None
-        selected = healthy[self._index % len(healthy)]
-        self._index = (self._index + 1) % len(healthy)
-        return selected
+    def mark_healthy(self, backend_id: str, healthy: bool) -> None:
+        for b in self.backends:
+            if b["id"] == backend_id: b["healthy"] = healthy
 
-    def least_loaded(self) -> Optional[Backend]:
-        healthy = [b for b in self._backends if b.status == BackendStatus.HEALTHY]
-        if not healthy:
-            return None
-        return min(healthy, key=lambda b: b.current_load / b.capacity if b.capacity else float('inf'))
+    def stats(self) -> dict:
+        return {"strategy": self.strategy.name, "backends": len(self.backends), "healthy": sum(1 for b in self.backends if b["healthy"])}
 
-    def random_backend(self) -> Optional[Backend]:
-        healthy = [b for b in self._backends if b.status == BackendStatus.HEALTHY]
-        if not healthy:
-            return None
-        return random.choice(healthy)
+def run():
+    lb = LoadBalancer(LBStrategy.ROUND_ROBIN)
+    lb.add_backend("be1", 2); lb.add_backend("be2", 1); lb.add_backend("be3", 1)
+    for _ in range(5): print("Backend:", lb.get_backend())
+    print("Stats:", lb.stats())
 
-    def get_stats(self) -> Dict[str, Any]:
-        return {"backends": len(self._backends), "healthy": sum(1 for b in self._backends if b.status == BackendStatus.HEALTHY), "total_load": sum(b.current_load for b in self._backends)}
-
-def run() -> None:
-    print("Load Balancer test")
-    e = LoadBalancer()
-    e.add_backend(Backend("b1", 100, 30))
-    e.add_backend(Backend("b2", 100, 50))
-    e.add_backend(Backend("b3", 100, 10))
-    print("  Round robin: " + e.round_robin().id)
-    print("  Round robin: " + e.round_robin().id)
-    print("  Least loaded: " + e.least_loaded().id)
-    print("  Random: " + e.random_backend().id)
-    print("  Stats: " + str(e.get_stats()))
-    print("Load Balancer test complete.")
-
-if __name__ == "__main__":
-    run()
+if __name__ == "__main__": run()

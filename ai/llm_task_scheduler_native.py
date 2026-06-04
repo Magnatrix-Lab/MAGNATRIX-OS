@@ -1,78 +1,55 @@
-"""LLM Task Scheduler — Native Python (stdlib only)."""
+"""Task Scheduler - Priority-based scheduling for MAGNATRIX-OS."""
 from __future__ import annotations
-import time
 from dataclasses import dataclass, field
-from typing import Dict, Any, List, Optional, Callable
+from typing import List, Dict, Optional, Tuple
 from enum import Enum, auto
+import heapq
 
-class TaskPriority(Enum):
-    CRITICAL = 1
-    HIGH = 2
-    NORMAL = 3
-    LOW = 4
-    BACKGROUND = 5
-
-class TaskStatus(Enum):
-    PENDING = auto()
-    RUNNING = auto()
-    COMPLETED = auto()
-    FAILED = auto()
-    CANCELLED = auto()
+class SchedulingPolicy(Enum):
+    FIFO = auto(); SJF = auto(); PRIORITY = auto(); EDF = auto()
 
 @dataclass
-class ScheduledTask:
-    id: str
-    task: Callable[[], Any]
-    priority: TaskPriority = TaskPriority.NORMAL
-    scheduled_at: float = 0.0
-    delay: float = 0.0
-    status: TaskStatus = TaskStatus.PENDING
-    result: Any = None
-    error: Optional[str] = None
+class Task:
+    task_id: str
+    duration: float
+    priority: int = 0
+    deadline: float = float('inf')
+    dependencies: List[str] = field(default_factory=list)
 
+@dataclass
 class TaskScheduler:
-    def __init__(self) -> None:
-        self._tasks: List[ScheduledTask] = []
+    policy: SchedulingPolicy = SchedulingPolicy.PRIORITY
+    tasks: Dict[str, Task] = field(default_factory=dict)
+    completed: List[str] = field(default_factory=list)
 
-    def schedule(self, task: ScheduledTask) -> None:
-        task.scheduled_at = time.time() + task.delay
-        self._tasks.append(task)
+    def add_task(self, task: Task) -> None:
+        self.tasks[task.task_id] = task
 
-    def run_all(self) -> Dict[str, Any]:
-        self._tasks.sort(key=lambda t: (t.priority.value, t.scheduled_at))
-        results = {}
-        for task in self._tasks:
-            if task.status == TaskStatus.PENDING and time.time() >= task.scheduled_at:
-                task.status = TaskStatus.RUNNING
-                try:
-                    task.result = task.task()
-                    task.status = TaskStatus.COMPLETED
-                except Exception as ex:
-                    task.status = TaskStatus.FAILED
-                    task.error = str(ex)
-                results[task.id] = task.result
-        return results
+    def schedule(self) -> List[str]:
+        available = [t for t in self.tasks.values() if not t.dependencies or all(d in self.completed for d in t.dependencies)]
+        if self.policy == SchedulingPolicy.SJF:
+            available.sort(key=lambda t: t.duration)
+        elif self.policy == SchedulingPolicy.PRIORITY:
+            available.sort(key=lambda t: -t.priority)
+        elif self.policy == SchedulingPolicy.EDF:
+            available.sort(key=lambda t: t.deadline)
+        return [t.task_id for t in available]
 
-    def cancel(self, task_id: str) -> bool:
-        for task in self._tasks:
-            if task.id == task_id and task.status == TaskStatus.PENDING:
-                task.status = TaskStatus.CANCELLED
-                return True
-        return False
+    def complete(self, task_id: str) -> None:
+        if task_id in self.tasks and task_id not in self.completed:
+            self.completed.append(task_id)
 
-    def get_stats(self) -> Dict[str, Any]:
-        return {"total": len(self._tasks), "completed": sum(1 for t in self._tasks if t.status == TaskStatus.COMPLETED), "failed": sum(1 for t in self._tasks if t.status == TaskStatus.FAILED), "pending": sum(1 for t in self._tasks if t.status == TaskStatus.PENDING)}
+    def stats(self) -> dict:
+        return {"tasks": len(self.tasks), "completed": len(self.completed), "policy": self.policy.name}
 
-def run() -> None:
-    print("Task Scheduler test")
-    e = TaskScheduler()
-    e.schedule(ScheduledTask("t1", lambda: "Result A", TaskPriority.HIGH, delay=0.0))
-    e.schedule(ScheduledTask("t2", lambda: "Result B", TaskPriority.NORMAL, delay=0.0))
-    e.schedule(ScheduledTask("t3", lambda: "Result C", TaskPriority.CRITICAL, delay=0.0))
-    results = e.run_all()
-    print("  Results: " + str(results))
-    print("  Stats: " + str(e.get_stats()))
-    print("Task Scheduler test complete.")
+def run():
+    ts = TaskScheduler(SchedulingPolicy.PRIORITY)
+    ts.add_task(Task("t1", 3, 2, dependencies=[]))
+    ts.add_task(Task("t2", 2, 1, dependencies=["t1"]))
+    ts.add_task(Task("t3", 1, 3, dependencies=[]))
+    print("Schedule:", ts.schedule())
+    ts.complete("t1")
+    print("After t1:", ts.schedule())
+    print("Stats:", ts.stats())
 
-if __name__ == "__main__":
-    run()
+if __name__ == "__main__": run()

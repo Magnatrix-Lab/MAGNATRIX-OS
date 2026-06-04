@@ -1,60 +1,42 @@
-"""LLM Inverted Index Engine — Native Python (stdlib only)."""
+"""Inverted Index - Document indexing for MAGNATRIX-OS."""
 from __future__ import annotations
 from dataclasses import dataclass, field
-from typing import Dict, Any, List, Optional, Set
-from enum import Enum, auto
+from typing import List, Dict, Set, Optional
+from collections import defaultdict
+import re
 
-class InvertedIndexEngine:
-    def __init__(self) -> None:
-        self._index: Dict[str, Set[str]] = {}
-        self._docs: Dict[str, str] = {}
-        self._term_freq: Dict[str, Dict[str, int]] = {}
+@dataclass
+class InvertedIndex:
+    index: Dict[str, Set[int]] = field(default_factory=lambda: defaultdict(set))
+    documents: Dict[int, str] = field(default_factory=dict)
+    doc_id_counter: int = 0
 
-    def add_document(self, doc_id: str, text: str) -> None:
-        self._docs[doc_id] = text
-        words = text.lower().split()
-        for word in words:
-            if word not in self._index:
-                self._index[word] = set()
-                self._term_freq[word] = {}
-            self._index[word].add(doc_id)
-            self._term_freq[word][doc_id] = self._term_freq[word].get(doc_id, 0) + 1
+    def add_document(self, text: str) -> int:
+        self.doc_id_counter += 1
+        doc_id = self.doc_id_counter
+        self.documents[doc_id] = text
+        tokens = re.findall(r"[a-zA-Z0-9]+", text.lower())
+        for token in tokens:
+            self.index[token].add(doc_id)
+        return doc_id
 
-    def search(self, term: str) -> List[str]:
-        return list(self._index.get(term.lower(), set()))
+    def search(self, query: str) -> Set[int]:
+        tokens = re.findall(r"[a-zA-Z0-9]+", query.lower())
+        if not tokens: return set()
+        result = set(self.index.get(tokens[0], set()))
+        for token in tokens[1:]:
+            result &= self.index.get(token, set())
+        return result
 
-    def search_and(self, terms: List[str]) -> List[str]:
-        if not terms:
-            return []
-        results = set(self._index.get(terms[0].lower(), set()))
-        for term in terms[1:]:
-            results &= self._index.get(term.lower(), set())
-        return list(results)
+    def stats(self) -> dict:
+        return {"terms": len(self.index), "documents": len(self.documents), "avg_postings": round(sum(len(v) for v in self.index.values())/len(self.index), 2) if self.index else 0}
 
-    def search_or(self, terms: List[str]) -> List[str]:
-        results = set()
-        for term in terms:
-            results.update(self._index.get(term.lower(), set()))
-        return list(results)
+def run():
+    ii = InvertedIndex()
+    ii.add_document("The quick brown fox")
+    ii.add_document("The lazy dog sleeps")
+    ii.add_document("The quick dog jumps")
+    print("Search 'the dog':", ii.search("the dog"))
+    print("Stats:", ii.stats())
 
-    def get_term_freq(self, term: str, doc_id: str) -> int:
-        return self._term_freq.get(term.lower(), {}).get(doc_id, 0)
-
-    def get_stats(self) -> Dict[str, Any]:
-        return {"terms": len(self._index), "documents": len(self._docs), "avg_postings": sum(len(v) for v in self._index.values()) / len(self._index) if self._index else 0}
-
-def run() -> None:
-    print("Inverted Index Engine test")
-    e = InvertedIndexEngine()
-    e.add_document("d1", "the quick brown fox")
-    e.add_document("d2", "the lazy dog jumps")
-    e.add_document("d3", "the fox and the dog")
-    print("  'the': " + str(e.search("the")))
-    print("  'fox': " + str(e.search("fox")))
-    print("  AND['the','fox']: " + str(e.search_and(["the", "fox"])))
-    print("  OR['fox','dog']: " + str(e.search_or(["fox", "dog"])))
-    print("  Stats: " + str(e.get_stats()))
-    print("Inverted Index Engine test complete.")
-
-if __name__ == "__main__":
-    run()
+if __name__ == "__main__": run()
