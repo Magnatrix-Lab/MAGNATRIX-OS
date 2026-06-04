@@ -1,90 +1,54 @@
-"""Sensor Fusion — multi-sensor data combination, native, stdlib only."""
+"""Sensor Fusion — Kalman filter, complementary filter, sensor merging, native, stdlib only."""
 from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import List, Dict, Optional, Tuple
-from enum import Enum, auto
 import math
-import random
-
-class SensorType(Enum):
-    ACCELEROMETER = auto()
-    GYROSCOPE = auto()
-    MAGNETOMETER = auto()
-    TEMPERATURE = auto()
-    PRESSURE = auto()
 
 @dataclass
-class SensorReading:
-    sensor_id: str
-    sensor_type: SensorType
-    values: List[float]
-    timestamp: float
-    confidence: float = 1.0
+class KalmanFilter1D:
+    x: float = 0.0
+    P: float = 1.0
+    Q: float = 0.01
+    R: float = 0.1
 
+    def predict(self, u: float = 0.0):
+        self.x += u
+        self.P += self.Q
+
+    def update(self, z: float):
+        K = self.P / (self.P + self.R)
+        self.x += K * (z - self.x)
+        self.P = (1 - K) * self.P
+
+@dataclass
 class SensorFusion:
-    def __init__(self):
-        self.sensors: Dict[str, SensorReading] = {}
-        self.fused_state: Dict[str, float] = {}
-        self.weights: Dict[str, float] = {}
+    sensors: Dict[str, List[float]] = field(default_factory=dict)
+    weights: Dict[str, float] = field(default_factory=dict)
+    kf: KalmanFilter1D = field(default_factory=KalmanFilter1D)
 
-    def add_reading(self, reading: SensorReading):
-        self.sensors[reading.sensor_id] = reading
-        if reading.sensor_id not in self.weights:
-            self.weights[reading.sensor_id] = 1.0
+    def weighted_average(self, readings: Dict[str, float]) -> float:
+        total_w = sum(self.weights.get(s, 1.0) for s in readings)
+        if total_w == 0:
+            return sum(readings.values()) / len(readings)
+        return sum(readings[s] * self.weights.get(s, 1.0) for s in readings) / total_w
 
-    def set_weight(self, sensor_id: str, weight: float):
-        self.weights[sensor_id] = weight
+    def complementary_filter(self, accel_angle: float, gyro_rate: float, dt: float, alpha: float = 0.98) -> float:
+        return alpha * (self.kf.x + gyro_rate * dt) + (1 - alpha) * accel_angle
 
-    def fuse_weighted_average(self, key: str) -> Optional[float]:
-        total = 0.0
-        weight_sum = 0.0
-        for sid, reading in self.sensors.items():
-            if reading.values and key in self._get_keys(reading):
-                idx = self._get_key_index(reading, key)
-                if idx < len(reading.values):
-                    w = self.weights.get(sid, 1.0) * reading.confidence
-                    total += reading.values[idx] * w
-                    weight_sum += w
-        if weight_sum == 0:
-            return None
-        return total / weight_sum
-
-    def _get_keys(self, reading: SensorReading) -> List[str]:
-        mapping = {
-            SensorType.ACCELEROMETER: ["ax", "ay", "az"],
-            SensorType.GYROSCOPE: ["gx", "gy", "gz"],
-            SensorType.MAGNETOMETER: ["mx", "my", "mz"],
-            SensorType.TEMPERATURE: ["temp"],
-            SensorType.PRESSURE: ["pressure"],
-        }
-        return mapping.get(reading.sensor_type, [])
-
-    def _get_key_index(self, reading: SensorReading, key: str) -> int:
-        keys = self._get_keys(reading)
-        return keys.index(key) if key in keys else -1
-
-    def fuse_kalman_simple(self, key: str, prev_estimate: float, process_noise: float = 0.1, measurement_noise: float = 0.1) -> float:
-        fused = self.fuse_weighted_average(key)
-        if fused is None:
-            return prev_estimate
-        estimate = prev_estimate
-        error_cov = 1.0
-        kalman_gain = error_cov / (error_cov + measurement_noise)
-        estimate = estimate + kalman_gain * (fused - estimate)
-        error_cov = (1 - kalman_gain) * error_cov + process_noise
-        return estimate
+    def kalman_fuse(self, measurements: List[float]):
+        for z in measurements:
+            self.kf.predict()
+            self.kf.update(z)
+        return self.kf.x
 
     def stats(self) -> Dict:
-        return {"sensors": len(self.sensors), "fused_keys": list(self.fused_state.keys()), "weights": self.weights}
+        return {"sensors": len(self.sensors), "kf_estimate": round(self.kf.x, 4)}
 
 def run():
-    fusion = SensorFusion()
-    fusion.add_reading(SensorReading("acc1", SensorType.ACCELEROMETER, [0.1, 0.2, 9.8], 0.0, 0.95))
-    fusion.add_reading(SensorReading("acc2", SensorType.ACCELEROMETER, [0.15, 0.18, 9.7], 0.0, 0.9))
-    fusion.add_reading(SensorReading("temp1", SensorType.TEMPERATURE, [25.0], 0.0, 0.99))
-    print("Fused az:", fusion.fuse_weighted_average("az"))
-    print("Fused temp:", fusion.fuse_weighted_average("temp"))
-    print(fusion.stats())
+    sf = SensorFusion(weights={"gps": 0.3, "imu": 0.7})
+    print("Weighted:", sf.weighted_average({"gps": 10.1, "imu": 10.3}))
+    print("Kalman:", sf.kalman_fuse([10.0, 10.2, 10.1, 10.3]))
+    print(sf.stats())
 
 if __name__ == "__main__":
     run()

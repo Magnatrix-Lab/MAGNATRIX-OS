@@ -1,62 +1,66 @@
-"""Motif Finder — consensus sequence, profile matrix, native, stdlib only."""
+"""Motif Finder — consensus, PWM, entropy, native, stdlib only."""
 from __future__ import annotations
 from dataclasses import dataclass, field
-from typing import List, Dict, Optional, Tuple
-from enum import Enum, auto
-from collections import Counter
+from typing import List, Dict, Optional
+import math
 
+@dataclass
 class MotifFinder:
-    def __init__(self, motif_length: int = 6):
-        self.motif_length = motif_length
+    sequences: List[str] = field(default_factory=list)
+    pwm: Dict[str, List[float]] = field(default_factory=dict)
 
-    def _profile(self, sequences: List[str]) -> Dict[str, List[float]]:
-        bases = ["A", "C", "G", "T"]
-        profile = {b: [0.0]*self.motif_length for b in bases}
-        for seq in sequences:
-            for i in range(self.motif_length):
-                if i < len(seq) and seq[i] in bases:
-                    profile[seq[i]][i] += 1.0 / len(sequences)
-        return profile
+    def build_pwm(self, aligned: List[str]) -> Dict[str, List[float]]:
+        if not aligned:
+            return {}
+        width = len(aligned[0])
+        counts = {b: [0]*width for b in "ACGT"}
+        for seq in aligned:
+            for i, b in enumerate(seq):
+                if b in counts:
+                    counts[b][i] += 1
+        total = len(aligned)
+        self.pwm = {b: [(c + 0.5) / (total + 2) for c in counts[b]] for b in counts}
+        return self.pwm
 
-    def consensus(self, sequences: List[str]) -> str:
-        profile = self._profile(sequences)
-        result = ""
-        for i in range(self.motif_length):
-            best = max(profile.keys(), key=lambda b: profile[b][i])
-            result += best
-        return result
+    def consensus(self, aligned: List[str]) -> str:
+        if not aligned:
+            return ""
+        pwm = self.build_pwm(aligned)
+        width = len(aligned[0])
+        return ''.join(max("ACGT", key=lambda b: pwm[b][i]) for i in range(width))
 
-    def score(self, sequences: List[str]) -> int:
-        consensus = self.consensus(sequences)
-        total = 0
-        for seq in sequences:
-            for i in range(self.motif_length):
-                if i < len(seq) and seq[i] != consensus[i]:
-                    total += 1
-        return total
+    def score(self, seq: str) -> float:
+        if not self.pwm or len(seq) != len(next(iter(self.pwm.values()))):
+            return 0.0
+        score = 0.0
+        for i, b in enumerate(seq):
+            if b in self.pwm:
+                score += math.log2(self.pwm[b][i] / 0.25)
+        return score
 
-    def find_motifs(self, dna: str, k: int = None) -> List[str]:
-        k = k or self.motif_length
-        return [dna[i:i+k] for i in range(len(dna) - k + 1)]
-
-    def most_common_motif(self, sequences: List[str], k: int = None) -> Tuple[str, int]:
-        k = k or self.motif_length
-        motifs = []
-        for seq in sequences:
-            motifs.extend(self.find_motifs(seq, k))
-        freq = Counter(motifs)
-        return freq.most_common(1)[0] if freq else ("", 0)
+    def information_content(self) -> List[float]:
+        if not self.pwm:
+            return []
+        width = len(next(iter(self.pwm.values())))
+        ic = []
+        for i in range(width):
+            e = 0.0
+            for b in "ACGT":
+                p = self.pwm[b][i]
+                if p > 0:
+                    e += p * math.log2(p / 0.25)
+            ic.append(e)
+        return ic
 
     def stats(self) -> Dict:
-        return {"motif_length": self.motif_length}
+        return {"sequences": len(self.sequences), "pwm_width": len(next(iter(self.pwm.values()))) if self.pwm else 0}
 
 def run():
-    finder = MotifFinder(6)
-    seqs = ["GATTACA", "GATTAGA", "GATCACA", "GATTACC"]
-    print("Consensus:", finder.consensus(seqs))
-    print("Score:", finder.score(seqs))
-    print("Most common:", finder.most_common_motif(seqs))
-    print(finder.stats())
+    mf = MotifFinder(sequences=["ATGCG", "ATGCG", "ATGCG"])
+    print("Consensus:", mf.consensus(["ATGCG", "ATGCG", "ATGCG"]))
+    print("Score:", mf.score("ATGCG"))
+    print("IC:", mf.information_content())
+    print(mf.stats())
 
 if __name__ == "__main__":
     run()

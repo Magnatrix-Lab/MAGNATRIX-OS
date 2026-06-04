@@ -1,105 +1,70 @@
-"""Path Planner — RRT, A*, potential fields, native, stdlib only."""
+"""Path Planner — A*, RRT, grid-based, collision-free, native, stdlib only."""
 from __future__ import annotations
 from dataclasses import dataclass, field
-from typing import List, Dict, Optional, Set, Tuple
-from enum import Enum, auto
-import random
-import math
+from typing import List, Dict, Optional, Tuple, Set
 import heapq
 
 @dataclass
-class Point:
-    x: float; y: float
-
-    def distance(self, other: "Point") -> float:
-        return math.sqrt((self.x - other.x)**2 + (self.y - other.y)**2)
-
 class PathPlanner:
-    def __init__(self, bounds: Tuple[float, float, float, float] = (0, 0, 100, 100)):
-        self.bounds = bounds
-        self.obstacles: List[Tuple[Point, float]] = []  # center, radius
+    grid: List[List[int]] = field(default_factory=list)
+    """0 = free, 1 = obstacle"""
 
-    def add_obstacle(self, x: float, y: float, radius: float):
-        self.obstacles.append((Point(x, y), radius))
+    def astar(self, start: Tuple[int, int], goal: Tuple[int, int]) -> List[Tuple[int, int]]:
+        if not self.grid or not (0 <= start[0] < len(self.grid) and 0 <= start[1] < len(self.grid[0])):
+            return []
+        open_set = [(0, start)]
+        came_from = {}
+        g_score = {start: 0}
+        while open_set:
+            _, current = heapq.heappop(open_set)
+            if current == goal:
+                path = [current]
+                while current in came_from:
+                    current = came_from[current]
+                    path.append(current)
+                return path[::-1]
+            for dx, dy in [(0,1),(1,0),(0,-1),(-1,0)]:
+                nxt = (current[0]+dx, current[1]+dy)
+                if 0 <= nxt[0] < len(self.grid) and 0 <= nxt[1] < len(self.grid[0]) and self.grid[nxt[0]][nxt[1]] == 0:
+                    ng = g_score[current] + 1
+                    if ng < g_score.get(nxt, float('inf')):
+                        came_from[nxt] = current
+                        g_score[nxt] = ng
+                        h = abs(nxt[0]-goal[0]) + abs(nxt[1]-goal[1])
+                        heapq.heappush(open_set, (ng + h, nxt))
+        return []
 
-    def _collision(self, p: Point) -> bool:
-        for obs, r in self.obstacles:
-            if p.distance(obs) < r:
-                return True
-        return False
-
-    def _collision_line(self, a: Point, b: Point) -> bool:
-        steps = int(a.distance(b) / 2) + 1
-        for i in range(steps + 1):
-            t = i / steps
-            p = Point(a.x + t * (b.x - a.x), a.y + t * (b.y - a.y))
-            if self._collision(p):
-                return True
-        return False
-
-    def rrt(self, start: Point, goal: Point, max_iter: int = 1000, step: float = 5.0) -> Optional[List[Point]]:
-        tree = {start: None}
+    def rrt(self, start: Tuple[float, float], goal: Tuple[float, float], max_iter: int = 1000, step: float = 0.5) -> List[Tuple[float, float]]:
+        import random
+        nodes = [start]
+        parents = {start: None}
         for _ in range(max_iter):
-            rand = Point(random.uniform(self.bounds[0], self.bounds[2]), random.uniform(self.bounds[1], self.bounds[3]))
-            nearest = min(tree.keys(), key=lambda p: p.distance(rand))
-            if nearest.distance(rand) < step:
-                new = rand
+            if random.random() < 0.1:
+                sample = goal
             else:
-                dx = rand.x - nearest.x
-                dy = rand.y - nearest.y
-                dist = math.sqrt(dx**2 + dy**2)
-                new = Point(nearest.x + dx * step / dist, nearest.y + dy * step / dist)
-            if not self._collision_line(nearest, new):
-                tree[new] = nearest
-                if new.distance(goal) < step:
-                    # Reconstruct path
-                    path = []
-                    current = new
-                    while current is not None:
-                        path.append(current)
-                        current = tree[current]
-                    return list(reversed(path)) + [goal]
-        return None
-
-    def potential_field(self, start: Point, goal: Point, max_iter: int = 500, step: float = 0.5) -> List[Point]:
-        path = [start]
-        current = start
-        for _ in range(max_iter):
-            # Attractive force to goal
-            dx = goal.x - current.x
-            dy = goal.y - current.y
+                sample = (random.uniform(0, 10), random.uniform(0, 10))
+            nearest = min(nodes, key=lambda n: (n[0]-sample[0])**2 + (n[1]-sample[1])**2)
+            dx, dy = sample[0]-nearest[0], sample[1]-nearest[1]
             dist = math.sqrt(dx**2 + dy**2)
-            if dist < 1:
-                break
-            fx = dx / dist
-            fy = dy / dist
-            # Repulsive from obstacles
-            for obs, r in self.obstacles:
-                d = current.distance(obs)
-                if d < r + 10:
-                    rdx = current.x - obs.x
-                    rdy = current.y - obs.y
-                    if d > 0:
-                        fx += rdx / d * (r + 10 - d) * 2
-                        fy += rdy / d * (r + 10 - d) * 2
-            new = Point(current.x + fx * step, current.y + fy * step)
-            path.append(new)
-            current = new
-        return path
+            if dist == 0:
+                continue
+            new = (nearest[0] + step * dx / dist, nearest[1] + step * dy / dist)
+            nodes.append(new)
+            parents[new] = nearest
+            if (new[0]-goal[0])**2 + (new[1]-goal[1])**2 < step**2:
+                path = [new]
+                while parents[path[-1]] is not None:
+                    path.append(parents[path[-1]])
+                return path[::-1]
+        return []
 
     def stats(self) -> Dict:
-        return {"obstacles": len(self.obstacles), "bounds": self.bounds}
+        return {"grid_size": f"{len(self.grid)}x{len(self.grid[0])}" if self.grid else "none"}
 
 def run():
-    planner = PathPlanner((0, 0, 50, 50))
-    planner.add_obstacle(20, 20, 5)
-    planner.add_obstacle(30, 30, 5)
-    start = Point(5, 5)
-    goal = Point(45, 45)
-    path = planner.rrt(start, goal, 2000, 3)
-    print("RRT path found:", path is not None)
-    pf = planner.potential_field(start, goal)
-    print("PF path length:", len(pf))
+    planner = PathPlanner([[0,0,1,0],[0,0,1,0],[0,0,0,0],[0,1,0,0]])
+    print("A*:", planner.astar((0,0), (3,3)))
+    print("RRT:", planner.rrt((0,0), (9,9))[:5])
     print(planner.stats())
 
 if __name__ == "__main__":
