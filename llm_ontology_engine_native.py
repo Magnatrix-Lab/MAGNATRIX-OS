@@ -1,85 +1,64 @@
-"""Ontology Engine — concepts, relations, inference, native, stdlib only."""
+"""Ontology Engine — classes, subclasses, properties, reasoning, native, stdlib only."""
 from __future__ import annotations
 from dataclasses import dataclass, field
-from typing import List, Dict, Set, Optional
-from enum import Enum, auto
-
-class RelationType(Enum):
-    ISA = auto()
-    HASA = auto()
-    PARTOF = auto()
-    RELATED = auto()
-    CAUSES = auto()
+from typing import List, Dict, Optional, Set
 
 @dataclass
-class Concept:
-    concept_id: str
-    label: str
-    properties: Dict[str, any] = field(default_factory=dict)
-    parents: List[str] = field(default_factory=list)
-
-@dataclass
-class Relation:
-    source: str
-    target: str
-    relation_type: RelationType
-    weight: float = 1.0
+class OntologyClass:
+    name: str
+    parent: Optional[str] = None
+    properties: List[str] = field(default_factory=list)
 
 class OntologyEngine:
     def __init__(self):
-        self.concepts: Dict[str, Concept] = {}
-        self.relations: List[Relation] = []
+        self.classes: Dict[str, OntologyClass] = {}
+        self.instances: Dict[str, str] = {}
+        self.property_values: Dict[Tuple[str, str], str] = {}
 
-    def add_concept(self, concept_id: str, label: str, properties: Dict = None, parents: List[str] = None):
-        self.concepts[concept_id] = Concept(concept_id, label, properties or {}, parents or [])
+    def add_class(self, name: str, parent: Optional[str] = None, properties: List[str] = None):
+        self.classes[name] = OntologyClass(name, parent, properties or [])
 
-    def add_relation(self, source: str, target: str, relation_type: RelationType, weight: float = 1.0):
-        self.relations.append(Relation(source, target, relation_type, weight))
+    def add_instance(self, name: str, cls: str):
+        self.instances[name] = cls
 
-    def get_ancestors(self, concept_id: str) -> Set[str]:
-        ancestors = set()
-        to_visit = [concept_id]
-        while to_visit:
-            current = to_visit.pop()
-            if current in self.concepts:
-                for p in self.concepts[current].parents:
-                    ancestors.add(p)
-                    to_visit.append(p)
-        return ancestors
+    def set_property(self, instance: str, prop: str, value: str):
+        self.property_values[(instance, prop)] = value
 
-    def get_related(self, concept_id: str, relation_type: Optional[RelationType] = None) -> List[str]:
-        related = []
-        for r in self.relations:
-            if r.source == concept_id and (relation_type is None or r.relation_type == relation_type):
-                related.append(r.target)
-            if r.relation_type == RelationType.RELATED and r.target == concept_id and (relation_type is None or r.relation_type == relation_type):
-                related.append(r.source)
-        return related
+    def is_a(self, instance: str, cls: str) -> bool:
+        if instance not in self.instances:
+            return False
+        current = self.instances[instance]
+        while current:
+            if current == cls:
+                return True
+            parent = self.classes.get(current, OntologyClass(current)).parent
+            current = parent
+        return False
 
-    def infer(self, concept_id: str) -> Dict:
-        return {
-            "ancestors": list(self.get_ancestors(concept_id)),
-            "related": self.get_related(concept_id),
-            "properties": self.concepts.get(concept_id, Concept("", "")).properties
-        }
-
-    def query(self, concept_id: str, relation_type: RelationType) -> List[str]:
-        return [r.target for r in self.relations if r.source == concept_id and r.relation_type == relation_type]
+    def get_properties(self, cls: str) -> List[str]:
+        props = []
+        current = cls
+        while current:
+            c = self.classes.get(current)
+            if c:
+                props.extend(c.properties)
+                current = c.parent
+            else:
+                break
+        return props
 
     def stats(self) -> Dict:
-        return {"concepts": len(self.concepts), "relations": len(self.relations), "relation_types": len(set(r.relation_type for r in self.relations))}
+        return {"classes": len(self.classes), "instances": len(self.instances), "properties": len(self.property_values)}
 
 def run():
-    onto = OntologyEngine()
-    onto.add_concept("animal", "Animal", {"alive": True})
-    onto.add_concept("mammal", "Mammal", parents=["animal"])
-    onto.add_concept("dog", "Dog", {"sound": "bark"}, parents=["mammal"])
-    onto.add_concept("cat", "Cat", {"sound": "meow"}, parents=["mammal"])
-    onto.add_relation("dog", "bone", RelationType.HASA)
-    onto.add_relation("cat", "whisker", RelationType.HASA)
-    print(onto.infer("dog"))
-    print(onto.query("dog", RelationType.HASA))
-    print(onto.stats())
+    ont = OntologyEngine()
+    ont.add_class("Animal", properties=["has_legs"])
+    ont.add_class("Dog", parent="Animal", properties=["barks"])
+    ont.add_instance("Rex", "Dog")
+    ont.set_property("Rex", "barks", "true")
+    print("Rex is Animal:", ont.is_a("Rex", "Animal"))
+    print("Props:", ont.get_properties("Dog"))
+    print(ont.stats())
 
 if __name__ == "__main__":
     run()

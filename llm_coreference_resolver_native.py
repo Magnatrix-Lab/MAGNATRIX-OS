@@ -1,8 +1,7 @@
-"""Coreference Resolver — pronoun resolution, entity chains, native, stdlib only."""
+"""Coreference Resolver — mention pairs, chains, entity linking, native, stdlib only."""
 from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import List, Dict, Optional, Set, Tuple
-from enum import Enum, auto
 import re
 
 @dataclass
@@ -10,59 +9,58 @@ class Mention:
     text: str
     start: int
     end: int
-    mention_type: str  # pronoun, name, noun_phrase
+    sentence: int
 
 @dataclass
-class CorefChain:
-    chain_id: str
-    mentions: List[Mention]
-    representative: str
-
 class CoreferenceResolver:
-    def __init__(self):
-        self.pronouns = {"he", "she", "it", "they", "him", "her", "them", "his", "their", "its", "this", "that", "these", "those"}
-        self.gender_map = {"he": "M", "she": "F", "him": "M", "her": "F", "his": "M", "her_poss": "F"}
+    mentions: List[Mention] = field(default_factory=list)
+    chains: List[List[int]] = field(default_factory=list)
+    """indices into mentions"""
 
-    def extract_mentions(self, text: str) -> List[Mention]:
-        mentions = []
-        # Simple noun phrase extraction
-        words = text.split()
-        pos = 0
-        for i, word in enumerate(words):
-            clean = re.sub(r"[^\w]", "", word).lower()
-            if clean in self.pronouns:
-                mentions.append(Mention(word, pos, pos + len(word), "pronoun"))
-            elif word[0].isupper() and i > 0:
-                mentions.append(Mention(word, pos, pos + len(word), "name"))
-            pos += len(word) + 1
-        return mentions
+    def add_mention(self, text: str, start: int, end: int, sentence: int):
+        self.mentions.append(Mention(text, start, end, sentence))
 
-    def resolve(self, text: str) -> List[CorefChain]:
-        mentions = self.extract_mentions(text)
-        chains: List[CorefChain] = []
-        for m in mentions:
-            if m.mention_type == "pronoun":
-                # Find closest preceding antecedent
-                for prev in reversed(mentions[:mentions.index(m)]):
-                    if prev.mention_type in ("name", "noun_phrase"):
-                        chain = next((c for c in chains if c.representative == prev.text), None)
-                        if chain:
-                            chain.mentions.append(m)
-                        else:
-                            chains.append(CorefChain(str(len(chains)), [prev, m], prev.text))
-                        break
-        return chains
+    def resolve(self) -> List[List[int]]:
+        self.chains = []
+        used = set()
+        for i, m1 in enumerate(self.mentions):
+            if i in used:
+                continue
+            chain = [i]
+            used.add(i)
+            for j, m2 in enumerate(self.mentions):
+                if j in used or i == j:
+                    continue
+                if self._match(m1, m2):
+                    chain.append(j)
+                    used.add(j)
+            self.chains.append(chain)
+        return self.chains
+
+    def _match(self, m1: Mention, m2: Mention) -> bool:
+        if m1.text.lower() == m2.text.lower():
+            return True
+        if m1.text.lower() in {"he", "she", "it", "they"} and m2.text[0].isupper() and m1.sentence > m2.sentence:
+            return True
+        if m2.text.lower() in {"he", "she", "it", "they"} and m1.text[0].isupper() and m2.sentence > m1.sentence:
+            return True
+        return False
+
+    def entity_chains(self) -> Dict[str, List[str]]:
+        chains = self.resolve()
+        return {f"chain_{i}": [self.mentions[idx].text for idx in chain] for i, chain in enumerate(chains)}
 
     def stats(self) -> Dict:
-        return {"pronouns": len(self.pronouns)}
+        return {"mentions": len(self.mentions), "chains": len(self.chains)}
 
 def run():
-    resolver = CoreferenceResolver()
-    text = "Alice went to the store. She bought some milk. Bob saw her there."
-    chains = resolver.resolve(text)
-    for c in chains:
-        print(f"Chain: {c.representative} -> {[m.text for m in c.mentions]}")
-    print(resolver.stats())
+    cr = CoreferenceResolver()
+    cr.add_mention("Alice", 0, 5, 0)
+    cr.add_mention("she", 20, 23, 1)
+    cr.add_mention("Bob", 30, 33, 0)
+    cr.add_mention("he", 45, 47, 1)
+    print("Chains:", cr.entity_chains())
+    print(cr.stats())
 
 if __name__ == "__main__":
     run()
