@@ -1,47 +1,73 @@
-"""Drug Interaction Checker — severity, mechanism, contraindications, native, stdlib only."""
-from __future__ import annotations
+"""Native stdlib module: Drug Interaction Calculator
+Assesses drug interaction severity and mechanism types.
+"""
 from dataclasses import dataclass, field
-from typing import List, Dict, Optional, Set, Tuple
+from typing import List, Dict
+from enum import Enum
+
+class InteractionType(Enum):
+    SYNERGY = "synergy"
+    ANTAGONISM = "antagonism"
+    ADDITIVE = "additive"
+    POTENTIATION = "potentiation"
+    INHIBITION = "inhibition"
+
+class SeverityLevel(Enum):
+    MINOR = "minor"
+    MODERATE = "moderate"
+    MAJOR = "major"
+    CONTRAINDICATED = "contraindicated"
 
 @dataclass
-class DrugInteraction:
+class DrugInteractionPair:
     drug_a: str
     drug_b: str
-    severity: str
-    mechanism: str
+    interaction_type: InteractionType
+    severity: SeverityLevel
+    effect_description: str
 
-class DrugInteractionChecker:
-    def __init__(self):
-        self.interactions: Dict[Tuple[str, str], DrugInteraction] = {}
+@dataclass
+class DrugInteractionCalculator:
+    patient_id: str
+    interactions: List[DrugInteractionPair] = field(default_factory=list)
 
-    def add_interaction(self, di: DrugInteraction):
-        key = tuple(sorted([di.drug_a, di.drug_b]))
-        self.interactions[key] = di
+    def severe_interactions(self) -> List[DrugInteractionPair]:
+        return [i for i in self.interactions if i.severity in [SeverityLevel.MAJOR, SeverityLevel.CONTRAINDICATED]]
 
-    def check(self, drugs: List[str]) -> List[DrugInteraction]:
-        found = []
-        for i in range(len(drugs)):
-            for j in range(i+1, len(drugs)):
-                key = tuple(sorted([drugs[i], drugs[j]]))
-                if key in self.interactions:
-                    found.append(self.interactions[key])
-        return found
+    def by_severity(self) -> Dict[str, int]:
+        counts = {}
+        for i in self.interactions:
+            counts[i.severity.value] = counts.get(i.severity.value, 0) + 1
+        return counts
 
-    def severity_score(self, interaction: DrugInteraction) -> int:
-        scores = {"minor": 1, "moderate": 2, "major": 3, "contraindicated": 4}
-        return scores.get(interaction.severity, 0)
+    def by_type(self) -> Dict[str, int]:
+        counts = {}
+        for i in self.interactions:
+            counts[i.interaction_type.value] = counts.get(i.interaction_type.value, 0) + 1
+        return counts
 
-    def safe_to_combine(self, drugs: List[str]) -> bool:
-        return all(self.severity_score(i) < 3 for i in self.check(drugs))
+    def has_contraindicated(self) -> bool:
+        return any(i.severity == SeverityLevel.CONTRAINDICATED for i in self.interactions)
 
     def stats(self) -> Dict:
-        return {"interactions": len(self.interactions)}
+        return {
+            "patient": self.patient_id,
+            "total_interactions": len(self.interactions),
+            "severe_count": len(self.severe_interactions()),
+            "contraindicated": self.has_contraindicated(),
+            "by_severity": self.by_severity(),
+            "by_type": self.by_type(),
+        }
 
 def run():
-    dic = DrugInteractionChecker()
-    dic.add_interaction(DrugInteraction("Warfarin", "Aspirin", "major", "increased bleeding risk"))
-    dic.add_interaction(DrugInteraction("Amlodipine", "Simvastatin", "moderate", "increased statin levels"))
-    print("Check:", [(i.drug_a, i.drug_b, i.severity) for i in dic.check(["Warfarin", "Aspirin"])])
+    dic = DrugInteractionCalculator(
+        patient_id="P-001",
+        interactions=[
+            DrugInteractionPair("Warfarin", "Aspirin", InteractionType.POTENTIATION, SeverityLevel.MAJOR, "Increased bleeding risk"),
+            DrugInteractionPair("Metformin", "Contrast dye", InteractionType.INHIBITION, SeverityLevel.MODERATE, "Lactic acidosis risk"),
+            DrugInteractionPair("Simvastatin", "Grapefruit", InteractionType.INHIBITION, SeverityLevel.MINOR, "Increased statin levels"),
+        ]
+    )
     print(dic.stats())
 
 if __name__ == "__main__":

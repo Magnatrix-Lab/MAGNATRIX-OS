@@ -1,57 +1,75 @@
-"""Visual Acuity Converter — Snellen, LogMAR, decimal, native, stdlib only."""
-from __future__ import annotations
-from dataclasses import dataclass, field
-from typing import List, Dict, Optional
+"""Native stdlib module: Visual Acuity Calculator
+Converts between Snellen, LogMAR, and decimal visual acuity notations.
+"""
+from dataclasses import dataclass
+from typing import Dict
 import math
 
 @dataclass
-class VisualAcuityConverter:
-    snellen: str = "6/6"
+class VisualAcuityCalculator:
+    snellen_fraction: str = ""
+    logmar: float = 0.0
+    decimal: float = 0.0
 
-    def to_decimal(self) -> float:
-        parts = self.snellen.split("/")
-        if len(parts) == 2:
-            try:
-                return float(parts[0]) / float(parts[1])
-            except:
-                return 1.0
-        return 1.0
+    def snellen_to_logmar(self, snellen: str) -> float:
+        try:
+            parts = snellen.split('/')
+            if len(parts) == 2:
+                return -math.log10(float(parts[0]) / float(parts[1]))
+        except (ValueError, ZeroDivisionError):
+            pass
+        return 0.0
 
-    def to_logmar(self) -> float:
-        d = self.to_decimal()
-        return -math.log10(d) if d > 0 else 0.0
+    def logmar_to_snellen(self, logmar: float) -> str:
+        if logmar == 0:
+            return "6/6"
+        decimal = 10 ** (-logmar)
+        return f"6/{int(6/decimal)}"
 
-    def from_logmar(self, logmar: float) -> str:
-        d = 10 ** (-logmar)
-        if d >= 1.0:
-            return f"6/{int(6/d)}"
-        return f"6/{int(6/d)}"
+    def decimal_to_logmar(self, decimal: float) -> float:
+        if decimal <= 0:
+            return 0.0
+        return -math.log10(decimal)
 
-    def from_decimal(self, decimal: float) -> str:
-        if decimal > 0:
-            return f"6/{int(6/decimal)}"
-        return "6/60"
+    def logmar_to_decimal(self, logmar: float) -> float:
+        return 10 ** (-logmar)
 
-    def is_legal_blind(self, better_eye: str = "6/60") -> bool:
-        d = self.to_decimal()
-        better = VisualAcuityConverter(better_eye).to_decimal()
-        return d < 0.1 or better < 0.1
-
-    def category(self) -> str:
-        d = self.to_decimal()
-        if d >= 1.0: return "normal"
-        elif d >= 0.5: return "mild impairment"
-        elif d >= 0.2: return "moderate impairment"
-        elif d >= 0.05: return "severe impairment"
+    def category(self, logmar: float) -> str:
+        if logmar <= 0.0:
+            return "normal"
+        elif logmar <= 0.1:
+            return "near_normal"
+        elif logmar <= 0.5:
+            return "moderate_visual_impairment"
+        elif logmar <= 1.0:
+            return "severe_visual_impairment"
         return "blind"
 
     def stats(self) -> Dict:
-        return {"snellen": self.snellen, "decimal": round(self.to_decimal(), 3), "logmar": round(self.to_logmar(), 2), "category": self.category()}
+        if self.snellen_fraction:
+            logmar = self.snellen_to_logmar(self.snellen_fraction)
+            decimal = self.logmar_to_decimal(logmar)
+        elif self.logmar != 0:
+            logmar = self.logmar
+            decimal = self.logmar_to_decimal(logmar)
+        elif self.decimal != 0:
+            logmar = self.decimal_to_logmar(self.decimal)
+            decimal = self.decimal
+        else:
+            logmar = 0.0
+            decimal = 1.0
+        return {
+            "snellen": self.logmar_to_snellen(logmar) if not self.snellen_fraction else self.snellen_fraction,
+            "logmar": round(logmar, 2),
+            "decimal": round(decimal, 3),
+            "category": self.category(logmar),
+        }
 
 def run():
-    for s in ["6/6", "6/12", "6/60", "3/60"]:
-        vac = VisualAcuityConverter(s)
-        print(vac.stats())
+    vac = VisualAcuityCalculator(snellen_fraction="6/12")
+    print(vac.stats())
+    vac2 = VisualAcuityCalculator(logmar=0.3)
+    print(vac2.stats())
 
 if __name__ == "__main__":
     run()

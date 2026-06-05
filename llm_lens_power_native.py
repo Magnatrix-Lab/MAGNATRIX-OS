@@ -1,48 +1,60 @@
-"""Lens Power Calculator — spherical, cylindrical, prismatic, native, stdlib only."""
-from __future__ import annotations
-from dataclasses import dataclass, field
-from typing import List, Dict, Optional, Tuple
+"""Native stdlib module: Lens Power Calculator
+Calculates lens power, focal length, and vergence for optics.
+"""
+from dataclasses import dataclass
+from typing import Dict
 import math
 
 @dataclass
 class LensPowerCalculator:
-    front_radius: float = 0.0
-    back_radius: float = 0.0
-    thickness_mm: float = 2.0
-    index: float = 1.5
+    focal_length_mm: float = 0.0
+    lens_power_diopters: float = 0.0
+    object_distance_m: float = 0.0
+    image_distance_m: float = 0.0
 
-    def lensmaker_power(self) -> float:
-        n = self.index
-        r1 = self.front_radius
-        r2 = self.back_radius
-        if r1 == 0 or r2 == 0:
+    def power_from_focal_length(self) -> float:
+        if self.focal_length_mm == 0:
             return 0.0
-        return (n - 1) * (1/r1 - 1/r2)
+        return 1000 / self.focal_length_mm
 
-    def effective_power(self, vertex_distance_m: float = 0.012) -> float:
-        p = self.lensmaker_power()
-        return p / (1 - vertex_distance_m * p) if (1 - vertex_distance_m * p) != 0 else p
+    def focal_length_from_power(self) -> float:
+        if self.lens_power_diopters == 0:
+            return 0.0
+        return 1000 / self.lens_power_diopters
 
-    def prism_diopters(self, decentration_mm: float, power: float) -> float:
-        return power * decentration_mm / 10
+    def lens_formula_image_distance(self) -> float:
+        if self.lens_power_diopters == 0 or self.object_distance_m == 0:
+            return 0.0
+        return 1 / (self.lens_power_diopters - (1 / self.object_distance_m))
 
-    def base_direction(self, prism: float, direction: str) -> Tuple[float, str]:
-        return prism, direction
+    def magnification(self) -> float:
+        if self.object_distance_m == 0:
+            return 0.0
+        image_dist = self.lens_formula_image_distance()
+        return image_dist / self.object_distance_m
 
-    def add_cylinder(self, sphere: float, cyl: float, axis: float, new_cyl: float, new_axis: float) -> Tuple[float, float, float]:
-        if abs(axis - new_axis) < 5 or abs(abs(axis - new_axis) - 180) < 5:
-            total_cyl = cyl + new_cyl
-            return sphere, total_cyl, axis
-        return sphere + cyl/2 + new_cyl/2, abs(cyl - new_cyl), (axis + new_axis) / 2
+    def near_point_power_add(self, near_point_m: float = 0.4) -> float:
+        if near_point_m == 0:
+            return 0.0
+        return 1 / near_point_m
+
+    def effective_power_at_vertex(self, original_power_d: float, vertex_distance_m: float) -> float:
+        if vertex_distance_m == 0:
+            return original_power_d
+        return original_power_d / (1 - vertex_distance_m * original_power_d)
 
     def stats(self) -> Dict:
-        return {"power_D": round(self.lensmaker_power(), 2), "effective_D": round(self.effective_power(), 2)}
+        return {
+            "focal_length_mm": round(self.focal_length_from_power(), 1) if self.lens_power_diopters else self.focal_length_mm,
+            "lens_power_diopters": round(self.power_from_focal_length(), 2) if self.focal_length_mm else self.lens_power_diopters,
+            "image_distance_m": round(self.lens_formula_image_distance(), 3) if self.object_distance_m else None,
+            "magnification": round(self.magnification(), 3) if self.object_distance_m else None,
+            "near_point_add_d": round(self.near_point_power_add(), 2),
+        }
 
 def run():
-    lpc = LensPowerCalculator(front_radius=0.1, back_radius=-0.1, index=1.5)
-    print(lpc.stats())
-    print("Prism 2mm decentration at 4D:", lpc.prism_diopters(2, 4))
-    print("Add cyl:", lpc.add_cylinder(-2, -1, 180, -0.75, 180))
+    lp = LensPowerCalculator(lens_power_diopters=4.0, object_distance_m=0.25)
+    print(lp.stats())
 
 if __name__ == "__main__":
     run()

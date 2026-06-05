@@ -1,44 +1,77 @@
-"""Radiation Dose Calculator — exposure, shielding, ALARA, native, stdlib only."""
-from __future__ import annotations
+"""Native stdlib module: Radiation Dose Calculator
+Calculates effective dose, organ dose, and exposure metrics for radiology.
+"""
 from dataclasses import dataclass, field
-from typing import List, Dict, Optional
-import math
+from typing import List, Dict
+from enum import Enum
+
+class ExamType(Enum):
+    CHEST_XRAY = "chest_xray"
+    CT_HEAD = "ct_head"
+    CT_ABDOMEN = "ct_abdomen"
+    MAMMOGRAPHY = "mammography"
+    DEXA = "dexa"
+    PET_CT = "pet_ct"
+    FLUOROSCOPY = "fluoroscopy"
 
 @dataclass
 class RadiationDoseCalculator:
-    kvp: float = 70.0
-    mas: float = 10.0
-    distance_cm: float = 100.0
-    exposure_time: float = 0.2
+    exam_type: ExamType
+    num_exposures: int
+    patient_age: int
+    patient_weight_kg: float
 
-    def exposure(self) -> float:
-        return self.kvp * self.mas * 0.001
+    def _base_dose_msv(self) -> float:
+        doses = {
+            ExamType.CHEST_XRAY: 0.1,
+            ExamType.CT_HEAD: 2.0,
+            ExamType.CT_ABDOMEN: 8.0,
+            ExamType.MAMMOGRAPHY: 0.4,
+            ExamType.DEXA: 0.001,
+            ExamType.PET_CT: 14.0,
+            ExamType.FLUOROSCOPY: 3.0,
+        }
+        return doses.get(self.exam_type, 1.0)
 
-    def inverse_square_dose(self, target_distance: float) -> float:
-        return self.exposure() * (self.distance_cm / target_distance) ** 2 if target_distance > 0 else 0.0
+    def effective_dose_msv(self) -> float:
+        return self._base_dose_msv() * self.num_exposures
 
-    def shielded_dose(self, thickness_mm: float, hvl_mm: float = 2.0) -> float:
-        return self.exposure() * (0.5 ** (thickness_mm / hvl_mm)) if hvl_mm > 0 else self.exposure()
+    def age_factor(self) -> float:
+        if self.patient_age < 10:
+            return 3.0
+        elif self.patient_age < 18:
+            return 1.5
+        elif self.patient_age < 40:
+            return 1.0
+        elif self.patient_age < 60:
+            return 0.8
+        return 0.6
 
-    def lead_equivalent(self, dose_reduction_factor: float = 10.0) -> float:
-        return 3.3 * math.log10(dose_reduction_factor) if dose_reduction_factor > 0 else 0.0
+    def risk_weighted_dose(self) -> float:
+        return self.effective_dose_msv() * self.age_factor()
 
-    def alara_check(self, annual_limit_msv: float = 20.0, annual_dose: float = 0.0) -> str:
-        if annual_dose > annual_limit_msv * 0.75: return "approach limit"
-        elif annual_dose > annual_limit_msv * 0.5: return "monitor closely"
-        return "within limits"
+    def equivalent_chest_xrays(self) -> float:
+        if self.effective_dose_msv() == 0:
+            return 0.0
+        return self.effective_dose_msv() / 0.1
 
-    def stats(self, target_distance: float = 50.0) -> Dict:
+    def cancer_risk_increase_pct(self) -> float:
+        return self.effective_dose_msv() * 0.005
+
+    def stats(self) -> Dict:
         return {
-            "exposure": round(self.exposure(), 3),
-            "dose_at_target": round(self.inverse_square_dose(target_distance), 3),
-            "shielded_2mm": round(self.shielded_dose(2.0), 3)
+            "exam": self.exam_type.value,
+            "exposures": self.num_exposures,
+            "effective_dose_msv": round(self.effective_dose_msv(), 3),
+            "age_factor": self.age_factor(),
+            "risk_weighted_dose": round(self.risk_weighted_dose(), 3),
+            "equivalent_chest_xrays": round(self.equivalent_chest_xrays(), 1),
+            "cancer_risk_increase_pct": round(self.cancer_risk_increase_pct(), 6),
         }
 
 def run():
-    rdc = RadiationDoseCalculator(kvp=80, mas=15, distance_cm=100)
+    rdc = RadiationDoseCalculator(exam_type=ExamType.CT_ABDOMEN, num_exposures=1, patient_age=35, patient_weight_kg=70)
     print(rdc.stats())
-    print("ALARA check:", rdc.alara_check(annual_dose=12))
 
 if __name__ == "__main__":
     run()
