@@ -1,49 +1,66 @@
 """Native stdlib module: Glaze Calculator
-Calculates glaze recipes, unity formulas, and SiO2:Al2O3 ratios.
+Calculates glaze recipes, expansion coefficients, and viscosity.
 """
-from dataclasses import dataclass
-from typing import Dict, Optional
+from dataclasses import dataclass, field
+from typing import List, Dict
+
+@dataclass
+class GlazeIngredient:
+    name: str
+    weight_g: float
+    expansion_coefficient: float
+    melting_point_c: float
 
 @dataclass
 class GlazeCalculator:
-    silica_pct: float
-    alumina_pct: float
-    flux_pct: float
-    batch_grams: float = 1000.0
+    glaze_name: str
+    ingredients: List[GlazeIngredient] = field(default_factory=list)
+    target_expansion: float = 5.0
 
-    def total_pct(self) -> float:
-        return self.silica_pct + self.alumina_pct + self.flux_pct
+    def total_weight_g(self) -> float:
+        return sum(i.weight_g for i in self.ingredients)
 
-    def normalized_silica(self) -> float:
-        return self.silica_pct / self.total_pct() if self.total_pct() else 0
+    def weighted_expansion(self) -> float:
+        if self.total_weight_g() == 0:
+            return 0.0
+        return sum(i.weight_g * i.expansion_coefficient for i in self.ingredients) / self.total_weight_g()
 
-    def normalized_alumina(self) -> float:
-        return self.alumina_pct / self.total_pct() if self.total_pct() else 0
+    def weighted_melting_point(self) -> float:
+        if self.total_weight_g() == 0:
+            return 0.0
+        return sum(i.weight_g * i.melting_point_c for i in self.ingredients) / self.total_weight_g()
 
-    def normalized_flux(self) -> float:
-        return self.flux_pct / self.total_pct() if self.total_pct() else 0
+    def expansion_match(self) -> float:
+        return self.target_expansion - self.weighted_expansion()
 
-    def silica_alumina_ratio(self) -> float:
-        return self.silica_pct / self.alumina_pct if self.alumina_pct else 0
-
-    def flux_index(self) -> float:
-        return self.normalized_flux() / (self.normalized_silica() + self.normalized_alumina())
-
-    def batch_amount(self, material_pct: float) -> float:
-        return material_pct / 100 * self.batch_grams
+    def silica_to_alumina_ratio(self) -> float:
+        silica = sum(i.weight_g for i in self.ingredients if "silica" in i.name.lower())
+        alumina = sum(i.weight_g for i in self.ingredients if "alumina" in i.name.lower() or "kaolin" in i.name.lower())
+        if alumina == 0:
+            return 0.0
+        return silica / alumina
 
     def stats(self) -> Dict:
         return {
-            "normalized_silica": round(self.normalized_silica(), 3),
-            "normalized_alumina": round(self.normalized_alumina(), 3),
-            "normalized_flux": round(self.normalized_flux(), 3),
-            "silica_alumina_ratio": round(self.silica_alumina_ratio(), 2),
-            "flux_index": round(self.flux_index(), 3),
-            "batch_grams": self.batch_grams,
+            "glaze": self.glaze_name,
+            "total_weight_g": round(self.total_weight_g(), 1),
+            "weighted_expansion": round(self.weighted_expansion(), 3),
+            "weighted_melting_c": round(self.weighted_melting_point(), 1),
+            "expansion_match": round(self.expansion_match(), 3),
+            "silica_alumina_ratio": round(self.silica_to_alumina_ratio(), 2),
         }
 
 def run():
-    gc = GlazeCalculator(silica_pct=60, alumina_pct=15, flux_pct=25, batch_grams=2000)
+    gc = GlazeCalculator(
+        glaze_name="Celadon",
+        target_expansion=5.0,
+        ingredients=[
+            GlazeIngredient("silica", 300, 0.35, 1700),
+            GlazeIngredient("kaolin", 250, 0.2, 1700),
+            GlazeIngredient("feldspar", 350, 0.25, 1200),
+            GlazeIngredient("whiting", 100, 0.3, 900),
+        ]
+    )
     print(gc.stats())
 
 if __name__ == "__main__":

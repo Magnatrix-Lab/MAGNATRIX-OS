@@ -1,44 +1,66 @@
-"""Fire Risk — FWI, fuel moisture, spread rate, native, stdlib only."""
-from __future__ import annotations
-from dataclasses import dataclass, field
-from typing import List, Dict, Optional, Tuple
-import math
+"""Native stdlib module: Fire Risk Calculator
+Calculates fire weather indices, fire behavior, and suppression metrics.
+"""
+from dataclasses import dataclass
+from typing import Dict
+from enum import Enum
+
+class FuelType(Enum):
+    GRASS = "grass"
+    SHRUB = "shrub"
+    FOREST = "forest"
+    LOGGING_DEBRIS = "logging_debris"
 
 @dataclass
-class FireRisk:
-    temperature: float = 30.0
-    humidity: float = 30.0
-    wind_speed: float = 20.0
-    precipitation: float = 0.0
-    fuel_moisture: float = 10.0
+class FireRiskCalculator:
+    temperature_c: float
+    relative_humidity_pct: float
+    wind_speed_kmh: float
+    precipitation_mm: float
+    fuel_type: FuelType
+    fuel_load_ton_ha: float
 
     def fire_weather_index(self) -> float:
-        """Simplified FWI component"""
-        isi = 0.208 * self.wind_speed * (100 - self.humidity) / 100 * (100 - self.fuel_moisture) / 100
-        bui = max(0, 0.1 * self.temperature * (100 - self.humidity) / 100 - self.precipitation)
-        return isi * bui / 100
+        if self.precipitation_mm > 2:
+            return 0.0
+        fwi = (self.temperature_c * (100 - self.relative_humidity_pct) * self.wind_speed_kmh) / 100
+        return max(0, fwi)
 
-    def rate_of_spread(self) -> float:
-        fwi = self.fire_weather_index()
-        return 0.5 * fwi * (1 + self.wind_speed / 10)
+    def rate_of_spread_m_min(self) -> float:
+        if self.fire_weather_index() == 0:
+            return 0.0
+        ros_factors = {FuelType.GRASS: 2.0, FuelType.SHRUB: 1.5, FuelType.FOREST: 0.8, FuelType.LOGGING_DEBRIS: 1.2}
+        return self.fire_weather_index() * ros_factors.get(self.fuel_type, 1.0) / 10
 
-    def fire_danger_rating(self) -> str:
-        fwi = self.fire_weather_index()
-        if fwi < 5: return "low"
-        elif fwi < 15: return "moderate"
-        elif fwi < 30: return "high"
-        elif fwi < 50: return "very high"
+    def fire_intensity_kw_m(self) -> float:
+        return self.rate_of_spread_m_min() * 60 * self.fuel_load_ton_ha * 18000 / 10000
+
+    def flame_length_m(self) -> float:
+        if self.fire_intensity_kw_m() == 0:
+            return 0.0
+        return 0.0775 * (self.fire_intensity_kw_m() ** 0.46)
+
+    def suppression_difficulty(self) -> str:
+        if self.fire_intensity_kw_m() < 100:
+            return "low"
+        elif self.fire_intensity_kw_m() < 1000:
+            return "moderate"
+        elif self.fire_intensity_kw_m() < 3000:
+            return "high"
         return "extreme"
 
-    def critical_fire_weather(self) -> bool:
-        return self.humidity < 20 and self.wind_speed > 25 and self.temperature > 35
-
     def stats(self) -> Dict:
-        return {"fwi": round(self.fire_weather_index(), 2), "ros": round(self.rate_of_spread(), 2), "danger": self.fire_danger_rating(), "critical": self.critical_fire_weather()}
+        return {
+            "fire_weather_index": round(self.fire_weather_index(), 1),
+            "rate_of_spread_m_min": round(self.rate_of_spread_m_min(), 2),
+            "fire_intensity_kw_m": round(self.fire_intensity_kw_m(), 1),
+            "flame_length_m": round(self.flame_length_m(), 1),
+            "suppression_difficulty": self.suppression_difficulty(),
+        }
 
 def run():
-    fr = FireRisk(temperature=38, humidity=15, wind_speed=30, fuel_moisture=5)
-    print(fr.stats())
+    frc = FireRiskCalculator(temperature_c=32, relative_humidity_pct=25, wind_speed_kmh=25, precipitation_mm=0, fuel_type=FuelType.FOREST, fuel_load_ton_ha=15)
+    print(frc.stats())
 
 if __name__ == "__main__":
     run()

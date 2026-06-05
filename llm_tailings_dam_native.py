@@ -1,38 +1,52 @@
-"""Tailings Dam — storage, embankment, seepage, native, stdlib only."""
-from __future__ import annotations
-from dataclasses import dataclass, field
-from typing import List, Dict, Optional
-import math
+"""Native stdlib module: Tailings Dam Calculator
+Calculates tailings volumes, dam heights, and storage capacities for mining.
+"""
+from dataclasses import dataclass
+from typing import Dict
 
 @dataclass
-class TailingsDam:
-    area_m2: float = 100000.0
-    dam_height: float = 20.0
-    slope_ratio: float = 2.5
-    tailings_density: float = 1.8
+class TailingsDamCalculator:
+    annual_tailings_tonnes: float
+    tailings_density_ton_m3: float
+    dam_height_m: float
+    dam_crest_width_m: float
+    dam_slope_ratio: float
+    impoundment_area_m2: float
 
-    def storage_volume(self) -> float:
-        return self.area_m2 * self.dam_height
+    def annual_tailings_volume_m3(self) -> float:
+        if self.tailings_density_ton_m3 == 0:
+            return 0.0
+        return self.annual_tailings_tonnes / self.tailings_density_ton_m3
 
-    def embankment_volume(self) -> float:
-        base_width = self.dam_height * self.slope_ratio * 2
-        return 0.5 * base_width * self.dam_height * 100
+    def dam_volume_m3(self) -> float:
+        if self.dam_slope_ratio == 0:
+            return 0.0
+        base_width = self.dam_crest_width_m + 2 * self.dam_height_m * self.dam_slope_ratio
+        return 0.5 * (self.dam_crest_width_m + base_width) * self.dam_height_m * self.impoundment_area_m2 / 10000
 
-    def seepage_rate(self, permeability: float = 1e-7, hydraulic_gradient: float = 0.1) -> float:
-        return permeability * hydraulic_gradient * self.area_m2
+    def storage_capacity_m3(self) -> float:
+        return self.impoundment_area_m2 * self.dam_height_m
 
-    def freeboard_required(self, design_flood: float = 1.0) -> float:
-        return 1.5 + design_flood * 0.5
+    def years_to_fill(self) -> float:
+        if self.annual_tailings_volume_m3() == 0:
+            return 0.0
+        return self.storage_capacity_m3() / self.annual_tailings_volume_m3()
 
-    def stability_check(self, fos_required: float = 1.5) -> bool:
-        return self.slope_ratio >= 2.0 and self.dam_height < 50
+    def freeboard_m(self, water_level_m: float) -> float:
+        return self.dam_height_m - water_level_m
 
     def stats(self) -> Dict:
-        return {"storage_m3": round(self.storage_volume(), 0), "embankment_m3": round(self.embankment_volume(), 0), "stable": self.stability_check()}
+        return {
+            "annual_tailings_m3": round(self.annual_tailings_volume_m3(), 1),
+            "dam_volume_m3": round(self.dam_volume_m3(), 1),
+            "storage_capacity_m3": round(self.storage_capacity_m3(), 1),
+            "years_to_fill": round(self.years_to_fill(), 1),
+            "freeboard_m": self.dam_height_m,
+        }
 
 def run():
-    td = TailingsDam(area_m2=500000, dam_height=35, slope_ratio=3.0)
-    print(td.stats())
+    tdc = TailingsDamCalculator(annual_tailings_tonnes=2000000, tailings_density_ton_m3=1.8, dam_height_m=40, dam_crest_width_m=8, dam_slope_ratio=2.5, impoundment_area_m2=500000)
+    print(tdc.stats())
 
 if __name__ == "__main__":
     run()
