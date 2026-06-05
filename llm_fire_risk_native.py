@@ -1,49 +1,44 @@
-"""Fire Risk Calculator — weather, fuel, topography, native, stdlib only."""
+"""Fire Risk — FWI, fuel moisture, spread rate, native, stdlib only."""
 from __future__ import annotations
 from dataclasses import dataclass, field
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Tuple
 import math
 
 @dataclass
-class FireRiskCalculator:
+class FireRisk:
     temperature: float = 30.0
-    humidity: float = 20.0
-    wind_speed: float = 25.0
-    fuel_moisture: float = 8.0
-    slope_pct: float = 15.0
+    humidity: float = 30.0
+    wind_speed: float = 20.0
+    precipitation: float = 0.0
+    fuel_moisture: float = 10.0
 
-    def ffdi(self) -> float:
-        """Forest Fire Danger Index (McArthur)."""
-        df = 2 * (self.temperature - 20) + 0.5 * self.humidity
-        if df < 0:
-            df = 0
-        k = 0.5 + 0.03 * self.wind_speed
-        return df * k * max(1, self.slope_pct / 10)
-
-    def danger_rating(self) -> str:
-        ffdi = self.ffdi()
-        if ffdi < 12: return "low"
-        elif ffdi < 24: return "moderate"
-        elif ffdi < 50: return "high"
-        elif ffdi < 100: return "very high"
-        return "extreme"
+    def fire_weather_index(self) -> float:
+        """Simplified FWI component"""
+        isi = 0.208 * self.wind_speed * (100 - self.humidity) / 100 * (100 - self.fuel_moisture) / 100
+        bui = max(0, 0.1 * self.temperature * (100 - self.humidity) / 100 - self.precipitation)
+        return isi * bui / 100
 
     def rate_of_spread(self) -> float:
-        """km/h approximation."""
-        return 0.5 * self.ffdi() ** 0.5
+        fwi = self.fire_weather_index()
+        return 0.5 * fwi * (1 + self.wind_speed / 10)
 
-    def spotting_distance(self) -> float:
-        return 0.5 * self.wind_speed * (self.ffdi() / 50) ** 0.5
+    def fire_danger_rating(self) -> str:
+        fwi = self.fire_weather_index()
+        if fwi < 5: return "low"
+        elif fwi < 15: return "moderate"
+        elif fwi < 30: return "high"
+        elif fwi < 50: return "very high"
+        return "extreme"
 
-    def suppression_difficulty(self) -> float:
-        return min(1.0, self.ffdi() / 100 + self.slope_pct / 100)
+    def critical_fire_weather(self) -> bool:
+        return self.humidity < 20 and self.wind_speed > 25 and self.temperature > 35
 
     def stats(self) -> Dict:
-        return {"ffdi": round(self.ffdi(), 1), "rating": self.danger_rating(), "ros_kmh": round(self.rate_of_spread(), 2)}
+        return {"fwi": round(self.fire_weather_index(), 2), "ros": round(self.rate_of_spread(), 2), "danger": self.fire_danger_rating(), "critical": self.critical_fire_weather()}
 
 def run():
-    frc = FireRiskCalculator(temperature=38, humidity=12, wind_speed=40, slope_pct=25)
-    print(frc.stats())
+    fr = FireRisk(temperature=38, humidity=15, wind_speed=30, fuel_moisture=5)
+    print(fr.stats())
 
 if __name__ == "__main__":
     run()

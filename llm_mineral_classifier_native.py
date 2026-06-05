@@ -1,49 +1,57 @@
-"""Mineral Classifier — hardness, streak, luster, cleavage, native, stdlib only."""
+"""Mineral Classifier — hardness, luster, streak, density, native, stdlib only."""
 from __future__ import annotations
 from dataclasses import dataclass, field
-from typing import List, Dict, Optional, Tuple
+from typing import List, Dict, Optional, Tuple, Set
 
 @dataclass
-class MineralClassifier:
-    hardness: float = 0.0
-    streak: str = ""
-    luster: str = ""
-    cleavage: str = ""
-    color: str = ""
-    specific_gravity: float = 0.0
+class Mineral:
+    name: str
+    hardness: float
+    density: float
+    luster: str
+    streak: str
+    cleavage: str
 
-    def match(self, candidates: List[Dict]) -> List[str]:
+class MineralClassifier:
+    def __init__(self):
+        self.minerals: List[Mineral] = []
+
+    def add_mineral(self, m: Mineral):
+        self.minerals.append(m)
+
+    def classify(self, hardness: float, density: float, luster: str, streak: str) -> List[str]:
         matches = []
-        for c in candidates:
+        for m in self.minerals:
             score = 0
-            if abs(c.get("hardness", 0) - self.hardness) < 1: score += 1
-            if c.get("streak", "") == self.streak: score += 1
-            if c.get("luster", "") == self.luster: score += 1
-            if c.get("cleavage", "") == self.cleavage: score += 1
-            if score >= 2:
-                matches.append(c.get("name", ""))
+            if abs(m.hardness - hardness) < 1: score += 1
+            if abs(m.density - density) < 1: score += 1
+            if m.luster == luster: score += 1
+            if m.streak == streak: score += 1
+            if score >= 3:
+                matches.append(m.name)
         return matches
 
-    def mohs_comparison(self, other_hardness: float) -> str:
-        if self.hardness > other_hardness:
-            return "can scratch"
-        elif self.hardness < other_hardness:
-            return "can be scratched by"
-        return "same hardness"
+    def mohs_scale(self, hardness: float) -> str:
+        if hardness < 2.5: return "fingernail"
+        elif hardness < 5.5: return "knife"
+        elif hardness < 6.5: return "glass"
+        elif hardness < 7.5: return "steel"
+        return "quartz"
 
-    def density_estimate(self, mass_g: float, volume_ml: float) -> float:
-        return mass_g / volume_ml if volume_ml > 0 else 0.0
+    def specific_gravity(self, weight_air: float, weight_water: float) -> float:
+        if weight_water <= 0:
+            return 0.0
+        return weight_air / (weight_air - weight_water)
 
     def stats(self) -> Dict:
-        return {"hardness": self.hardness, "luster": self.luster, "sg": self.specific_gravity}
+        return {"minerals": len(self.minerals), "hardness_range": (min(m.hardness for m in self.minerals), max(m.hardness for m in self.minerals)) if self.minerals else (0, 0)}
 
 def run():
-    mc = MineralClassifier(hardness=7, streak="white", luster="vitreous", color="purple")
-    candidates = [
-        {"name": "Quartz", "hardness": 7, "streak": "white", "luster": "vitreous"},
-        {"name": "Amethyst", "hardness": 7, "streak": "white", "luster": "vitreous"},
-    ]
-    print("Match:", mc.match(candidates))
+    mc = MineralClassifier()
+    mc.add_mineral(Mineral("Quartz", 7, 2.65, "vitreous", "white", "none"))
+    mc.add_mineral(Mineral("Feldspar", 6, 2.56, "vitreous", "white", "good"))
+    mc.add_mineral(Mineral("Calcite", 3, 2.71, "vitreous", "white", "perfect"))
+    print("Classify:", mc.classify(7, 2.65, "vitreous", "white"))
     print(mc.stats())
 
 if __name__ == "__main__":

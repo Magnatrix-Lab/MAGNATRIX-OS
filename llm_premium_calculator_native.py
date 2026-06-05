@@ -1,36 +1,44 @@
-"""Premium Calculator — actuarial, risk class, loading, native, stdlib only."""
+"""Premium Calculator — life, health, auto, actuarial, native, stdlib only."""
 from __future__ import annotations
 from dataclasses import dataclass, field
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Tuple
+import math
 
 @dataclass
 class PremiumCalculator:
-    base_rate: float = 1000.0
-    age_factor: float = 1.0
+    age: int = 30
+    gender: str = "male"
+    sum_assured: float = 100000.0
+    term_years: int = 20
     risk_factor: float = 1.0
-    loading: float = 0.15
 
-    def calculate(self) -> float:
-        return self.base_rate * self.age_factor * self.risk_factor * (1 + self.loading)
+    def life_premium(self) -> float:
+        base = self.sum_assured / 1000 * 5
+        age_factor = 1 + (self.age - 25) * 0.02
+        gender_factor = 0.95 if self.gender == "female" else 1.0
+        return base * age_factor * gender_factor * self.risk_factor / self.term_years
 
-    def risk_adjusted(self, claims_history: int, credit_score: int) -> float:
-        risk_mult = 1.0 + claims_history * 0.1 - (credit_score - 700) / 1000
-        return self.base_rate * self.age_factor * max(0.5, risk_mult) * (1 + self.loading)
+    def health_premium(self) -> float:
+        base = 5000
+        age_factor = 1 + (self.age - 25) * 0.03
+        return base * age_factor * self.risk_factor
 
-    def term_premium(self, years: int) -> float:
-        annual = self.calculate()
-        return annual * years * (1 - 0.02 * (years - 1))
+    def auto_premium(self, car_value: float = 20000) -> float:
+        base = car_value * 0.03
+        age_factor = 1.5 if self.age < 25 else 1.0 if self.age < 50 else 1.2
+        return base * age_factor * self.risk_factor
 
-    def earned_premium(self, elapsed_months: int, term_months: int = 12) -> float:
-        return self.calculate() * (elapsed_months / term_months)
+    def net_present_value(self, discount_rate: float = 0.05) -> float:
+        premium = self.life_premium()
+        return sum(premium / ((1 + discount_rate) ** t) for t in range(1, self.term_years + 1))
 
     def stats(self) -> Dict:
-        return {"base": self.base_rate, "premium": round(self.calculate(), 2), "term_3yr": round(self.term_premium(3), 2)}
+        return {"life": round(self.life_premium(), 2), "health": round(self.health_premium(), 2), "npv": round(self.net_present_value(), 2)}
 
 def run():
-    pc = PremiumCalculator(base_rate=2000, age_factor=1.2, risk_factor=1.5)
+    pc = PremiumCalculator(age=45, sum_assured=500000, risk_factor=1.2)
     print(pc.stats())
-    print("Risk adjusted:", pc.risk_adjusted(2, 720))
+    print("Auto:", pc.auto_premium(30000))
 
 if __name__ == "__main__":
     run()

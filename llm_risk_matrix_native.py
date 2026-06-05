@@ -1,4 +1,4 @@
-"""Risk Matrix — probability, impact, heatmap, native, stdlib only."""
+"""Risk Matrix — likelihood, impact, heat map, scoring, native, stdlib only."""
 from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import List, Dict, Optional, Tuple
@@ -6,49 +6,43 @@ from typing import List, Dict, Optional, Tuple
 @dataclass
 class RiskMatrix:
     risks: List[Dict] = field(default_factory=list)
-    """Each risk: {name, probability (1-5), impact (1-5)}"""
+    """Each: {name, likelihood, impact} 1-5"""
+
+    def add_risk(self, name: str, likelihood: int, impact: int):
+        self.risks.append({"name": name, "likelihood": likelihood, "impact": impact})
 
     def score(self, risk: Dict) -> int:
-        return risk.get("probability", 0) * risk.get("impact", 0)
+        return risk["likelihood"] * risk["impact"]
 
-    def category(self, risk: Dict) -> str:
-        s = self.score(risk)
-        if s <= 4: return "low"
-        elif s <= 9: return "medium"
-        elif s <= 14: return "high"
-        return "extreme"
+    def level(self, score: int) -> str:
+        if score <= 4: return "low"
+        elif score <= 9: return "medium"
+        elif score <= 14: return "high"
+        return "critical"
 
-    def heatmap(self) -> List[List[int]]:
+    def heat_map(self) -> List[List[int]]:
         grid = [[0]*5 for _ in range(5)]
         for r in self.risks:
-            p = min(4, max(0, r.get("probability", 0) - 1))
-            i = min(4, max(0, r.get("impact", 0) - 1))
-            grid[p][i] += 1
+            l = max(0, min(4, r["likelihood"] - 1))
+            i = max(0, min(4, r["impact"] - 1))
+            grid[l][i] += 1
         return grid
 
     def prioritized(self) -> List[Dict]:
         return sorted(self.risks, key=lambda r: self.score(r), reverse=True)
 
-    def acceptable(self, threshold: int = 12) -> List[Dict]:
-        return [r for r in self.risks if self.score(r) <= threshold]
-
     def stats(self) -> Dict:
-        categories = {}
-        for r in self.risks:
-            c = self.category(r)
-            categories[c] = categories.get(c, 0) + 1
-        return {"risks": len(self.risks), "categories": categories, "max_score": max(self.score(r) for r in self.risks) if self.risks else 0}
+        scores = [self.score(r) for r in self.risks]
+        return {"risks": len(self.risks), "avg_score": sum(scores)/len(scores) if scores else 0, "critical": sum(1 for s in scores if s >= 15)}
 
 def run():
     rm = RiskMatrix()
-    rm.risks = [
-        {"name": "Fire", "probability": 2, "impact": 5},
-        {"name": "Theft", "probability": 3, "impact": 3},
-        {"name": "Flood", "probability": 1, "impact": 5},
-    ]
+    rm.add_risk("Fire", 2, 5)
+    rm.add_risk("Theft", 3, 3)
+    rm.add_risk("Cyber", 4, 4)
     print(rm.stats())
-    print("Heatmap:", rm.heatmap())
-    print("Top:", [r["name"] for r in rm.prioritized()])
+    print("Heat map:", rm.heat_map())
+    print("Top:", [(r["name"], rm.score(r)) for r in rm.prioritized()[:3]])
 
 if __name__ == "__main__":
     run()

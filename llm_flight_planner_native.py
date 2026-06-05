@@ -1,55 +1,59 @@
-"""Flight Planner — fuel, range, waypoints, wind, native, stdlib only."""
+"""Flight Planner — route, fuel, waypoints, ETAs, native, stdlib only."""
 from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import List, Dict, Optional, Tuple
 import math
 
 @dataclass
+class Waypoint:
+    name: str
+    lat: float
+    lon: float
+    alt: float = 0.0
+
 class FlightPlanner:
-    range_nm: float = 1000.0
-    fuel_capacity: float = 5000.0
-    fuel_consumption: float = 50.0
-    """gallons per hour"""
-    cruise_speed: float = 450.0
+    def __init__(self):
+        self.waypoints: List[Waypoint] = []
+        self.cruise_speed: float = 450.0
 
-    def endurance(self) -> float:
-        return self.fuel_capacity / self.fuel_consumption if self.fuel_consumption > 0 else 0.0
+    def add_waypoint(self, wp: Waypoint):
+        self.waypoints.append(wp)
 
-    def max_range(self) -> float:
-        return self.endurance() * self.cruise_speed
+    def leg_distance(self, a: Waypoint, b: Waypoint) -> float:
+        R = 6371.0
+        dlat = math.radians(b.lat - a.lat)
+        dlon = math.radians(b.lon - a.lon)
+        ha = math.sin(dlat/2)**2 + math.cos(math.radians(a.lat)) * math.cos(math.radians(b.lat)) * math.sin(dlon/2)**2
+        return 2 * R * math.asin(min(1, math.sqrt(ha)))
 
-    def fuel_needed(self, distance: float, headwind: float = 0.0) -> float:
-        gs = self.cruise_speed - headwind
-        time = distance / gs if gs > 0 else float('inf')
-        return time * self.fuel_consumption
+    def total_distance(self) -> float:
+        return sum(self.leg_distance(self.waypoints[i], self.waypoints[i+1]) for i in range(len(self.waypoints)-1))
 
-    def waypoint_distance(self, waypoints: List[Tuple[float, float]]) -> float:
-        total = 0.0
-        for i in range(len(waypoints) - 1):
-            lat1, lon1 = waypoints[i]
-            lat2, lon2 = waypoints[i+1]
-            dlat = math.radians(lat2 - lat1)
-            dlon = math.radians(lon2 - lon1)
-            a = math.sin(dlat/2)**2 + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(dlon/2)**2
-            total += 2 * 3440 * math.asin(min(1, math.sqrt(a)))
-        return total
+    def flight_time(self) -> float:
+        return self.total_distance() / self.cruise_speed if self.cruise_speed > 0 else 0.0
 
-    def can_reach(self, distance: float, alternate_nm: float = 100.0) -> bool:
-        needed = self.fuel_needed(distance) + self.fuel_needed(alternate_nm) * 1.1
-        return needed <= self.fuel_capacity
+    def fuel_required(self, burn_rate: float = 3000.0) -> float:
+        return self.flight_time() * burn_rate
 
-    def stats(self, distance: float = 500) -> Dict:
-        return {
-            "endurance_hrs": round(self.endurance(), 1),
-            "max_range_nm": round(self.max_range(), 1),
-            "fuel_needed": round(self.fuel_needed(distance), 1),
-            "can_reach": self.can_reach(distance)
-        }
+    def etas(self, departure: float = 0.0) -> List[Tuple[str, float]]:
+        times = []
+        t = departure
+        for i in range(len(self.waypoints)):
+            times.append((self.waypoints[i].name, t))
+            if i < len(self.waypoints) - 1:
+                t += self.leg_distance(self.waypoints[i], self.waypoints[i+1]) / self.cruise_speed
+        return times
+
+    def stats(self) -> Dict:
+        return {"waypoints": len(self.waypoints), "distance": round(self.total_distance(), 1), "flight_time": round(self.flight_time(), 2)}
 
 def run():
     fp = FlightPlanner()
-    print(fp.stats(800))
-    print("Waypoints:", fp.waypoint_distance([(40.7, -74.0), (51.5, -0.1), (48.9, 2.3)]))
+    fp.add_waypoint(Waypoint("JFK", 40.64, -73.78))
+    fp.add_waypoint(Waypoint("BOS", 42.37, -71.02))
+    fp.add_waypoint(Waypoint("DCA", 38.85, -77.04))
+    print(fp.stats())
+    print("ETAs:", fp.etas())
 
 if __name__ == "__main__":
     run()

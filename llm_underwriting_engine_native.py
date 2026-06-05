@@ -1,54 +1,52 @@
-"""Underwriting Engine — scoring, declination, rating factors, native, stdlib only."""
+"""Underwriting Engine — scoring, declination, modification, native, stdlib only."""
 from __future__ import annotations
 from dataclasses import dataclass, field
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Tuple
 
 @dataclass
 class UnderwritingEngine:
-    factors: Dict[str, float] = field(default_factory=dict)
-    """factor -> weight"""
-    scores: Dict[str, float] = field(default_factory=dict)
-    """factor -> applicant score"""
-    min_acceptable: float = 0.6
+    age: int = 30
+    health_score: float = 80.0
+    credit_score: int = 700
+    occupation_risk: int = 1
+    smoking: bool = False
 
-    def add_factor(self, name: str, weight: float, score: float):
-        self.factors[name] = weight
-        self.scores[name] = score
+    def risk_score(self) -> float:
+        score = 0.0
+        score += max(0, (self.age - 25) * 0.5)
+        score += max(0, (100 - self.health_score) * 0.3)
+        score += max(0, (700 - self.credit_score) * 0.01)
+        score += self.occupation_risk * 5
+        if self.smoking:
+            score += 20
+        return score
 
-    def weighted_score(self) -> float:
-        total_weight = sum(self.factors.values())
-        if total_weight == 0:
-            return 0.0
-        return sum(self.scores.get(f, 0) * w for f, w in self.factors.items()) / total_weight
-
-    def approve(self) -> bool:
-        return self.weighted_score() >= self.min_acceptable
-
-    def rate_class(self) -> str:
-        s = self.weighted_score()
-        if s >= 0.9: return "preferred"
-        elif s >= 0.75: return "standard"
-        elif s >= 0.6: return "substandard"
-        return "decline"
+    def decision(self) -> str:
+        s = self.risk_score()
+        if s > 80: return "decline"
+        elif s > 50: return "modified"
+        elif s > 30: return "rated"
+        return "standard"
 
     def loading_pct(self) -> float:
-        s = self.weighted_score()
-        if s >= 0.9: return 0.0
-        elif s >= 0.75: return 0.1
-        elif s >= 0.6: return 0.25
-        return 0.5
+        s = self.risk_score()
+        if s > 50: return (s - 50) * 2
+        return 0.0
+
+    def exclusion_list(self) -> List[str]:
+        if self.occupation_risk > 3:
+            return ["accidental death", "disability"]
+        if self.smoking:
+            return ["smoking-related illness"]
+        return []
 
     def stats(self) -> Dict:
-        return {"score": round(self.weighted_score(), 3), "approved": self.approve(), "class": self.rate_class()}
+        return {"score": round(self.risk_score(), 1), "decision": self.decision(), "loading": round(self.loading_pct(), 1)}
 
 def run():
-    ue = UnderwritingEngine()
-    ue.add_factor("age", 0.3, 0.8)
-    ue.add_factor("health", 0.4, 0.7)
-    ue.add_factor("occupation", 0.2, 0.9)
-    ue.add_factor("credit", 0.1, 0.85)
+    ue = UnderwritingEngine(age=55, health_score=60, credit_score=600, occupation_risk=4, smoking=True)
     print(ue.stats())
-    print("Loading:", ue.loading_pct())
+    print("Exclusions:", ue.exclusion_list())
 
 if __name__ == "__main__":
     run()

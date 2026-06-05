@@ -1,7 +1,7 @@
-"""Tree Inventory — DBH, height, volume, biomass, native, stdlib only."""
+"""Tree Inventory — DBH, height, volume, species, native, stdlib only."""
 from __future__ import annotations
 from dataclasses import dataclass, field
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Tuple
 import math
 
 @dataclass
@@ -17,50 +17,38 @@ class TreeInventory:
     def add_tree(self, t: Tree):
         self.trees.append(t)
 
-    def volume(self, t: Tree) -> float:
-        """Smalian formula approximation."""
-        r = t.dbh_cm / 200
-        return math.pi * r ** 2 * t.height_m * 0.5
-
-    def biomass(self, t: Tree) -> float:
-        """General allometric equation."""
-        return 0.0577 * (t.dbh_cm ** 2) * t.height_m
-
-    def carbon_stock(self, t: Tree) -> float:
-        return self.biomass(t) * 0.47
-
-    def basal_area(self, t: Tree) -> float:
-        r = t.dbh_cm / 200
-        return math.pi * r ** 2
+    def basal_area(self, tree: Tree) -> float:
+        r = tree.dbh_cm / 200
+        return math.pi * r * r
 
     def total_basal_area(self) -> float:
         return sum(self.basal_area(t) for t in self.trees)
 
+    def volume(self, tree: Tree, form_factor: float = 0.5) -> float:
+        return self.basal_area(tree) * tree.height_m * form_factor
+
     def total_volume(self) -> float:
         return sum(self.volume(t) for t in self.trees)
 
-    def species_distribution(self) -> Dict[str, int]:
-        dist = {}
+    def species_count(self) -> Dict[str, int]:
+        counts = {}
         for t in self.trees:
-            dist[t.species] = dist.get(t.species, 0) + 1
-        return dist
+            counts[t.species] = counts.get(t.species, 0) + 1
+        return counts
+
+    def avg_dbh(self) -> float:
+        return sum(t.dbh_cm for t in self.trees) / len(self.trees) if self.trees else 0.0
 
     def stats(self) -> Dict:
-        return {
-            "trees": len(self.trees),
-            "total_basal_area": round(self.total_basal_area(), 3),
-            "total_volume": round(self.total_volume(), 2),
-            "species": self.species_distribution()
-        }
+        return {"trees": len(self.trees), "basal_area": round(self.total_basal_area(), 2), "volume": round(self.total_volume(), 2), "species": len(self.species_count())}
 
 def run():
     ti = TreeInventory()
+    ti.add_tree(Tree("Pine", 30, 20))
     ti.add_tree(Tree("Oak", 45, 25))
-    ti.add_tree(Tree("Pine", 35, 30))
-    ti.add_tree(Tree("Oak", 50, 28))
+    ti.add_tree(Tree("Pine", 25, 18))
     print(ti.stats())
-    for t in ti.trees:
-        print(f"{t.species}: carbon={ti.carbon_stock(t):.1f} kg")
+    print("Species:", ti.species_count())
 
 if __name__ == "__main__":
     run()

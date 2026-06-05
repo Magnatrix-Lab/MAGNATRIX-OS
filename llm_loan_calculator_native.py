@@ -1,55 +1,54 @@
-"""Loan Calculator — circulation, overdue, renewals, holds, native, stdlib only."""
+"""Loan Calculator — EMI, APR, amortization, native, stdlib only."""
 from __future__ import annotations
 from dataclasses import dataclass, field
-from typing import List, Dict, Optional
-from datetime import datetime, timedelta
+from typing import List, Dict, Optional, Tuple
+import math
 
 @dataclass
-class LoanRecord:
-    item_id: str
-    patron_id: str
-    checkout_date: str
-    due_date: str
-    renewals: int = 0
-
 class LoanCalculator:
-    def __init__(self):
-        self.loans: List[LoanRecord] = []
+    principal: float = 100000.0
+    annual_rate: float = 0.08
+    term_months: int = 120
 
-    def add_loan(self, l: LoanRecord):
-        self.loans.append(l)
+    def monthly_rate(self) -> float:
+        return self.annual_rate / 12
 
-    def overdue(self, current_date: str) -> List[LoanRecord]:
-        return [l for l in self.loans if l.due_date < current_date]
+    def emi(self) -> float:
+        r = self.monthly_rate()
+        if r == 0:
+            return self.principal / self.term_months
+        return self.principal * r * (1 + r)**self.term_months / ((1 + r)**self.term_months - 1)
 
-    def fine(self, loan: LoanRecord, current_date: str, rate_per_day: float = 1.0) -> float:
-        if loan.due_date >= current_date:
-            return 0.0
-        due = datetime.strptime(loan.due_date, "%Y-%m-%d")
-        curr = datetime.strptime(current_date, "%Y-%m-%d")
-        days = (curr - due).days
-        return days * rate_per_day
+    def total_payment(self) -> float:
+        return self.emi() * self.term_months
 
-    def renewal_eligible(self, loan: LoanRecord, max_renewals: int = 2) -> bool:
-        return loan.renewals < max_renewals
+    def total_interest(self) -> float:
+        return self.total_payment() - self.principal
 
-    def hold_position(self, item_id: str, patron_id: str, holds: List[Dict]) -> int:
-        item_holds = [h for h in holds if h["item_id"] == item_id]
-        item_holds.sort(key=lambda h: h["date"])
-        for i, h in enumerate(item_holds):
-            if h["patron_id"] == patron_id:
-                return i + 1
-        return -1
+    def apr(self, fees: float = 0.0) -> float:
+        total_cost = self.total_interest() + fees
+        return total_cost / self.principal / (self.term_months / 12) * 100
 
-    def stats(self, current_date: str) -> Dict:
-        return {"total_loans": len(self.loans), "overdue": len(self.overdue(current_date))}
+    def amortization_schedule(self) -> List[Dict]:
+        schedule = []
+        balance = self.principal
+        r = self.monthly_rate()
+        emi = self.emi()
+        for i in range(1, self.term_months + 1):
+            interest = balance * r
+            principal = emi - interest
+            balance -= principal
+            schedule.append({"month": i, "emi": round(emi, 2), "interest": round(interest, 2), "principal": round(principal, 2), "balance": round(max(0, balance), 2)})
+        return schedule
+
+    def stats(self) -> Dict:
+        return {"emi": round(self.emi(), 2), "total_interest": round(self.total_interest(), 2), "total_payment": round(self.total_payment(), 2)}
 
 def run():
-    lc = LoanCalculator()
-    lc.add_loan(LoanRecord("B1", "P1", "2024-01-01", "2024-01-15", 0))
-    lc.add_loan(LoanRecord("B2", "P2", "2024-01-01", "2024-01-10", 2))
-    print(lc.stats("2024-01-20"))
-    print("Fine B2:", lc.fine(lc.loans[1], "2024-01-20", 2.0))
+    lc = LoanCalculator(principal=200000, annual_rate=0.06, term_months=240)
+    print(lc.stats())
+    print("First payment:", lc.amortization_schedule()[0])
+    print("APR:", lc.apr(5000))
 
 if __name__ == "__main__":
     run()
