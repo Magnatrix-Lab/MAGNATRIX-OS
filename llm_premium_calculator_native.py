@@ -1,44 +1,75 @@
-"""Premium Calculator — life, health, auto, actuarial, native, stdlib only."""
-from __future__ import annotations
-from dataclasses import dataclass, field
-from typing import List, Dict, Optional, Tuple
-import math
+"""Native stdlib module: Premium Calculator
+Calculates insurance premiums by risk factors, coverage, and deductibles.
+"""
+from dataclasses import dataclass
+from typing import Dict
+from enum import Enum
+
+class PolicyType(Enum):
+    AUTO = "auto"
+    HOME = "home"
+    LIFE = "life"
+    HEALTH = "health"
+    BUSINESS = "business"
 
 @dataclass
 class PremiumCalculator:
-    age: int = 30
-    gender: str = "male"
-    sum_assured: float = 100000.0
-    term_years: int = 20
+    policy_type: PolicyType
+    base_premium: float
+    coverage_amount: float
+    deductible: float
     risk_factor: float = 1.0
+    age: int = 35
+    claim_history: int = 0
 
-    def life_premium(self) -> float:
-        base = self.sum_assured / 1000 * 5
-        age_factor = 1 + (self.age - 25) * 0.02
-        gender_factor = 0.95 if self.gender == "female" else 1.0
-        return base * age_factor * gender_factor * self.risk_factor / self.term_years
+    def deductible_discount_pct(self) -> float:
+        if self.deductible >= 1000:
+            return 15
+        elif self.deductible >= 500:
+            return 10
+        elif self.deductible >= 250:
+            return 5
+        return 0
 
-    def health_premium(self) -> float:
-        base = 5000
-        age_factor = 1 + (self.age - 25) * 0.03
-        return base * age_factor * self.risk_factor
+    def age_factor(self) -> float:
+        if self.policy_type == PolicyType.LIFE:
+            if self.age < 30:
+                return 0.8
+            elif self.age < 50:
+                return 1.0
+            elif self.age < 65:
+                return 1.5
+            return 2.5
+        elif self.policy_type == PolicyType.AUTO:
+            if self.age < 25:
+                return 1.5
+            elif self.age < 40:
+                return 1.0
+            return 0.9
+        return 1.0
 
-    def auto_premium(self, car_value: float = 20000) -> float:
-        base = car_value * 0.03
-        age_factor = 1.5 if self.age < 25 else 1.0 if self.age < 50 else 1.2
-        return base * age_factor * self.risk_factor
+    def claim_surcharge_pct(self) -> float:
+        return self.claim_history * 10
 
-    def net_present_value(self, discount_rate: float = 0.05) -> float:
-        premium = self.life_premium()
-        return sum(premium / ((1 + discount_rate) ** t) for t in range(1, self.term_years + 1))
+    def calculated_premium(self) -> float:
+        premium = self.base_premium * self.risk_factor * self.age_factor()
+        premium *= (1 - self.deductible_discount_pct() / 100)
+        premium *= (1 + self.claim_surcharge_pct() / 100)
+        return premium
 
     def stats(self) -> Dict:
-        return {"life": round(self.life_premium(), 2), "health": round(self.health_premium(), 2), "npv": round(self.net_present_value(), 2)}
+        return {
+            "policy_type": self.policy_type.value,
+            "base_premium": self.base_premium,
+            "calculated_premium": round(self.calculated_premium(), 2),
+            "age_factor": round(self.age_factor(), 2),
+            "deductible_discount_pct": self.deductible_discount_pct(),
+            "claim_surcharge_pct": self.claim_surcharge_pct(),
+        }
 
 def run():
-    pc = PremiumCalculator(age=45, sum_assured=500000, risk_factor=1.2)
+    pc = PremiumCalculator(policy_type=PolicyType.AUTO, base_premium=800, coverage_amount=50000, deductible=500, risk_factor=1.1, age=28, claim_history=1)
     print(pc.stats())
-    print("Auto:", pc.auto_premium(30000))
 
 if __name__ == "__main__":
     run()

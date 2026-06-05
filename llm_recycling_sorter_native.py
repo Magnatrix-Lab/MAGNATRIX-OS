@@ -1,43 +1,69 @@
-"""Recycling Sorter -- purity, contamination, bale value, native, stdlib only."""
-from __future__ import annotations
+"""Native stdlib module: Recycling Sorter
+Categorizes materials by recyclability and contamination levels.
+"""
 from dataclasses import dataclass, field
-from typing import List, Dict, Optional
+from typing import List, Dict
+from enum import Enum
+
+class Recyclability(Enum):
+    RECYCLABLE = "recyclable"
+    COMPOSTABLE = "compostable"
+    LANDFILL = "landfill"
+    SPECIAL = "special"
+
+@dataclass
+class MaterialItem:
+    name: str
+    weight_kg: float
+    recyclability: Recyclability
+    contamination_pct: float = 0.0
 
 @dataclass
 class RecyclingSorter:
-    stream: str = "mixed"
-    items: List[Dict] = field(default_factory=list)
+    facility_name: str
+    items: List[MaterialItem] = field(default_factory=list)
 
-    def purity(self) -> float:
-        if not self.items:
+    def total_weight_kg(self) -> float:
+        return sum(i.weight_kg for i in self.items)
+
+    def by_category(self) -> Dict[str, float]:
+        totals = {}
+        for i in self.items:
+            totals[i.recyclability.value] = totals.get(i.recyclability.value, 0) + i.weight_kg
+        return totals
+
+    def contamination_kg(self) -> float:
+        return sum(i.weight_kg * (i.contamination_pct / 100) for i in self.items)
+
+    def contamination_rate_pct(self) -> float:
+        if self.total_weight_kg() == 0:
             return 0.0
-        correct = sum(1 for i in self.items if i.get("correct_stream", False))
-        return correct / len(self.items)
+        return (self.contamination_kg() / self.total_weight_kg()) * 100
 
-    def contamination_rate(self) -> float:
-        return 1 - self.purity()
-
-    def bale_value(self, price_per_ton: float) -> float:
-        total_weight = sum(i.get("weight_kg", 0) for i in self.items) / 1000
-        return total_weight * price_per_ton * self.purity()
-
-    def sort_efficiency(self, target_purity: float = 0.95) -> float:
-        return min(1.0, self.purity() / target_purity)
-
-    def reject_items(self) -> List[str]:
-        return [i.get("id", "") for i in self.items if not i.get("correct_stream", False)]
+    def clean_recyclable_kg(self) -> float:
+        return sum(i.weight_kg * (1 - i.contamination_pct / 100) for i in self.items if i.recyclability == Recyclability.RECYCLABLE)
 
     def stats(self) -> Dict:
-        return {"items": len(self.items), "purity": round(self.purity(), 3), "contamination": round(self.contamination_rate(), 3), "efficiency": round(self.sort_efficiency(), 3)}
+        return {
+            "facility": self.facility_name,
+            "total_weight_kg": round(self.total_weight_kg(), 1),
+            "by_category": {k: round(v, 1) for k, v in self.by_category().items()},
+            "contamination_rate_pct": round(self.contamination_rate_pct(), 1),
+            "clean_recyclable_kg": round(self.clean_recyclable_kg(), 1),
+        }
 
 def run():
-    rs = RecyclingSorter("PET", [
-        {"id": "1", "weight_kg": 0.5, "correct_stream": True},
-        {"id": "2", "weight_kg": 0.3, "correct_stream": True},
-        {"id": "3", "weight_kg": 0.2, "correct_stream": False},
-    ])
+    rs = RecyclingSorter(
+        facility_name="MRF Central",
+        items=[
+            MaterialItem("PET bottles", 200, Recyclability.RECYCLABLE, 5),
+            MaterialItem("cardboard", 150, Recyclability.RECYCLABLE, 3),
+            MaterialItem("food_waste", 80, Recyclability.COMPOSTABLE, 0),
+            MaterialItem("styrofoam", 40, Recyclability.LANDFILL, 0),
+            MaterialItem("batteries", 10, Recyclability.SPECIAL, 0),
+        ]
+    )
     print(rs.stats())
-    print("Rejects:", rs.reject_items())
 
 if __name__ == "__main__":
     run()

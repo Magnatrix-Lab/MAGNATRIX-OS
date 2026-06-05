@@ -1,42 +1,66 @@
-"""Carbon Footprint Calculator — emissions, offsets, scope 1/2/3, native, stdlib only."""
-from __future__ import annotations
+"""Native stdlib module: Carbon Footprint Calculator
+Estimates carbon footprint from waste, energy, and transport activities.
+"""
 from dataclasses import dataclass, field
-from typing import List, Dict, Optional
+from typing import List, Dict
 
 @dataclass
-class CarbonFootprint:
-    scope1: float = 0.0
-    scope2: float = 0.0
-    scope3: float = 0.0
-    offsets: float = 0.0
+class CarbonSource:
+    category: str
+    amount: float
+    unit: str
+    emission_factor_kg_per_unit: float
 
-    def total(self) -> float:
-        return self.scope1 + self.scope2 + self.scope3
+@dataclass
+class CarbonFootprintCalculator:
+    entity_name: str
+    period: str
+    sources: List[CarbonSource] = field(default_factory=list)
 
-    def net(self) -> float:
-        return max(0, self.total() - self.offsets)
+    def total_emissions_kg(self) -> float:
+        return sum(s.amount * s.emission_factor_kg_per_unit for s in self.sources)
 
-    def intensity(self, revenue: float) -> float:
-        return self.net() / revenue if revenue > 0 else 0.0
+    def total_emissions_tons(self) -> float:
+        return self.total_emissions_kg() / 1000
 
-    def breakdown(self) -> Dict[str, float]:
-        total = self.total()
-        if total == 0:
-            return {"scope1": 0, "scope2": 0, "scope3": 0}
-        return {"scope1": self.scope1/total, "scope2": self.scope2/total, "scope3": self.scope3/total}
+    def by_category(self) -> Dict[str, float]:
+        totals = {}
+        for s in self.sources:
+            totals[s.category] = totals.get(s.category, 0) + (s.amount * s.emission_factor_kg_per_unit)
+        return totals
 
-    def target_reduction(self, year: int, base_year: int, base_emissions: float, target_pct: float) -> float:
-        years = year - base_year
-        annual_rate = (1 - target_pct/100) ** (1 / max(years, 1))
-        return base_emissions * (annual_rate ** years)
+    def per_capita_kg(self, people: int) -> float:
+        if people == 0:
+            return 0.0
+        return self.total_emissions_kg() / people
 
-    def stats(self) -> Dict:
-        return {"total": self.total(), "net": self.net(), "breakdown": self.breakdown()}
+    def offset_trees_needed(self, tree_absorption_kg_per_year: float = 20) -> int:
+        if tree_absorption_kg_per_year == 0:
+            return 0
+        return int(self.total_emissions_kg() / tree_absorption_kg_per_year)
+
+    def stats(self, people: int = 1) -> Dict:
+        return {
+            "entity": self.entity_name,
+            "total_kg": round(self.total_emissions_kg(), 1),
+            "total_tons": round(self.total_emissions_tons(), 2),
+            "per_capita_kg": round(self.per_capita_kg(people), 1),
+            "offset_trees": self.offset_trees_needed(),
+            "by_category": {k: round(v, 1) for k, v in self.by_category().items()},
+        }
 
 def run():
-    cf = CarbonFootprint(scope1=100, scope2=200, scope3=500, offsets=50)
-    print(cf.stats())
-    print("Target 2030:", cf.target_reduction(2030, 2024, 800, 30))
+    cfc = CarbonFootprintCalculator(
+        entity_name="Small Office",
+        period="2024",
+        sources=[
+            CarbonSource("electricity", 5000, "kWh", 0.5),
+            CarbonSource("natural_gas", 2000, "kWh", 0.2),
+            CarbonSource("waste", 1000, "kg", 0.5),
+            CarbonSource("commute", 10000, "km", 0.12),
+        ]
+    )
+    print(cfc.stats(people=20))
 
 if __name__ == "__main__":
     run()
