@@ -1,57 +1,68 @@
-"""Weight and Balance Calculator — CG, moment, envelope, native, stdlib only."""
-from __future__ import annotations
+"""Native stdlib module: Weight and Balance Calculator
+Calculates aircraft CG, moment, and weight limits for flight planning.
+"""
 from dataclasses import dataclass, field
-from typing import List, Dict, Optional, Tuple
+from typing import List, Dict
 
 @dataclass
-class WeightItem:
+class Station:
     name: str
-    weight: float
-    arm: float
+    weight_kg: float
+    arm_m: float
 
-class WeightBalance:
-    def __init__(self):
-        self.items: List[WeightItem] = []
-        self.empty_weight: float = 5000.0
-        self.empty_arm: float = 40.0
+@dataclass
+class WeightBalanceCalculator:
+    aircraft_empty_weight_kg: float
+    aircraft_empty_cg_m: float
+    max_takeoff_weight_kg: float
+    max_landing_weight_kg: float
+    stations: List[Station] = field(default_factory=list)
 
-    def add_item(self, item: WeightItem):
-        self.items.append(item)
-
-    def total_weight(self) -> float:
-        return self.empty_weight + sum(i.weight for i in self.items)
+    def total_weight_kg(self) -> float:
+        return self.aircraft_empty_weight_kg + sum(s.weight_kg for s in self.stations)
 
     def total_moment(self) -> float:
-        return self.empty_weight * self.empty_arm + sum(i.weight * i.arm for i in self.items)
+        empty_moment = self.aircraft_empty_weight_kg * self.aircraft_empty_cg_m
+        return empty_moment + sum(s.weight_kg * s.arm_m for s in self.stations)
 
-    def cg(self) -> float:
-        return self.total_moment() / self.total_weight() if self.total_weight() > 0 else 0.0
-
-    def in_envelope(self, min_cg: float = 35.0, max_cg: float = 45.0, max_weight: float = 10000.0) -> bool:
-        cg = self.cg()
-        return min_cg <= cg <= max_cg and self.total_weight() <= max_weight
-
-    def fuel_to_add(self, target_cg: float, fuel_arm: float = 40.0) -> float:
-        current_w = self.total_weight()
-        current_m = self.total_moment()
-        if fuel_arm == target_cg:
+    def center_of_gravity_m(self) -> float:
+        if self.total_weight_kg() == 0:
             return 0.0
-        return (current_w * target_cg - current_m) / (fuel_arm - target_cg) if fuel_arm != target_cg else 0.0
+        return self.total_moment() / self.total_weight_kg()
+
+    def within_takeoff_limits(self) -> bool:
+        return self.total_weight_kg() <= self.max_takeoff_weight_kg
+
+    def within_landing_limits(self) -> bool:
+        return self.total_weight_kg() <= self.max_landing_weight_kg
+
+    def remaining_payload_kg(self) -> float:
+        return max(0, self.max_takeoff_weight_kg - self.total_weight_kg())
 
     def stats(self) -> Dict:
         return {
-            "total_weight": round(self.total_weight(), 1),
-            "cg": round(self.cg(), 2),
-            "in_envelope": self.in_envelope()
+            "total_weight_kg": round(self.total_weight_kg(), 1),
+            "cg_m": round(self.center_of_gravity_m(), 3),
+            "total_moment": round(self.total_moment(), 2),
+            "within_takeoff": self.within_takeoff_limits(),
+            "within_landing": self.within_landing_limits(),
+            "remaining_payload_kg": round(self.remaining_payload_kg(), 1),
         }
 
 def run():
-    wb = WeightBalance()
-    wb.add_item(WeightItem("Pilot", 80, 37))
-    wb.add_item(WeightItem("Passenger", 75, 60))
-    wb.add_item(WeightItem("Baggage", 50, 80))
-    print(wb.stats())
-    print("Fuel to add:", wb.fuel_to_add(42.0))
+    wbc = WeightBalanceCalculator(
+        aircraft_empty_weight_kg=800,
+        aircraft_empty_cg_m=2.5,
+        max_takeoff_weight_kg=1600,
+        max_landing_weight_kg=1500,
+        stations=[
+            Station("pilot", 80, 2.0),
+            Station("passenger", 75, 2.0),
+            Station("fuel", 200, 2.8),
+            Station("baggage", 30, 3.5),
+        ]
+    )
+    print(wbc.stats())
 
 if __name__ == "__main__":
     run()

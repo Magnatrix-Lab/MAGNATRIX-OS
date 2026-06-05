@@ -1,43 +1,74 @@
-"""Tide Calculator — harmonic constituents, tidal range, predictions, native, stdlib only."""
-from __future__ import annotations
+"""Native stdlib module: Tide Calculator
+Calculates tidal heights, ranges, and harmonic constituents.
+"""
 from dataclasses import dataclass, field
-from typing import List, Dict, Optional, Tuple
+from typing import List, Dict
 import math
 
 @dataclass
+class HarmonicConstituent:
+    name: str
+    amplitude_m: float
+    phase_deg: float
+    speed_deg_per_hour: float
+
+@dataclass
 class TideCalculator:
-    constituents: Dict[str, Tuple[float, float]] = field(default_factory=dict)
-    """name -> (amplitude, phase)"""
+    location_name: str
+    mean_sea_level_m: float
+    constituents: List[HarmonicConstituent] = field(default_factory=list)
 
-    def add_constituent(self, name: str, amp: float, phase: float):
-        self.constituents[name] = (amp, phase)
+    def tidal_range_m(self) -> float:
+        if not self.constituents:
+            return 0.0
+        max_amp = sum(c.amplitude_m for c in self.constituents)
+        return 2 * max_amp
 
-    def predict(self, t: float) -> float:
-        """t in hours from reference."""
-        height = 0.0
-        speeds = {"M2": 28.984, "S2": 30.0, "N2": 28.44, "K1": 15.041, "O1": 13.943}
-        for name, (amp, phase) in self.constituents.items():
-            speed = speeds.get(name, 15.0)
-            height += amp * math.cos(math.radians(speed * t - phase))
+    def tidal_height_at_time(self, hours_since_epoch: float) -> float:
+        height = self.mean_sea_level_m
+        for c in self.constituents:
+            angle = math.radians(c.speed_deg_per_hour * hours_since_epoch + c.phase_deg)
+            height += c.amplitude_m * math.cos(angle)
         return height
 
-    def high_low_tides(self, hours: List[float]) -> Tuple[float, float]:
-        heights = [self.predict(h) for h in hours]
-        return max(heights), min(heights)
+    def high_tide_estimate_m(self) -> float:
+        return self.mean_sea_level_m + sum(c.amplitude_m for c in self.constituents)
 
-    def tidal_range(self, hours: List[float]) -> float:
-        high, low = self.high_low_tides(hours)
-        return high - low
+    def low_tide_estimate_m(self) -> float:
+        return self.mean_sea_level_m - sum(c.amplitude_m for c in self.constituents)
+
+    def spring_range_m(self) -> float:
+        return 2 * sum(c.amplitude_m for c in self.constituents)
+
+    def neap_range_m(self) -> float:
+        if len(self.constituents) < 2:
+            return self.spring_range_m()
+        m2 = next((c.amplitude_m for c in self.constituents if c.name == "M2"), 0)
+        s2 = next((c.amplitude_m for c in self.constituents if c.name == "S2"), 0)
+        return 2 * (m2 - s2)
 
     def stats(self) -> Dict:
-        return {"constituents": len(self.constituents), "names": list(self.constituents.keys())}
+        return {
+            "location": self.location_name,
+            "msl_m": self.mean_sea_level_m,
+            "tidal_range_m": round(self.tidal_range_m(), 2),
+            "high_tide_m": round(self.high_tide_estimate_m(), 2),
+            "low_tide_m": round(self.low_tide_estimate_m(), 2),
+            "spring_range_m": round(self.spring_range_m(), 2),
+            "neap_range_m": round(self.neap_range_m(), 2),
+            "constituents": len(self.constituents),
+        }
 
 def run():
-    tc = TideCalculator()
-    tc.add_constituent("M2", 1.2, 0)
-    tc.add_constituent("S2", 0.5, 30)
-    print("Height t=0:", tc.predict(0))
-    print("Range 24h:", tc.tidal_range(list(range(24))))
+    tc = TideCalculator(
+        location_name="Port A",
+        mean_sea_level_m=2.5,
+        constituents=[
+            HarmonicConstituent("M2", 1.2, 0, 28.984),
+            HarmonicConstituent("S2", 0.4, 30, 30.0),
+            HarmonicConstituent("K1", 0.3, 60, 15.041),
+        ]
+    )
     print(tc.stats())
 
 if __name__ == "__main__":

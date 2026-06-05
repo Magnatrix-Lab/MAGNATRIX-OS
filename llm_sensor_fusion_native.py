@@ -1,53 +1,65 @@
-"""Sensor Fusion — Kalman filter, complementary filter, sensor merging, native, stdlib only."""
-from __future__ import annotations
+"""Native stdlib module: Sensor Fusion Calculator
+Fuses sensor readings with complementary and Kalman-style filtering.
+"""
 from dataclasses import dataclass, field
-from typing import List, Dict, Optional, Tuple
-import math
+from typing import List, Dict
 
 @dataclass
-class KalmanFilter1D:
-    x: float = 0.0
-    P: float = 1.0
-    Q: float = 0.01
-    R: float = 0.1
-
-    def predict(self, u: float = 0.0):
-        self.x += u
-        self.P += self.Q
-
-    def update(self, z: float):
-        K = self.P / (self.P + self.R)
-        self.x += K * (z - self.x)
-        self.P = (1 - K) * self.P
+class SensorReading:
+    sensor_name: str
+    value: float
+    variance: float
 
 @dataclass
-class SensorFusion:
-    sensors: Dict[str, List[float]] = field(default_factory=dict)
-    weights: Dict[str, float] = field(default_factory=dict)
-    kf: KalmanFilter1D = field(default_factory=KalmanFilter1D)
+class SensorFusionCalculator:
+    readings: List[SensorReading] = field(default_factory=list)
+    prior_estimate: float = 0.0
+    prior_variance: float = 1.0
 
-    def weighted_average(self, readings: Dict[str, float]) -> float:
-        total_w = sum(self.weights.get(s, 1.0) for s in readings)
-        if total_w == 0:
-            return sum(readings.values()) / len(readings)
-        return sum(readings[s] * self.weights.get(s, 1.0) for s in readings) / total_w
+    def weighted_average(self) -> float:
+        if not self.readings:
+            return self.prior_estimate
+        total_weight = 0.0
+        weighted_sum = 0.0
+        for r in self.readings:
+            weight = 1 / max(r.variance, 0.0001)
+            total_weight += weight
+            weighted_sum += r.value * weight
+        return weighted_sum / total_weight
 
-    def complementary_filter(self, accel_angle: float, gyro_rate: float, dt: float, alpha: float = 0.98) -> float:
-        return alpha * (self.kf.x + gyro_rate * dt) + (1 - alpha) * accel_angle
+    def fused_variance(self) -> float:
+        if not self.readings:
+            return self.prior_variance
+        total_weight = sum(1 / max(r.variance, 0.0001) for r in self.readings)
+        return 1 / total_weight
 
-    def kalman_fuse(self, measurements: List[float]):
-        for z in measurements:
-            self.kf.predict()
-            self.kf.update(z)
-        return self.kf.x
+    def sensor_count(self) -> int:
+        return len(self.readings)
+
+    def variance_reduction_pct(self) -> float:
+        if self.prior_variance == 0:
+            return 0.0
+        return ((self.prior_variance - self.fused_variance()) / self.prior_variance) * 100
 
     def stats(self) -> Dict:
-        return {"sensors": len(self.sensors), "kf_estimate": round(self.kf.x, 4)}
+        return {
+            "sensors": self.sensor_count(),
+            "fused_value": round(self.weighted_average(), 4),
+            "fused_variance": round(self.fused_variance(), 6),
+            "variance_reduction_pct": round(self.variance_reduction_pct(), 2),
+            "prior_estimate": self.prior_estimate,
+        }
 
 def run():
-    sf = SensorFusion(weights={"gps": 0.3, "imu": 0.7})
-    print("Weighted:", sf.weighted_average({"gps": 10.1, "imu": 10.3}))
-    print("Kalman:", sf.kalman_fuse([10.0, 10.2, 10.1, 10.3]))
+    sf = SensorFusionCalculator(
+        readings=[
+            SensorReading("lidar", 10.2, 0.1),
+            SensorReading("ultrasonic", 10.5, 0.3),
+            SensorReading("camera", 9.9, 0.2),
+        ],
+        prior_estimate=10.0,
+        prior_variance=0.5
+    )
     print(sf.stats())
 
 if __name__ == "__main__":
