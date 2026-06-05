@@ -1,45 +1,50 @@
-"""Rock Mechanics — RMR, Q-system, stress, stability, native, stdlib only."""
+"""Rock Mechanics — RMR, Q-system, stress, native, stdlib only."""
 from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import List, Dict, Optional
 
 @dataclass
 class RockMechanics:
-    rmr_score: float = 0.0
-    q_value: float = 0.0
-    ucs_mpa: float = 0.0
-    joint_spacing: float = 0.0
+    rmr_score: int = 60
+    q_value: float = 10.0
+    ucs_mpa: float = 100.0
+    stress_ratio: float = 0.5
 
     def rmr_class(self) -> str:
-        if self.rmr_score >= 81: return "I - Very good"
-        elif self.rmr_score >= 61: return "II - Good"
-        elif self.rmr_score >= 41: return "III - Fair"
-        elif self.rmr_score >= 21: return "IV - Poor"
-        return "V - Very poor"
-
-    def q_support(self) -> str:
-        if self.q_value >= 400: return "no support"
-        elif self.q_value >= 100: return "spot bolting"
-        elif self.q_value >= 10: return "systematic bolting"
-        elif self.q_value >= 1: return "systematic bolting + shotcrete"
-        elif self.q_value >= 0.1: return "heavy support"
-        return "very heavy support"
+        if self.rmr_score >= 81: return "I (Very Good)"
+        elif self.rmr_score >= 61: return "II (Good)"
+        elif self.rmr_score >= 41: return "III (Fair)"
+        elif self.rmr_score >= 21: return "IV (Poor)"
+        return "V (Very Poor)"
 
     def stand_up_time(self) -> float:
-        if self.rmr_score >= 80: return 10.0
-        elif self.rmr_score >= 60: return 1.0
-        elif self.rmr_score >= 40: return 0.1
-        elif self.rmr_score >= 20: return 0.01
-        return 0.0
+        if self.rmr_score >= 81: return 10 * 365
+        elif self.rmr_score >= 61: return 6 * 30
+        elif self.rmr_score >= 41: return 7
+        elif self.rmr_score >= 21: return 10 / 24
+        return 0.5 / 24
 
-    def stability_factor(self) -> float:
-        return self.rmr_score / 100
+    def support_required(self) -> str:
+        if self.rmr_score >= 81: return "none"
+        elif self.rmr_score >= 61: return "spot bolting"
+        elif self.rmr_score >= 41: return "systematic bolting"
+        elif self.rmr_score >= 21: return "heavy support"
+        return "extensive support"
+
+    def q_support(self) -> float:
+        return self.q_value ** 0.5 if self.q_value > 0 else 0.0
+
+    def stress_condition(self) -> str:
+        if self.stress_ratio < 0.2: return "low stress"
+        elif self.stress_ratio < 0.6: return "medium stress"
+        elif self.stress_ratio < 0.8: return "high stress"
+        return "very high stress"
 
     def stats(self) -> Dict:
-        return {"rmr_class": self.rmr_class(), "q_support": self.q_support(), "stand_up": self.stand_up_time(), "stability": round(self.stability_factor(), 2)}
+        return {"rmr_class": self.rmr_class(), "stand_up_time_days": round(self.stand_up_time(), 1), "support": self.support_required(), "stress": self.stress_condition()}
 
 def run():
-    rm = RockMechanics(rmr_score=65, q_value=25, ucs_mpa=80, joint_spacing=0.5)
+    rm = RockMechanics(rmr_score=55, q_value=8, stress_ratio=0.4)
     print(rm.stats())
 
 if __name__ == "__main__":
