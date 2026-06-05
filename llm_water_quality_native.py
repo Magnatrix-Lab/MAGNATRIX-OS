@@ -1,53 +1,65 @@
-"""Water Quality -- turbidity, pH, dissolved oxygen, coliform, native, stdlib only."""
-from __future__ import annotations
+"""Native stdlib module: Water Quality Monitor
+Tracks water quality parameters and calculates WQI for aquaculture.
+"""
 from dataclasses import dataclass, field
-from typing import List, Dict, Optional
+from typing import List, Dict
 
 @dataclass
-class WaterQuality:
-    ph: float = 7.0
-    turbidity_ntu: float = 1.0
-    dissolved_oxygen_mg_l: float = 8.0
-    total_coliform_mpn: float = 0.0
-    temperature_c: float = 20.0
+class WaterParameter:
+    name: str
+    value: float
+    unit: str
+    ideal_min: float
+    ideal_max: float
+    weight: float = 1.0
 
-    def ph_status(self) -> str:
-        if 6.5 <= self.ph <= 8.5: return "acceptable"
-        elif 6.0 <= self.ph < 6.5 or 8.5 < self.ph <= 9.0: return "marginal"
-        return "unacceptable"
+@dataclass
+class WaterQualityMonitor:
+    system_name: str
+    parameters: List[WaterParameter] = field(default_factory=list)
 
-    def turbidity_status(self) -> str:
-        if self.turbidity_ntu <= 1: return "excellent"
-        elif self.turbidity_ntu <= 4: return "acceptable"
-        elif self.turbidity_ntu <= 10: return "marginal"
-        return "unacceptable"
-
-    def do_status(self) -> str:
-        if self.dissolved_oxygen_mg_l >= 6: return "good"
-        elif self.dissolved_oxygen_mg_l >= 4: return "moderate"
-        return "poor"
-
-    def safe_for_drinking(self) -> bool:
-        return (self.ph_status() == "acceptable" and 
-                self.turbidity_ntu <= 4 and 
-                self.total_coliform_mpn == 0 and 
-                self.dissolved_oxygen_mg_l >= 4)
+    def _parameter_score(self, param: WaterParameter) -> float:
+        if param.value < param.ideal_min or param.value > param.ideal_max:
+            return 0.0
+        range_mid = (param.ideal_min + param.ideal_max) / 2
+        range_total = param.ideal_max - param.ideal_min
+        if range_total == 0:
+            return 100.0
+        deviation = abs(param.value - range_mid) / (range_total / 2)
+        return max(0, 100 - (deviation * 100))
 
     def wqi(self) -> float:
-        scores = [
-            max(0, 100 - abs(self.ph - 7.5) * 20),
-            max(0, 100 - self.turbidity_ntu * 10),
-            min(100, self.dissolved_oxygen_mg_l * 12.5),
-            100 if self.total_coliform_mpn == 0 else max(0, 100 - self.total_coliform_mpn * 10)
-        ]
-        return sum(scores) / len(scores)
+        if not self.parameters:
+            return 0.0
+        total_weight = sum(p.weight for p in self.parameters)
+        if total_weight == 0:
+            return 0.0
+        weighted_sum = sum(self._parameter_score(p) * p.weight for p in self.parameters)
+        return weighted_sum / total_weight
+
+    def out_of_range(self) -> List[str]:
+        return [p.name for p in self.parameters if p.value < p.ideal_min or p.value > p.ideal_max]
 
     def stats(self) -> Dict:
-        return {"ph": self.ph_status(), "turbidity": self.turbidity_status(), "do": self.do_status(), "safe": self.safe_for_drinking(), "wqi": round(self.wqi(), 1)}
+        return {
+            "system": self.system_name,
+            "wqi": round(self.wqi(), 1),
+            "parameters_count": len(self.parameters),
+            "out_of_range": self.out_of_range(),
+        }
 
 def run():
-    wq = WaterQuality(ph=7.2, turbidity_ntu=2, dissolved_oxygen_mg_l=7.5, total_coliform_mpn=0)
-    print(wq.stats())
+    wqm = WaterQualityMonitor(
+        system_name="Pond A",
+        parameters=[
+            WaterParameter("temperature", 26, "C", 22, 28, 1.0),
+            WaterParameter("ph", 7.2, "", 6.5, 8.5, 1.0),
+            WaterParameter("ammonia", 0.3, "mg/L", 0, 0.5, 2.0),
+            WaterParameter("nitrite", 0.1, "mg/L", 0, 0.2, 2.0),
+            WaterParameter("dissolved_oxygen", 5.5, "mg/L", 5, 8, 2.0),
+        ]
+    )
+    print(wqm.stats())
 
 if __name__ == "__main__":
     run()
