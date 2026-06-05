@@ -1,43 +1,50 @@
-"""Color Separator -- CMYK, spot, halftone, trapping, native, stdlib only."""
-from __future__ import annotations
+"""Native stdlib module: Color Separator
+Calculates CMYK color separations and ink coverage for print jobs.
+"""
 from dataclasses import dataclass, field
-from typing import List, Dict, Optional, Tuple
+from typing import List, Dict
+
+@dataclass
+class InkCoverage:
+    cyan_pct: float
+    magenta_pct: float
+    yellow_pct: float
+    black_pct: float
 
 @dataclass
 class ColorSeparator:
-    rgb: Tuple[int, int, int] = (0, 0, 0)
+    job_name: str
+    page_count: int
+    coverage_per_page: InkCoverage = field(default_factory=lambda: InkCoverage(30, 25, 20, 40))
+    ink_cost_per_pct: float = 0.05
 
-    def to_cmyk(self) -> Tuple[float, float, float, float]:
-        r, g, b = self.rgb[0] / 255, self.rgb[1] / 255, self.rgb[2] / 255
-        k = 1 - max(r, g, b)
-        c = (1 - r - k) / (1 - k) if k < 1 else 0
-        m = (1 - g - k) / (1 - k) if k < 1 else 0
-        y = (1 - b - k) / (1 - k) if k < 1 else 0
-        return round(c, 3), round(m, 3), round(y, 3), round(k, 3)
+    def total_ink_units(self) -> Dict[str, float]:
+        return {
+            "cyan": self.page_count * self.coverage_per_page.cyan_pct,
+            "magenta": self.page_count * self.coverage_per_page.magenta_pct,
+            "yellow": self.page_count * self.coverage_per_page.yellow_pct,
+            "black": self.page_count * self.coverage_per_page.black_pct,
+        }
 
-    def total_ink_coverage(self) -> float:
-        c, m, y, k = self.to_cmyk()
-        return (c + m + y + k) * 100
+    def ink_cost(self) -> float:
+        units = self.total_ink_units()
+        return sum(units.values()) * self.ink_cost_per_pct
 
-    def halftone_dots(self, lpi: int = 150) -> int:
-        return lpi ** 2
-
-    def trapping_offset(self, base_color: str) -> float:
-        if base_color in ["cyan", "magenta", "yellow"]:
-            return 0.1
-        return 0.2
-
-    def spot_color_needed(self, brand_colors: List[Tuple[int, int, int]]) -> bool:
-        for bc in brand_colors:
-            if bc != self.rgb:
-                return True
-        return False
+    def total_coverage_pct(self) -> float:
+        c = self.coverage_per_page
+        return c.cyan_pct + c.magenta_pct + c.yellow_pct + c.black_pct
 
     def stats(self) -> Dict:
-        return {"rgb": self.rgb, "cmyk": self.to_cmyk(), "ink_coverage": round(self.total_ink_coverage(), 1)}
+        return {
+            "job": self.job_name,
+            "pages": self.page_count,
+            "total_ink_units": {k: round(v, 1) for k, v in self.total_ink_units().items()},
+            "ink_cost": round(self.ink_cost(), 2),
+            "total_coverage_pct": round(self.total_coverage_pct(), 1),
+        }
 
 def run():
-    cs = ColorSeparator((255, 128, 0))
+    cs = ColorSeparator(job_name="Brochure", page_count=5000, coverage_per_page=InkCoverage(35, 30, 25, 45))
     print(cs.stats())
 
 if __name__ == "__main__":

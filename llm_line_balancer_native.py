@@ -1,60 +1,60 @@
-"""Line Balancer — cycle time, workstations, precedence, native, stdlib only."""
-from __future__ import annotations
+"""Native stdlib module: Line Balancer
+Balances production line tasks across stations to minimize cycle time.
+"""
 from dataclasses import dataclass, field
-from typing import List, Dict, Optional, Tuple, Set
+from typing import List, Dict
 
 @dataclass
 class Task:
-    id: str
-    time: float
+    name: str
+    duration_sec: float
     predecessors: List[str] = field(default_factory=list)
 
+@dataclass
 class LineBalancer:
-    def __init__(self):
-        self.tasks: Dict[str, Task] = {}
-        self.cycle_time: float = 10.0
+    line_name: str
+    cycle_time_sec: float
+    tasks: List[Task] = field(default_factory=list)
 
-    def add_task(self, t: Task):
-        self.tasks[t.id] = t
-
-    def total_time(self) -> float:
-        return sum(t.time for t in self.tasks.values())
+    def total_work_content(self) -> float:
+        return sum(t.duration_sec for t in self.tasks)
 
     def min_stations(self) -> int:
-        return math.ceil(self.total_time() / self.cycle_time)
+        if self.cycle_time_sec <= 0:
+            return 0
+        return max(1, int(self.total_work_content() / self.cycle_time_sec) + (1 if self.total_work_content() % self.cycle_time_sec > 0 else 0))
 
-    def balance(self) -> List[List[str]]:
-        stations = []
-        assigned = set()
-        while len(assigned) < len(self.tasks):
-            station = []
-            station_time = 0.0
-            available = [t for t in self.tasks.values() if t.id not in assigned and all(p in assigned for p in t.predecessors)]
-            available.sort(key=lambda t: t.time, reverse=True)
-            for t in available:
-                if station_time + t.time <= self.cycle_time:
-                    station.append(t.id)
-                    station_time += t.time
-                    assigned.add(t.id)
-            stations.append(station)
-        return stations
+    def balance_efficiency(self, num_stations: int) -> float:
+        if num_stations == 0:
+            return 0.0
+        return (self.total_work_content() / (num_stations * self.cycle_time_sec)) * 100
 
-    def efficiency(self) -> float:
-        stations = self.balance()
-        idle = sum(self.cycle_time - sum(self.tasks[tid].time for tid in s) for s in stations)
-        return 1 - idle / (len(stations) * self.cycle_time)
+    def idle_time(self, num_stations: int) -> float:
+        return (num_stations * self.cycle_time_sec) - self.total_work_content()
 
-    def stats(self) -> Dict:
-        stations = self.balance()
-        return {"tasks": len(self.tasks), "stations": len(stations), "efficiency": round(self.efficiency(), 3)}
+    def stats(self, num_stations: int = 0) -> Dict:
+        if num_stations == 0:
+            num_stations = self.min_stations()
+        return {
+            "line": self.line_name,
+            "total_work_content_sec": round(self.total_work_content(), 1),
+            "min_stations": self.min_stations(),
+            "balance_efficiency_pct": round(self.balance_efficiency(num_stations), 1),
+            "idle_time_sec": round(self.idle_time(num_stations), 1),
+        }
 
 def run():
-    lb = LineBalancer(cycle_time=10)
-    lb.add_task(Task("A", 3))
-    lb.add_task(Task("B", 4, ["A"]))
-    lb.add_task(Task("C", 5, ["A"]))
-    lb.add_task(Task("D", 3, ["B", "C"]))
-    print("Balance:", lb.balance())
+    lb = LineBalancer(
+        line_name="Assembly Line A",
+        cycle_time_sec=60,
+        tasks=[
+            Task("install_engine", 45),
+            Task("attach_wheels", 30),
+            Task("wiring", 40),
+            Task("quality_check", 25),
+            Task("packaging", 20),
+        ]
+    )
     print(lb.stats())
 
 if __name__ == "__main__":

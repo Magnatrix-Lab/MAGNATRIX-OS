@@ -1,57 +1,60 @@
-"""Readability Scorer — Flesch-Kincaid, Gunning Fog, SMOG, native, stdlib only."""
-from __future__ import annotations
-from dataclasses import dataclass, field
-from typing import List, Dict, Optional
-import re, math
+"""Native stdlib module: Readability Scorer
+Scores text readability using Flesch-Kincaid and Gunning Fog indices.
+"""
+from dataclasses import dataclass
+from typing import Dict
 
 @dataclass
 class ReadabilityScorer:
-    text: str = ""
+    text: str
 
-    def _counts(self) -> Tuple[int, int, int, int]:
-        sentences = len(re.findall(r'[.!?]+', self.text)) or 1
-        words = len(re.findall(r'\w+', self.text)) or 1
-        syllables = sum(max(1, len(w) // 3) for w in re.findall(r'\w+', self.text))
-        complex_words = sum(1 for w in re.findall(r'\w+', self.text) if max(1, len(w) // 3) >= 3)
-        return sentences, words, syllables, complex_words
+    def word_count(self) -> int:
+        return len(self.text.split())
 
-    def flesch_reading_ease(self) -> float:
-        s, w, sy, _ = self._counts()
-        return 206.835 - 1.015 * (w / s) - 84.6 * (sy / w)
+    def sentence_count(self) -> int:
+        return max(1, self.text.count(".") + self.text.count("!") + self.text.count("?"))
+
+    def syllable_count(self) -> int:
+        words = self.text.lower().split()
+        count = 0
+        for word in words:
+            syllables = 0
+            vowels = "aeiouy"
+            if word[0] in vowels:
+                syllables += 1
+            for i in range(1, len(word)):
+                if word[i] in vowels and word[i-1] not in vowels:
+                    syllables += 1
+            if word.endswith("e"):
+                syllables -= 1
+            count += max(1, syllables)
+        return count
+
+    def flesch_kincaid_ease(self) -> float:
+        if self.sentence_count() == 0 or self.word_count() == 0:
+            return 0.0
+        return 206.835 - 1.015 * (self.word_count() / self.sentence_count()) - 84.6 * (self.syllable_count() / self.word_count())
 
     def flesch_kincaid_grade(self) -> float:
-        s, w, sy, _ = self._counts()
-        return 0.39 * (w / s) + 11.8 * (sy / w) - 15.59
+        if self.sentence_count() == 0 or self.word_count() == 0:
+            return 0.0
+        return 0.39 * (self.word_count() / self.sentence_count()) + 11.8 * (self.syllable_count() / self.word_count()) - 15.59
 
     def gunning_fog(self) -> float:
-        s, w, _, cw = self._counts()
-        return 0.4 * ((w / s) + 100 * (cw / w))
+        if self.sentence_count() == 0 or self.word_count() == 0:
+            return 0.0
+        complex_words = sum(1 for w in self.text.split() if len(w) > 6)
+        return 0.4 * ((self.word_count() / self.sentence_count()) + 100 * (complex_words / self.word_count()))
 
-    def smog_index(self) -> float:
-        sentences = len(re.findall(r'[.!?]+', self.text)) or 1
-        complex_words = sum(1 for w in re.findall(r'\w+', self.text) if max(1, len(w) // 3) >= 3)
-        return math.sqrt(complex_words * (30 / sentences)) + 3 if sentences > 0 else 0
-
-    def grade_level(self) -> str:
-        fk = self.flesch_kincaid_grade()
-        if fk < 6: return "elementary"
-        elif fk < 9: return "middle school"
-        elif fk < 13: return "high school"
-        elif fk < 16: return "college"
-        return "graduate"
-
-    def stats(self) -> Dict:
+    def stats(self) -> Dict[str, float]:
         return {
-            "flesch": round(self.flesch_reading_ease(), 1),
-            "fk_grade": round(self.flesch_kincaid_grade(), 1),
+            "flesch_kincaid_ease": round(self.flesch_kincaid_ease(), 1),
+            "flesch_kincaid_grade": round(self.flesch_kincaid_grade(), 1),
             "gunning_fog": round(self.gunning_fog(), 1),
-            "smog": round(self.smog_index(), 1),
-            "grade": self.grade_level()
         }
 
 def run():
-    text = "The cat sat on the mat. It was very comfortable. The sun was shining brightly."
-    rs = ReadabilityScorer(text)
+    rs = ReadabilityScorer(text="The quick brown fox jumps over the lazy dog. The cat sat on the mat. A journey of a thousand miles begins with a single step.")
     print(rs.stats())
 
 if __name__ == "__main__":
