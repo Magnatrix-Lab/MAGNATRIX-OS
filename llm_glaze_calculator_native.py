@@ -1,45 +1,49 @@
-"""Glaze Calculator — unity molecular, SiO2:Al2O3 ratio, native, stdlib only."""
-from __future__ import annotations
-from dataclasses import dataclass, field
-from typing import List, Dict, Optional, Tuple
+"""Native stdlib module: Glaze Calculator
+Calculates glaze recipes, unity formulas, and SiO2:Al2O3 ratios.
+"""
+from dataclasses import dataclass
+from typing import Dict, Optional
 
 @dataclass
 class GlazeCalculator:
-    ingredients: Dict[str, Dict[str, float]] = field(default_factory=dict)
-    """ingredient -> {SiO2, Al2O3, flux} mol%"""
+    silica_pct: float
+    alumina_pct: float
+    flux_pct: float
+    batch_grams: float = 1000.0
 
-    def unity_formula(self) -> Dict[str, float]:
-        total = sum(d.get("flux", 0) for d in self.ingredients.values())
-        if total == 0:
-            return {}
-        return {k: sum(d.get(k, 0) for d in self.ingredients.values()) / total for k in ["SiO2", "Al2O3", "flux"]}
+    def total_pct(self) -> float:
+        return self.silica_pct + self.alumina_pct + self.flux_pct
+
+    def normalized_silica(self) -> float:
+        return self.silica_pct / self.total_pct() if self.total_pct() else 0
+
+    def normalized_alumina(self) -> float:
+        return self.alumina_pct / self.total_pct() if self.total_pct() else 0
+
+    def normalized_flux(self) -> float:
+        return self.flux_pct / self.total_pct() if self.total_pct() else 0
 
     def silica_alumina_ratio(self) -> float:
-        f = self.unity_formula()
-        if not f.get("Al2O3", 0):
-            return 0.0
-        return f.get("SiO2", 0) / f.get("Al2O3", 0)
+        return self.silica_pct / self.alumina_pct if self.alumina_pct else 0
 
-    def glaze_type(self) -> str:
-        r = self.silica_alumina_ratio()
-        if r > 12: return "matte"
-        elif r > 6: return "satin"
-        elif r > 3: return "glossy"
-        return "crystalline"
+    def flux_index(self) -> float:
+        return self.normalized_flux() / (self.normalized_silica() + self.normalized_alumina())
 
-    def expansion_coefficient(self) -> float:
-        f = self.unity_formula()
-        return 4.5 * f.get("SiO2", 0) + 1.5 * f.get("Al2O3", 0) + 15 * f.get("flux", 0)
+    def batch_amount(self, material_pct: float) -> float:
+        return material_pct / 100 * self.batch_grams
 
     def stats(self) -> Dict:
-        return {"unity": self.unity_formula(), "ratio": round(self.silica_alumina_ratio(), 2), "type": self.glaze_type()}
+        return {
+            "normalized_silica": round(self.normalized_silica(), 3),
+            "normalized_alumina": round(self.normalized_alumina(), 3),
+            "normalized_flux": round(self.normalized_flux(), 3),
+            "silica_alumina_ratio": round(self.silica_alumina_ratio(), 2),
+            "flux_index": round(self.flux_index(), 3),
+            "batch_grams": self.batch_grams,
+        }
 
 def run():
-    gc = GlazeCalculator({
-        "feldspar": {"SiO2": 0.6, "Al2O3": 0.25, "flux": 0.15},
-        "silica": {"SiO2": 1.0, "Al2O3": 0, "flux": 0},
-        "kaolin": {"SiO2": 0.45, "Al2O3": 0.4, "flux": 0.15},
-    })
+    gc = GlazeCalculator(silica_pct=60, alumina_pct=15, flux_pct=25, batch_grams=2000)
     print(gc.stats())
 
 if __name__ == "__main__":
