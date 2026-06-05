@@ -1,45 +1,72 @@
-"""Dice Probability — combinations, expected value, critical hits, native, stdlib only."""
-from __future__ import annotations
-from dataclasses import dataclass, field
-from typing import List, Dict, Optional, Tuple
-from itertools import product
+"""Native stdlib module: Dice Probability Calculator
+Calculates probabilities for dice rolls, combinations, and success thresholds.
+"""
+from dataclasses import dataclass
+from typing import Dict
+import math
 
 @dataclass
-class DiceProbability:
-    sides: int = 6
-    num_dice: int = 2
-    modifier: int = 0
+class DiceProbabilityCalculator:
+    num_dice: int
+    sides_per_die: int
+    target_value: int
 
-    def all_outcomes(self) -> List[int]:
-        outcomes = []
-        for combo in product(range(1, self.sides + 1), repeat=self.num_dice):
-            outcomes.append(sum(combo) + self.modifier)
-        return outcomes
+    def min_total(self) -> int:
+        return self.num_dice
 
-    def probability(self, target: int) -> float:
-        outcomes = self.all_outcomes()
-        return outcomes.count(target) / len(outcomes) if outcomes else 0.0
+    def max_total(self) -> int:
+        return self.num_dice * self.sides_per_die
+
+    def total_combinations(self) -> int:
+        return self.sides_per_die ** self.num_dice
+
+    def probability_meet_or_exceed(self) -> float:
+        if self.target_value > self.max_total():
+            return 0.0
+        if self.target_value <= self.min_total():
+            return 1.0
+        favorable = 0
+        for total in range(self.target_value, self.max_total() + 1):
+            favorable += self._ways_to_total(total)
+        return favorable / self.total_combinations()
+
+    def _ways_to_total(self, total: int) -> int:
+        if self.num_dice == 1:
+            return 1 if self.min_total() <= total <= self.max_total() else 0
+        if total < self.num_dice or total > self.num_dice * self.sides_per_die:
+            return 0
+        count = 0
+        for i in range(1, self.sides_per_die + 1):
+            count += self._ways_recursive(self.num_dice - 1, total - i)
+        return count
+
+    def _ways_recursive(self, dice: int, total: int) -> int:
+        if dice == 0:
+            return 1 if total == 0 else 0
+        if total < dice or total > dice * self.sides_per_die:
+            return 0
+        count = 0
+        for i in range(1, self.sides_per_die + 1):
+            count += self._ways_recursive(dice - 1, total - i)
+        return count
 
     def expected_value(self) -> float:
-        return sum(self.all_outcomes()) / len(self.all_outcomes()) if self.all_outcomes() else 0.0
+        return self.num_dice * (self.sides_per_die + 1) / 2
 
-    def critical_hit_chance(self, threshold: int) -> float:
-        outcomes = self.all_outcomes()
-        return sum(1 for o in outcomes if o >= threshold) / len(outcomes) if outcomes else 0.0
-
-    def distribution(self) -> Dict[int, float]:
-        outcomes = self.all_outcomes()
-        total = len(outcomes)
-        return {i: outcomes.count(i) / total for i in set(outcomes)}
-
-    def stats(self, threshold: int = 10) -> Dict:
-        return {"expected": round(self.expected_value(), 2), "critical": round(self.critical_hit_chance(threshold), 3), "outcomes": len(self.all_outcomes())}
+    def stats(self) -> Dict:
+        return {
+            "num_dice": self.num_dice,
+            "sides": self.sides_per_die,
+            "target": self.target_value,
+            "min_total": self.min_total(),
+            "max_total": self.max_total(),
+            "expected_value": round(self.expected_value(), 2),
+            "p_meet_or_exceed": round(self.probability_meet_or_exceed(), 4),
+        }
 
 def run():
-    dp = DiceProbability(sides=6, num_dice=3, modifier=2)
-    print(dp.stats())
-    print("P(12):", dp.probability(12))
-    print("Distribution:", dp.distribution())
+    dpc = DiceProbabilityCalculator(num_dice=2, sides_per_die=6, target_value=7)
+    print(dpc.stats())
 
 if __name__ == "__main__":
     run()

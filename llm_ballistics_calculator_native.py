@@ -1,46 +1,62 @@
-"""Ballistics Calculator — trajectory, drop, wind, native, stdlib only."""
-from __future__ import annotations
-from dataclasses import dataclass, field
-from typing import List, Dict, Optional, Tuple
+"""Native stdlib module: Ballistics Calculator
+Calculates projectile trajectories, muzzle velocities, and ranges.
+"""
+from dataclasses import dataclass
+from typing import Dict
 import math
 
 @dataclass
 class BallisticsCalculator:
-    muzzle_velocity: float = 800.0
-    bullet_mass: float = 0.009
-    bc: float = 0.3
-    gravity: float = 9.81
+    muzzle_velocity_m_s: float
+    angle_deg: float
+    projectile_mass_g: float
+    drag_coefficient: float = 0.3
 
-    def drop(self, distance: float, time: float) -> float:
-        return 0.5 * self.gravity * time**2
+    def range_m(self) -> float:
+        g = 9.81
+        angle = math.radians(self.angle_deg)
+        v = self.muzzle_velocity_m_s
+        return (v ** 2 * math.sin(2 * angle)) / g
 
-    def time_of_flight(self, distance: float) -> float:
-        return distance / self.muzzle_velocity
+    def max_height_m(self) -> float:
+        g = 9.81
+        angle = math.radians(self.angle_deg)
+        v = self.muzzle_velocity_m_s
+        return (v ** 2 * (math.sin(angle) ** 2)) / (2 * g)
 
-    def trajectory(self, steps: int = 10, max_dist: float = 1000.0) -> List[Tuple[float, float]]:
-        points = []
-        for i in range(steps + 1):
-            d = i * max_dist / steps
-            t = self.time_of_flight(d)
-            y = self.drop(d, t)
-            points.append((d, -y))
-        return points
+    def time_of_flight_s(self) -> float:
+        g = 9.81
+        angle = math.radians(self.angle_deg)
+        v = self.muzzle_velocity_m_s
+        return (2 * v * math.sin(angle)) / g
 
-    def wind_drift(self, distance: float, wind_speed: float, wind_angle: float) -> float:
-        time = self.time_of_flight(distance)
-        return wind_speed * math.sin(math.radians(wind_angle)) * time
+    def kinetic_energy_j(self) -> float:
+        m = self.projectile_mass_g / 1000
+        return 0.5 * m * (self.muzzle_velocity_m_s ** 2)
 
-    def energy(self, velocity: float) -> float:
-        return 0.5 * self.bullet_mass * velocity**2
+    def momentum_kg_m_s(self) -> float:
+        m = self.projectile_mass_g / 1000
+        return m * self.muzzle_velocity_m_s
 
-    def stats(self, distance: float = 500) -> Dict:
-        t = self.time_of_flight(distance)
-        return {"drop_m": round(self.drop(distance, t), 3), "tof_s": round(t, 3), "energy_j": round(self.energy(self.muzzle_velocity), 1)}
+    def effective_range_m(self, min_energy_j: float = 100) -> float:
+        if self.kinetic_energy_j() == 0:
+            return 0.0
+        return self.range_m() * (self.kinetic_energy_j() / (self.kinetic_energy_j() + min_energy_j))
+
+    def stats(self) -> Dict:
+        return {
+            "muzzle_velocity_m_s": self.muzzle_velocity_m_s,
+            "angle_deg": self.angle_deg,
+            "range_m": round(self.range_m(), 1),
+            "max_height_m": round(self.max_height_m(), 1),
+            "time_of_flight_s": round(self.time_of_flight_s(), 2),
+            "kinetic_energy_j": round(self.kinetic_energy_j(), 1),
+            "momentum_kg_m_s": round(self.momentum_kg_m_s(), 3),
+        }
 
 def run():
-    bc = BallisticsCalculator()
-    print(bc.stats(500))
-    print("Trajectory:", bc.trajectory(5, 500))
+    bc = BallisticsCalculator(muzzle_velocity_m_s=850, angle_deg=45, projectile_mass_g=10)
+    print(bc.stats())
 
 if __name__ == "__main__":
     run()

@@ -1,58 +1,62 @@
-"""Fallacy Detector — informal fallacies, patterns, scoring, native, stdlib only."""
-from __future__ import annotations
+"""Native stdlib module: Fallacy Detector
+Identifies common logical fallacies in arguments by pattern matching.
+"""
 from dataclasses import dataclass, field
-from typing import List, Dict, Optional, Tuple
-import re
+from typing import List, Dict
+from enum import Enum
+
+class FallacyType(Enum):
+    AD_HOMINEM = "ad_hominem"
+    STRAW_MAN = "straw_man"
+    SLIPPERY_SLOPE = "slippery_slope"
+    FALSE_DICHOTOMY = "false_dichotomy"
+    APPEAL_TO_AUTHORITY = "appeal_to_authority"
+    CIRCULAR = "circular_reasoning"
+    HASTY_GENERALIZATION = "hasty_generalization"
+    POST_HOC = "post_hoc"
+    TU_QUOQUE = "tu_quoque"
+    BANDWAGON = "bandwagon"
 
 @dataclass
 class FallacyDetector:
-    patterns: Dict[str, List[str]] = field(default_factory=lambda: {
-        "ad_hominem": ["you are", "your character", "because you", "irrelevant personal"],
-        "appeal_to_authority": ["expert says", "doctor says", "studies show", "according to"],
-        "bandwagon": ["everyone believes", "popular opinion", "common sense", "everyone knows"],
-        "false_cause": ["after this therefore", "because of that", "correlation implies"],
-        "red_herring": ["irrelevant", "changing subject", "distracting", "off topic"]
-    })
-    weights: Dict[str, float] = field(default_factory=lambda: {
-        "ad_hominem": 0.3, "appeal_to_authority": 0.2, "bandwagon": 0.2, "false_cause": 0.2, "red_herring": 0.1
-    })
+    argument_text: str
 
-    def detect(self, text: str) -> Dict[str, float]:
-        text_lower = text.lower()
-        scores = {}
-        for fallacy, markers in self.patterns.items():
-            count = sum(1 for m in markers if m in text_lower)
-            scores[fallacy] = min(1.0, count * self.weights.get(fallacy, 0.2))
-        return scores
-
-    def overall_fallacy_score(self, text: str) -> float:
-        scores = self.detect(text)
-        return sum(scores.values())
-
-    def classify(self, text: str) -> Optional[str]:
-        scores = self.detect(text)
-        if max(scores.values()) == 0:
-            return None
-        return max(scores, key=scores.get)
-
-    def explain(self, fallacy: str) -> str:
-        explanations = {
-            "ad_hominem": "Attacking the person rather than the argument.",
-            "appeal_to_authority": "Using authority as sole evidence without substance.",
-            "bandwagon": "Assuming something is true because many believe it.",
-            "false_cause": "Assuming causation from correlation or sequence.",
-            "red_herring": "Introducing an irrelevant topic to divert attention."
+    def _check_patterns(self, fallacy: FallacyType) -> bool:
+        text = self.argument_text.lower()
+        patterns = {
+            FallacyType.AD_HOMINEM: ["you are wrong because", "you always", "you never", "just like you", "typical of"],
+            FallacyType.STRAW_MAN: ["so you are saying", "basically you think", "what you really mean", "twist"],
+            FallacyType.SLIPPERY_SLOPE: ["lead to", "next thing", "before you know", "snowball", "gateway", "eventually"],
+            FallacyType.FALSE_DICHOTOMY: ["either or", "only two options", "black and white", "no middle ground", "you are with us or"],
+            FallacyType.APPEAL_TO_AUTHORITY: ["expert says", "scientists agree", "studies show", "according to", "authority says"],
+            FallacyType.CIRCULAR: ["because it is true", "it is true because", "by definition", "that is just what it is"],
+            FallacyType.HASTY_GENERALIZATION: ["all of them", "everyone knows", "always happens", "never works", "one time so", "based on my experience"],
+            FallacyType.POST_HOC: ["after that", "since then", "happened because", "followed by", "caused by"],
+            FallacyType.TU_QUOQUE: ["you do it too", "what about you", "you also", "look at yourself", "pot calling"],
+            FallacyType.BANDWAGON: ["everyone is", "most people", "popular opinion", "consensus", "everybody agrees", "majority"],
         }
-        return explanations.get(fallacy, "Unknown fallacy.")
+        for pattern in patterns.get(fallacy, []):
+            if pattern in text:
+                return True
+        return False
 
-    def stats(self, text: str) -> Dict:
-        return {"detected": self.detect(text), "score": self.overall_fallacy_score(text), "primary": self.classify(text)}
+    def detected_fallacies(self) -> List[str]:
+        return [f.value for f in FallacyType if self._check_patterns(f)]
+
+    def severity_score(self) -> int:
+        return len(self.detected_fallacies())
+
+    def stats(self) -> Dict:
+        return {
+            "argument": self.argument_text[:80],
+            "detected_fallacies": self.detected_fallacies(),
+            "severity": self.severity_score(),
+            "fallacy_count": len(self.detected_fallacies()),
+        }
 
 def run():
-    fd = FallacyDetector()
-    text = "You are wrong because you are a bad person. Everyone knows this is true."
-    print(fd.stats(text))
-    print("Explain:", fd.explain(fd.classify(text)))
+    fd = FallacyDetector(argument_text="Everyone knows the Earth is flat. After the law was passed, crime increased. So you are saying we should just give up? Either you support this or you hate freedom. Scientists agree that this is true. You are wrong because you always mess things up.")
+    print(fd.stats())
 
 if __name__ == "__main__":
     run()
