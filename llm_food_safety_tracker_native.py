@@ -1,65 +1,57 @@
-"""Food Safety Tracker — HACCP, temperature logs, recall, native, stdlib only."""
+"""Food Safety Tracker — HACCP, CCP, temperature logs, native, stdlib only."""
 from __future__ import annotations
 from dataclasses import dataclass, field
-from typing import List, Dict, Optional
-from enum import Enum, auto
-import time
+from typing import List, Dict, Optional, Tuple
+from datetime import datetime
+
+@dataclass
+class TemperatureLog:
+    timestamp: str
+    ccp: str
+    temp: float
+    acceptable_range: Tuple[float, float]
 
 class FoodSafetyTracker:
     def __init__(self):
-        self.products: Dict[str, Dict] = {}
-        self.temperature_logs: List[Dict] = []
-        self.recalls: List[Dict] = []
-        self.hazards: List[str] = []
+        self.logs: List[TemperatureLog] = []
+        self.ccps: Dict[str, Tuple[float, float]] = {}
 
-    def register_product(self, product_id: str, batch: str, temp_min: float, temp_max: float, shelf_life: int):
-        self.products[product_id] = {
-            "batch": batch,
-            "temp_min": temp_min,
-            "temp_max": temp_max,
-            "shelf_life": shelf_life,
-            "registered": time.time(),
-            "status": "OK",
-        }
+    def add_ccp(self, name: str, min_temp: float, max_temp: float):
+        self.ccps[name] = (min_temp, max_temp)
 
-    def log_temperature(self, product_id: str, temp: float, timestamp: float = None):
-        timestamp = timestamp or time.time()
-        self.temperature_logs.append({"product": product_id, "temp": temp, "time": timestamp})
-        prod = self.products.get(product_id)
-        if prod and (temp < prod["temp_min"] or temp > prod["temp_max"]):
-            prod["status"] = "ALERT"
-            self.hazards.append(f"Temperature violation: {product_id} at {temp}")
+    def log(self, entry: TemperatureLog):
+        self.logs.append(entry)
 
-    def check_expiry(self, now: float = None) -> List[str]:
-        now = now or time.time()
-        expired = []
-        for pid, prod in self.products.items():
-            if now - prod["registered"] > prod["shelf_life"] * 86400:
-                expired.append(pid)
-                prod["status"] = "EXPIRED"
-        return expired
+    def violations(self) -> List[TemperatureLog]:
+        return [l for l in self.logs if l.temp < l.acceptable_range[0] or l.temp > l.acceptable_range[1]]
 
-    def recall(self, batch: str, reason: str):
-        for pid, prod in self.products.items():
-            if prod["batch"] == batch:
-                prod["status"] = "RECALLED"
-                self.recalls.append({"batch": batch, "reason": reason, "time": time.time()})
+    def violation_rate(self) -> float:
+        if not self.logs:
+            return 0.0
+        return len(self.violations()) / len(self.logs)
+
+    def ccp_status(self, ccp: str) -> str:
+        ccp_logs = [l for l in self.logs if l.ccp == ccp]
+        if not ccp_logs:
+            return "no_data"
+        latest = ccp_logs[-1]
+        min_t, max_t = latest.acceptable_range
+        if min_t <= latest.temp <= max_t:
+            return "safe"
+        return "critical"
 
     def stats(self) -> Dict:
-        statuses = {}
-        for p in self.products.values():
-            s = p["status"]
-            statuses[s] = statuses.get(s, 0) + 1
-        return {"products": len(self.products), "recalls": len(self.recalls), "hazards": len(self.hazards), "statuses": statuses}
+        return {"logs": len(self.logs), "violations": len(self.violations()), "rate": round(self.violation_rate(), 3)}
 
 def run():
     fst = FoodSafetyTracker()
-    fst.register_product("P1", "B001", 2, 8, 7)
-    fst.log_temperature("P1", 10)
-    fst.log_temperature("P1", 5)
-    print(fst.check_expiry())
-    fst.recall("B001", "Contamination risk")
+    fst.add_ccp("Cooking", 70, 100)
+    fst.add_ccp("Cooling", 0, 5)
+    fst.log(TemperatureLog("2024-01-01T10:00", "Cooking", 75, (70, 100)))
+    fst.log(TemperatureLog("2024-01-01T11:00", "Cooking", 65, (70, 100)))
+    fst.log(TemperatureLog("2024-01-01T12:00", "Cooling", 3, (0, 5)))
     print(fst.stats())
+    print("CCP Cooking:", fst.ccp_status("Cooking"))
 
 if __name__ == "__main__":
     run()

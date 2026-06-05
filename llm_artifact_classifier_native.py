@@ -1,142 +1,55 @@
-"""Artifact Classifier — typology, material detection, period assignment, native, stdlib only."""
+"""Artifact Classifier — typology, material, function, native, stdlib only."""
 from __future__ import annotations
 from dataclasses import dataclass, field
-from typing import List, Dict, Optional, Tuple, Set
-from enum import Enum, auto
-from math import sqrt, pow, radians, degrees, sin, cos, atan2, pi, fabs, exp, log
-from datetime import datetime, timedelta
-
-class MaterialType(Enum):
-    CERAMIC = auto()
-    STONE = auto()
-    METAL = auto()
-    BONE = auto()
-    WOOD = auto()
-    GLASS = auto()
-    TEXTILE = auto()
-    ORGANIC = auto()
-
-class Period(Enum):
-    PREHISTORIC = auto()
-    ANCIENT = auto()
-    CLASSICAL = auto()
-    MEDIEVAL = auto()
-    POST_MEDIEVAL = auto()
-    MODERN = auto()
-
-@dataclass
-class ArtifactFeature:
-    name: str
-    value: float  # normalized 0-1
-    weight: float = 1.0
+from typing import List, Dict, Optional, Set, Tuple
 
 @dataclass
 class Artifact:
     id: str
-    features: List[ArtifactFeature] = field(default_factory=list)
-    material: Optional[MaterialType] = None
-    period: Optional[Period] = None
-    dimensions: Tuple[float, float, float] = (0.0, 0.0, 0.0)  # l, w, h cm
-    weight_g: float = 0.0
-    provenance: str = ""
-
-    @property
-    def volume(self) -> float:
-        return self.dimensions[0] * self.dimensions[1] * self.dimensions[2]
-
-    @property
-    def density(self) -> float:
-        return self.weight_g / self.volume if self.volume > 0 else 0.0
-
-    def similarity(self, other: 'Artifact') -> float:
-        """Cosine similarity of feature vectors."""
-        if not self.features or not other.features:
-            return 0.0
-        feat_map = {f.name: f.value * f.weight for f in self.features}
-        other_map = {f.name: f.value * f.weight for f in other.features}
-        all_keys = set(feat_map.keys()) | set(other_map.keys())
-        dot = sum(feat_map.get(k, 0) * other_map.get(k, 0) for k in all_keys)
-        norm1 = sqrt(sum(v**2 for v in feat_map.values()))
-        norm2 = sqrt(sum(v**2 for v in other_map.values()))
-        return dot / (norm1 * norm2) if norm1 > 0 and norm2 > 0 else 0.0
+    dimensions: Tuple[float, float, float]
+    material: str
+    features: List[str] = field(default_factory=list)
 
 class ArtifactClassifier:
     def __init__(self):
         self.artifacts: List[Artifact] = []
-        self.type_database: Dict[str, Dict] = {}
+        self.typologies: Dict[str, List[str]] = {}
 
-    def add_artifact(self, artifact: Artifact) -> None:
-        self.artifacts.append(artifact)
+    def add_artifact(self, a: Artifact):
+        self.artifacts.append(a)
 
-    def add_type(self, name: str, material: MaterialType, period: Period, features: List[ArtifactFeature]) -> None:
-        self.type_database[name] = {"material": material, "period": period, "features": features}
+    def classify_by_material(self, material: str) -> List[Artifact]:
+        return [a for a in self.artifacts if a.material == material]
 
-    def classify(self, artifact: Artifact) -> List[Tuple[str, float]]:
-        """Return top matches with similarity scores."""
-        scores = []
-        for type_name, data in self.type_database.items():
-            temp = Artifact("temp", features=data["features"])
-            sim = artifact.similarity(temp)
-            scores.append((type_name, sim))
-        scores.sort(key=lambda x: x[1], reverse=True)
-        return scores
+    def classify_by_feature(self, feature: str) -> List[Artifact]:
+        return [a for a in self.artifacts if feature in a.features]
 
-    def assign_material(self, artifact: Artifact) -> MaterialType:
-        """Assign material based on density and features."""
-        if artifact.density < 0.5:
-            return MaterialType.ORGANIC
-        elif artifact.density < 1.5:
-            return MaterialType.CERAMIC
-        elif artifact.density < 3.0:
-            return MaterialType.STONE
-        elif artifact.density < 7.0:
-            return MaterialType.GLASS
-        elif artifact.density < 12.0:
-            return MaterialType.BONE
-        return MaterialType.METAL
+    def function_hypothesis(self, a: Artifact) -> str:
+        if "edge" in a.features and "handle" in a.features:
+            return "tool"
+        if "opening" in a.features and "base" in a.features:
+            return "container"
+        if "decoration" in a.features:
+            return "ornament"
+        return "unknown"
 
-    def group_by_similarity(self, threshold: float = 0.7) -> List[List[Artifact]]:
-        groups: List[List[Artifact]] = []
-        for a in self.artifacts:
-            found = False
-            for g in groups:
-                if a.similarity(g[0]) >= threshold:
-                    g.append(a)
-                    found = True
-                    break
-            if not found:
-                groups.append([a])
-        return groups
+    def similarity(self, a1: Artifact, a2: Artifact) -> float:
+        shared = len(set(a1.features) & set(a2.features))
+        total = len(set(a1.features) | set(a2.features))
+        return shared / total if total > 0 else 0.0
 
-    def stats(self) -> Dict[str, float]:
-        by_material = {}
-        by_period = {}
-        for a in self.artifacts:
-            mat = a.material.name if a.material else "UNKNOWN"
-            per = a.period.name if a.period else "UNKNOWN"
-            by_material[mat] = by_material.get(mat, 0) + 1
-            by_period[per] = by_period.get(per, 0) + 1
-        return {
-            "artifact_count": len(self.artifacts),
-            "type_database_count": len(self.type_database),
-            "material_categories": len(by_material),
-            "period_categories": len(by_period)
-        }
+    def stats(self) -> Dict:
+        materials = set(a.material for a in self.artifacts)
+        return {"artifacts": len(self.artifacts), "materials": len(materials)}
 
 def run():
-    clf = ArtifactClassifier()
-    clf.add_type("amphora", MaterialType.CERAMIC, Period.ANCIENT, [
-        ArtifactFeature("curvature", 0.8), ArtifactFeature("thickness", 0.3), ArtifactFeature("glaze", 0.2)
-    ])
-    clf.add_type("sword", MaterialType.METAL, Period.MEDIEVAL, [
-        ArtifactFeature("elongation", 0.9), ArtifactFeature("hardness", 0.8), ArtifactFeature("edge_sharpness", 0.7)
-    ])
-    art = Artifact("A1", features=[
-        ArtifactFeature("curvature", 0.75), ArtifactFeature("thickness", 0.35), ArtifactFeature("glaze", 0.15)
-    ], dimensions=(30, 20, 15), weight_g=800, provenance="Mediterranean")
-    print(f"Classify result: {clf.classify(art)}")
-    print(f"Assigned material: {clf.assign_material(art).name}")
-    print(clf.stats())
+    ac = ArtifactClassifier()
+    ac.add_artifact(Artifact("A1", (10, 5, 2), "stone", ["edge", "handle", "polished"]))
+    ac.add_artifact(Artifact("A2", (8, 8, 10), "clay", ["opening", "base", "decoration"]))
+    ac.add_artifact(Artifact("A3", (10, 5, 2), "stone", ["edge", "handle"]))
+    print(ac.stats())
+    print("Similarity A1-A3:", ac.similarity(ac.artifacts[0], ac.artifacts[2]))
+    print("Function A1:", ac.function_hypothesis(ac.artifacts[0]))
 
 if __name__ == "__main__":
     run()

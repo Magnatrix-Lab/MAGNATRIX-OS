@@ -1,62 +1,41 @@
-"""Property Valuator — comparable sales, regression, cap rate, native, stdlib only."""
+"""Property Valuator — comps, cap rate, DCF, native, stdlib only."""
 from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import List, Dict, Optional, Tuple
-from enum import Enum, auto
-import statistics
 
+@dataclass
 class PropertyValuator:
-    def __init__(self):
-        self.comps: List[Dict] = []
-        self.subject: Dict = {}
+    price: float = 0.0
+    income: float = 0.0
+    expenses: float = 0.0
+    area: float = 0.0
 
-    def add_comparable(self, props: Dict):
-        self.comps.append(props)
+    def cap_rate(self) -> float:
+        noi = self.income - self.expenses
+        return noi / self.price if self.price > 0 else 0.0
 
-    def set_subject(self, props: Dict):
-        self.subject = props
+    def price_per_sqft(self) -> float:
+        return self.price / self.area if self.area > 0 else 0.0
 
-    def comparable_value(self, adjustment_weights: Dict[str, float] = None) -> float:
-        if not self.comps:
+    def dcf_value(self, cash_flows: List[float], discount_rate: float = 0.08) -> float:
+        return sum(cf / ((1 + discount_rate) ** (i + 1)) for i, cf in enumerate(cash_flows))
+
+    def comparable_value(self, comps: List[float], weights: List[float]) -> float:
+        if not comps or not weights or len(comps) != len(weights):
             return 0.0
-        prices = []
-        for comp in self.comps:
-            price = comp.get("price", 0)
-            prices.append(price)
-        return statistics.median(prices) if prices else 0
+        return sum(c * w for c, w in zip(comps, weights)) / sum(weights)
 
-    def income_approach(self, noi: float, cap_rate: float) -> float:
-        return noi / cap_rate if cap_rate else 0
-
-    def cost_approach(self, land_value: float, construction_cost: float, depreciation: float) -> float:
-        return land_value + construction_cost - depreciation
-
-    def regression_value(self, features: List[str]) -> float:
-        if not self.comps:
-            return 0.0
-        # Simple average price per sqft
-        prices_per_sqft = []
-        for c in self.comps:
-            sqft = c.get("sqft", 1)
-            price = c.get("price", 0)
-            if sqft > 0:
-                prices_per_sqft.append(price / sqft)
-        avg = statistics.mean(prices_per_sqft) if prices_per_sqft else 0
-        subject_sqft = self.subject.get("sqft", 1)
-        return avg * subject_sqft
+    def gross_rent_multiplier(self) -> float:
+        return self.price / self.income if self.income > 0 else 0.0
 
     def stats(self) -> Dict:
-        return {"comps": len(self.comps), "subject_set": bool(self.subject)}
+        return {"cap_rate": round(self.cap_rate(), 4), "price_per_sqft": round(self.price_per_sqft(), 2)}
 
 def run():
-    v = PropertyValuator()
-    v.add_comparable({"price": 300000, "sqft": 2000, "beds": 3})
-    v.add_comparable({"price": 350000, "sqft": 2200, "beds": 4})
-    v.set_subject({"sqft": 2100, "beds": 3})
-    print("Comp value:", v.comparable_value())
-    print("Regression:", v.regression_value(["sqft"]))
-    print("Income:", v.income_approach(50000, 0.05))
-    print(v.stats())
+    pv = PropertyValuator(price=500000, income=40000, expenses=15000, area=2000)
+    print(pv.stats())
+    print("DCF:", pv.dcf_value([25000, 26000, 27000]))
+    print("GRM:", pv.gross_rent_multiplier())
 
 if __name__ == "__main__":
     run()

@@ -1,62 +1,44 @@
-"""Clause Extractor — indemnity, liability, force majeure, confidentiality, native, stdlib only."""
+"""Clause Extractor — boilerplate, key terms, definitions, native, stdlib only."""
 from __future__ import annotations
 from dataclasses import dataclass, field
-from typing import List, Dict, Optional
-from enum import Enum, auto
+from typing import List, Dict, Optional, Set
 import re
 
-class ClauseType(Enum):
-    INDEMNITY = auto()
-    LIABILITY = auto()
-    FORCE_MAJEURE = auto()
-    CONFIDENTIALITY = auto()
-    TERMINATION = auto()
-    GOVERNING_LAW = auto()
-
+@dataclass
 class ClauseExtractor:
-    def __init__(self):
-        self.patterns = {
-            ClauseType.INDEMNITY: [r"indemnif", r"hold harmless", r"defend"],
-            ClauseType.LIABILITY: [r"liabilit", r"limitation of liability", r"damages"],
-            ClauseType.FORCE_MAJEURE: [r"force majeure", r"act of god", r"beyond.*control"],
-            ClauseType.CONFIDENTIALITY: [r"confidential", r"non-disclosure", r"NDA"],
-            ClauseType.TERMINATION: [r"terminat", r"cancel", r"breach"],
-            ClauseType.GOVERNING_LAW: [r"governed by", r"jurisdiction", r"governing law"],
-        }
-        self.clauses: List[Dict] = []
+    text: str = ""
 
-    def extract(self, text: str) -> List[Dict]:
-        found = []
-        for clause_type, patterns in self.patterns.items():
-            for pattern in patterns:
-                for match in re.finditer(pattern, text, re.IGNORECASE):
-                    start = max(0, match.start() - 50)
-                    end = min(len(text), match.end() + 150)
-                    snippet = text[start:end]
-                    found.append({"type": clause_type.name, "snippet": snippet, "position": match.start()})
-        self.clauses.extend(found)
-        return found
+    def extract_definitions(self) -> Dict[str, str]:
+        defs = {}
+        for m in re.finditer(r'"([^"]+)"\s+means\s+([^.;]+)', self.text):
+            defs[m.group(1)] = m.group(2).strip()
+        return defs
 
-    def has_clause(self, text: str, clause_type: ClauseType) -> bool:
-        patterns = self.patterns.get(clause_type, [])
-        return any(re.search(p, text, re.IGNORECASE) for p in patterns)
+    def extract_dates(self) -> List[str]:
+        return re.findall(r'(?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2},?\s+\d{4}', self.text)
 
-    def missing_clauses(self, text: str) -> List[str]:
-        return [ct.name for ct in ClauseType if not self.has_clause(text, ct)]
+    def extract_amounts(self) -> List[str]:
+        return re.findall(r'\$[\d,]+(?:\.\d{2})?', self.text)
+
+    def extract_parties(self) -> List[str]:
+        return re.findall(r'(?:between|among)\s+([A-Z][A-Za-z\s]+(?:and|&)[A-Z][A-Za-z\s]+)', self.text)
+
+    def key_terms(self) -> List[str]:
+        terms = []
+        for phrase in ["confidential information", "intellectual property", "force majeure", "indemnification", "termination for cause"]:
+            if phrase in self.text.lower():
+                terms.append(phrase)
+        return terms
 
     def stats(self) -> Dict:
-        by_type = {}
-        for c in self.clauses:
-            t = c["type"]
-            by_type[t] = by_type.get(t, 0) + 1
-        return {"extracted": len(self.clauses), "by_type": by_type}
+        return {"definitions": len(self.extract_definitions()), "dates": len(self.extract_dates()), "amounts": len(self.extract_amounts())}
 
 def run():
-    ce = ClauseExtractor()
-    text = "This agreement is governed by California law. The parties agree to confidentiality. In case of force majeure..."
-    print(ce.extract(text))
-    print("Missing:", ce.missing_clauses(text))
+    text = 'The "Service" means the software. Between ABC Corp and XYZ Inc. Payment of $10,000 due on January 15, 2025. Confidential information must be protected.'
+    ce = ClauseExtractor(text)
     print(ce.stats())
+    print("Definitions:", ce.extract_definitions())
+    print("Key terms:", ce.key_terms())
 
 if __name__ == "__main__":
     run()

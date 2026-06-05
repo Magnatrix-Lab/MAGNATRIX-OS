@@ -1,55 +1,51 @@
-"""Compliance Checker — rule validation, gap analysis, scoring, native, stdlib only."""
+"""Compliance Checker — regulations, gaps, audit trail, native, stdlib only."""
 from __future__ import annotations
 from dataclasses import dataclass, field
-from typing import List, Dict, Optional
-from enum import Enum, auto
+from typing import List, Dict, Optional, Set, Tuple
 
-class ComplianceRule:
-    def __init__(self, rule_id: str, description: str, required: bool = True):
-        self.rule_id = rule_id
-        self.description = description
-        self.required = required
+@dataclass
+class Requirement:
+    id: str
+    regulation: str
+    description: str
+    mandatory: bool = True
 
 class ComplianceChecker:
     def __init__(self):
-        self.rules: List[ComplianceRule] = []
-        self.checks: Dict[str, bool] = {}
-        self.findings: List[Dict] = []
+        self.requirements: List[Requirement] = []
+        self.evidence: Dict[str, List[str]] = {}
 
-    def add_rule(self, rule: ComplianceRule):
-        self.rules.append(rule)
+    def add_requirement(self, r: Requirement):
+        self.requirements.append(r)
 
-    def check(self, evidence: Dict[str, bool]):
-        self.checks = evidence
-        self.findings = []
-        for rule in self.rules:
-            passed = evidence.get(rule.rule_id, False)
-            if rule.required and not passed:
-                self.findings.append({"rule": rule.rule_id, "status": "FAIL", "severity": "HIGH"})
-            elif not passed:
-                self.findings.append({"rule": rule.rule_id, "status": "FAIL", "severity": "MEDIUM"})
+    def add_evidence(self, req_id: str, evidence: str):
+        self.evidence.setdefault(req_id, []).append(evidence)
 
-    def score(self) -> float:
-        if not self.rules:
-            return 100.0
-        passed = sum(1 for r in self.rules if self.checks.get(r.rule_id, False))
-        return (passed / len(self.rules)) * 100
+    def compliant(self, req_id: str) -> bool:
+        return req_id in self.evidence and len(self.evidence[req_id]) > 0
 
     def gaps(self) -> List[str]:
-        return [f["rule"] for f in self.findings if f["severity"] == "HIGH"]
+        return [r.id for r in self.requirements if r.mandatory and not self.compliant(r.id)]
+
+    def coverage(self) -> float:
+        if not self.requirements:
+            return 0.0
+        met = sum(1 for r in self.requirements if self.compliant(r.id))
+        return met / len(self.requirements)
+
+    def audit_trail(self) -> Dict[str, List[str]]:
+        return self.evidence
 
     def stats(self) -> Dict:
-        return {"rules": len(self.rules), "findings": len(self.findings), "score": self.score()}
+        return {"requirements": len(self.requirements), "coverage": round(self.coverage(), 3), "gaps": len(self.gaps())}
 
 def run():
     cc = ComplianceChecker()
-    cc.add_rule(ComplianceRule("R1", "Data encryption required", True))
-    cc.add_rule(ComplianceRule("R2", "Audit logging", True))
-    cc.add_rule(ComplianceRule("R3", "Backup policy", False))
-    cc.check({"R1": True, "R2": False, "R3": True})
-    print(cc.findings)
-    print(cc.score())
+    cc.add_requirement(Requirement("R1", "GDPR", "Data protection", True))
+    cc.add_requirement(Requirement("R2", "SOX", "Financial controls", True))
+    cc.add_evidence("R1", "Privacy policy v2")
     print(cc.stats())
+    print("Gaps:", cc.gaps())
 
 if __name__ == "__main__":
     run()

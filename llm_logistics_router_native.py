@@ -1,79 +1,64 @@
-"""Logistics Router — VRP, delivery sequence, capacity constraint, native, stdlib only."""
+"""Military Logistics Router — nodes, capacity, time, risk, native, stdlib only."""
 from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import List, Dict, Optional, Tuple
-from enum import Enum, auto
-import math
-import random
+import heapq
 
 @dataclass
-class DeliveryPoint:
-    point_id: str
-    x: float
-    y: float
-    demand: float
-    time_window: Tuple[float, float]
-
 class LogisticsRouter:
-    def __init__(self, vehicle_capacity: float = 100):
-        self.vehicle_capacity = vehicle_capacity
-        self.depot = (0.0, 0.0)
-        self.points: List[DeliveryPoint] = []
-        self.routes: List[List[str]] = []
-        self.distances: Dict[Tuple[str, str], float] = {}
+    nodes: Dict[str, Tuple[float, float]] = field(default_factory=dict)
+    edges: Dict[Tuple[str, str], Tuple[float, float]] = field(default_factory=dict)
+    """(from, to) -> (time, risk)"""
 
-    def add_point(self, point: DeliveryPoint):
-        self.points.append(point)
+    def add_node(self, name: str, x: float, y: float):
+        self.nodes[name] = (x, y)
 
-    def _distance(self, a: Tuple[float, float], b: Tuple[float, float]) -> float:
-        return math.sqrt((a[0]-b[0])**2 + (a[1]-b[1])**2)
+    def add_edge(self, a: str, b: str, time: float, risk: float = 0.0):
+        self.edges[(a, b)] = (time, risk)
 
-    def build_distance_matrix(self):
-        all_points = [("depot", self.depot[0], self.depot[1])] + [(p.point_id, p.x, p.y) for p in self.points]
-        for i, (id1, x1, y1) in enumerate(all_points):
-            for j, (id2, x2, y2) in enumerate(all_points):
-                self.distances[(id1, id2)] = self._distance((x1, y1), (x2, y2))
+    def shortest_path(self, start: str, goal: str, weight: str = "time") -> Tuple[List[str], float]:
+        dist = {start: 0.0}
+        prev = {}
+        open_set = [(0, start)]
+        while open_set:
+            d, current = heapq.heappop(open_set)
+            if current == goal:
+                path = [current]
+                while current in prev:
+                    current = prev[current]
+                    path.append(current)
+                return path[::-1], d
+            for (a, b), (t, r) in self.edges.items():
+                if a == current:
+                    w = t if weight == "time" else r
+                    nd = d + w
+                    if b not in dist or nd < dist[b]:
+                        dist[b] = nd
+                        prev[b] = current
+                        heapq.heappush(open_set, (nd, b))
+        return [], float('inf')
 
-    def solve_vrp(self) -> List[List[str]]:
-        self.build_distance_matrix()
-        self.routes = []
-        unvisited = set(p.point_id for p in self.points)
-        while unvisited:
-            route = []
-            capacity = self.vehicle_capacity
-            current = "depot"
-            while unvisited:
-                candidates = [pid for pid in unvisited if next(p.demand for p in self.points if p.point_id == pid) <= capacity]
-                if not candidates:
-                    break
-                nearest = min(candidates, key=lambda pid: self.distances[(current, pid)])
-                demand = next(p.demand for p in self.points if p.point_id == nearest)
-                capacity -= demand
-                route.append(nearest)
-                unvisited.remove(nearest)
-                current = nearest
-            self.routes.append(route)
-        return self.routes
-
-    def route_distance(self, route: List[str]) -> float:
-        total = self.distances[("depot", route[0])] if route else 0
+    def capacity_check(self, route: List[str], max_risk: float = 5.0) -> bool:
+        total_risk = 0.0
         for i in range(len(route) - 1):
-            total += self.distances[(route[i], route[i+1])]
-        if route:
-            total += self.distances[(route[-1], "depot")]
-        return total
+            e = self.edges.get((route[i], route[i+1]))
+            if e:
+                total_risk += e[1]
+        return total_risk <= max_risk
 
     def stats(self) -> Dict:
-        total_dist = sum(self.route_distance(r) for r in self.routes)
-        return {"points": len(self.points), "routes": len(self.routes), "total_distance": total_dist}
+        return {"nodes": len(self.nodes), "edges": len(self.edges)}
 
 def run():
-    router = LogisticsRouter(50)
-    for i in range(8):
-        router.add_point(DeliveryPoint(f"P{i}", random.uniform(0, 50), random.uniform(0, 50), random.uniform(5, 15), (8, 17)))
-    routes = router.solve_vrp()
-    print("Routes:", routes)
-    print(router.stats())
+    lr = LogisticsRouter()
+    lr.add_node("Base", 0, 0)
+    lr.add_node("FWD", 50, 0)
+    lr.add_node("OBJ", 100, 20)
+    lr.add_edge("Base", "FWD", 2, 1)
+    lr.add_edge("FWD", "OBJ", 3, 2)
+    path, cost = lr.shortest_path("Base", "OBJ")
+    print("Path:", path, "cost:", cost)
+    print(lr.stats())
 
 if __name__ == "__main__":
     run()
