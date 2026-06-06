@@ -1,43 +1,37 @@
 version: "3.8"
 
 services:
-  magnatrix-core:
-    build: .
+  magnatrix:
+    build:
+      context: .
+      dockerfile: Dockerfile
     container_name: magnatrix-os
-    restart: unless-stopped
     ports:
-      - "8080:8080"   # Dashboard HTTP
-      - "8765:8765"   # WebSocket metrics
-      - "9090:9090"   # P2P mesh
+      - "8080:8080"
     volumes:
-      - magnatrix-data:/root/.magnatrix-os
-      - ./:/opt/magnatrix-os:ro
+      - magnatrix-data:/opt/magnatrix/data
+      - magnatrix-logs:/opt/magnatrix/logs
     environment:
       - MAGNATRIX_ENV=production
-      - MAGNATRIX_LOG_LEVEL=info
-      - MAGNATRIX_AUTO_PUSH=true
-      - MAGNATRIX_ALIGNMENT_THRESHOLD=0.7
-      - MAGNATRIX_TELEMETRY=false
+      - MAGNATRIX_LOG_LEVEL=INFO
+      - MAGNATRIX_HOST=0.0.0.0
+      - MAGNATRIX_PORT=8080
+    restart: unless-stopped
+    networks:
+      - magnatrix-net
     healthcheck:
-      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/api/status')"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/api/health', timeout=5)"]
       interval: 30s
-      timeout: 5s
+      timeout: 10s
       retries: 3
       start_period: 10s
-
-  magnatrix-nginx:
-    image: nginx:alpine
-    container_name: magnatrix-proxy
-    restart: unless-stopped
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - ./frontend:/usr/share/nginx/html:ro
-      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
-    depends_on:
-      - magnatrix-core
 
 volumes:
   magnatrix-data:
     driver: local
+  magnatrix-logs:
+    driver: local
+
+networks:
+  magnatrix-net:
+    driver: bridge

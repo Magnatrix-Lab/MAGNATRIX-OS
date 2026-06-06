@@ -1,0 +1,30 @@
+[Unit]
+Description=MAGNATRIX-OS - Private Uncensored Open-Source AI Operating System
+After=network.target
+
+[Service]
+Type=simple
+User=magnatrix
+Group=magnatrix
+WorkingDirectory=/opt/magnatrix
+ExecStart=/usr/bin/python3 -u /opt/magnatrix/core/web_dashboard_server_native.py
+Restart=always
+RestartSec=5
+Environment="PYTHONDONTWRITEBYTECODE=1"
+Environment="PYTHONUNBUFFERED=1"
+Environment="MAGNATRIX_HOME=/opt/magnatrix"
+
+# Security hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/magnatrix/data /opt/magnatrix/logs
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=magnatrix
+
+[Install]
+WantedBy=multi-user.target

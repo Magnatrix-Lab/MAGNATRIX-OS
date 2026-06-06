@@ -1,217 +1,123 @@
-#!/usr/bin/env bash
-# ═══════════════════════════════════════════════════════════════════════════════
-# MAGNATRIX-OS Installer — Linux / macOS
-# ═══════════════════════════════════════════════════════════════════════════════
+#!/bin/bash
+# MAGNATRIX-OS Installation Script
+# Quick installer for Linux/macOS systems
 
-set -euo pipefail
-
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-CYAN='\033[0;36m'
-YELLOW='\033[1;33m'
-NC='\033[0m'
-
-log_info()  { echo -e "${CYAN}[INFO]${NC} $*"; }
-log_ok()    { echo -e "${GREEN}[OK]${NC} $*"; }
-log_warn()  { echo -e "${YELLOW}[WARN]${NC} $*"; }
-log_err()   { echo -e "${RED}[ERR]${NC} $*" >&2; }
+set -e
 
 REPO_URL="https://github.com/Magnatrix-Lab/MAGNATRIX-OS.git"
-INSTALL_DIR="${MAGNATRIX_INSTALL_DIR:-$HOME/MAGNATRIX-OS}"
-DATA_DIR="${MAGNATRIX_DATA_DIR:-$HOME/.magnatrix}"
+INSTALL_DIR="${MAGNATRIX_HOME:-/opt/magnatrix}"
 PYTHON_MIN="3.10"
+USER="magnatrix"
 
-detect_os() {
-    if [[ "$OSTYPE" == "linux-gnu"* ]]; then echo "linux"
-    elif [[ "$OSTYPE" == "darwin"* ]]; then echo "macos"
-    else echo "unknown"; fi
-}
+# Colors
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m'
 
-OS=$(detect_os)
+log_info() { echo -e "${BLUE}[INFO]${NC} $1"; }
+log_ok() { echo -e "${GREEN}[OK]${NC} $1"; }
+log_warn() { echo -e "${YELLOW}[WARN]${NC} $1"; }
+log_err() { echo -e "${RED}[ERR]${NC} $1"; }
 
-check_deps() {
-    log_info "Checking dependencies..."
-    local missing=()
-    if ! command -v python3 &>/dev/null; then missing+=("python3")
-    else
-        local pyver=$(python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')
-        if [[ "$(printf '%s\n' "$PYTHON_MIN" "$pyver" | sort -V | head -n1)" != "$PYTHON_MIN" ]]; then
-            log_err "Python $pyver found, but >= $PYTHON_MIN required"
-            missing+=("python3 (>= $PYTHON_MIN)")
-        fi
-    fi
-    if ! command -v git &>/dev/null; then missing+=("git"); fi
-    if ! command -v docker &>/dev/null; then log_warn "Docker not found. Docker mode unavailable."; fi
-    if ! command -v docker-compose &>/dev/null && ! docker compose version &>/dev/null; then
-        log_warn "Docker Compose not found. Docker mode unavailable."
-    fi
-    if [[ ${#missing[@]} -gt 0 ]]; then
-        log_err "Missing dependencies: ${missing[*]}"
-        if [[ "$OS" == "linux" ]]; then
-            log_info "  sudo apt-get update && sudo apt-get install -y python3 python3-pip python3-venv git"
-        elif [[ "$OS" == "macos" ]]; then
-            log_info "  brew install python git"
-        fi
+check_python() {
+    log_info "Checking Python version..."
+    if ! command -v python3 &> /dev/null; then
+        log_err "Python3 is not installed. Please install Python ${PYTHON_MIN} or higher."
         exit 1
     fi
-    log_ok "All required dependencies present"
+    PYVER=$(python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')
+    if [ "$(printf '%s\n' "$PYTHON_MIN" "$PYVER" | sort -V | head -n1)" != "$PYTHON_MIN" ]; then
+        log_err "Python ${PYTHON_MIN} or higher is required. Found: ${PYVER}"
+        exit 1
+    fi
+    log_ok "Python ${PYVER} found"
 }
 
-clone_repo() {
-    if [[ -d "$INSTALL_DIR/.git" ]]; then
-        log_info "Existing installation found — updating..."
+create_user() {
+    if ! id "$USER" &>/dev/null; then
+        log_info "Creating system user: ${USER}"
+        useradd -r -s /bin/false -d "$INSTALL_DIR" -M "$USER" 2>/dev/null || true
+    else
+        log_ok "User ${USER} already exists"
+    fi
+}
+
+install_repo() {
+    if [ -d "$INSTALL_DIR/.git" ]; then
+        log_warn "Repository already exists at ${INSTALL_DIR}. Pulling latest..."
         cd "$INSTALL_DIR"
-        git fetch origin && git reset --hard origin/main
+        git pull origin main
     else
-        log_info "Cloning MAGNATRIX-OS..."
-        rm -rf "$INSTALL_DIR"
-        git clone --depth 1 "$REPO_URL" "$INSTALL_DIR"
+        log_info "Cloning MAGNATRIX-OS repository..."
+        mkdir -p "$(dirname "$INSTALL_DIR")"
+        git clone "$REPO_URL" "$INSTALL_DIR"
     fi
-    log_ok "Repository ready"
+    chown -R "$USER:$USER" "$INSTALL_DIR"
+    log_ok "Repository installed at ${INSTALL_DIR}"
 }
 
-setup_data_dir() {
-    log_info "Setting up data directory: $DATA_DIR"
-    mkdir -p "$DATA_DIR"/{models,knowledge,logs,config,repos,vault}
-    chmod 700 "$DATA_DIR"
-    chmod 700 "$DATA_DIR/vault"
-    log_ok "Data directory ready"
-}
-
-setup_python() {
-    log_info "Setting up Python environment..."
-    cd "$INSTALL_DIR"
-    if [[ ! -d .venv ]]; then python3 -m venv .venv; fi
-    source .venv/bin/activate
-    pip install --no-cache-dir --upgrade pip setuptools wheel
-    pip install --no-cache-dir -e ".[all]"
-    log_ok "Python environment ready"
-}
-
-build_cpp() {
-    log_info "Building C++ HFT Engine..."
-    cd "$INSTALL_DIR/trading/cpp_hft_engine"
-    if command -v cmake &>/dev/null; then
-        mkdir -p build && cd build
-        cmake .. -DCMAKE_BUILD_TYPE=Release 2>/dev/null || log_warn "CMake failed — using Python fallback"
-        make -j$(nproc 2>/dev/null || echo 2) 2>/dev/null || log_warn "C++ build failed — Python fallback active"
+install_systemd() {
+    if command -v systemctl &> /dev/null; then
+        log_info "Installing systemd service..."
+        cp "$INSTALL_DIR/magnatrix.service" /etc/systemd/system/
+        systemctl daemon-reload
+        systemctl enable magnatrix.service
+        log_ok "Systemd service installed. Run: systemctl start magnatrix"
     else
-        log_warn "CMake not found — C++ Python fallback active"
+        log_warn "systemctl not found. Skipping systemd service installation."
     fi
-    log_ok "C++ engine build attempted"
 }
 
-build_rust() {
-    log_info "Building Rust Crypto Engine..."
-    cd "$INSTALL_DIR/security/rust_crypto_engine"
-    if command -v cargo &>/dev/null; then
-        cargo build --release 2>/dev/null || log_warn "Rust build failed — Python fallback active"
-    else
-        log_warn "Cargo not found — Rust Python fallback active"
-    fi
-    log_ok "Rust engine build attempted"
+create_dirs() {
+    mkdir -p "$INSTALL_DIR/data" "$INSTALL_DIR/logs"
+    chown -R "$USER:$USER" "$INSTALL_DIR"
 }
 
-run_tests() {
-    log_info "Running tests..."
-    cd "$INSTALL_DIR"
-    source .venv/bin/activate
-    python tests/run_all_tests.py 2>/dev/null || log_warn "Some tests failed (non-blocking)"
-    log_ok "Tests completed"
+start_service() {
+    read -p "Start MAGNATRIX-OS now? [y/N]: " -n 1 -r
+    echo
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+        if command -v systemctl &> /dev/null; then
+            systemctl start magnatrix
+            log_ok "Service started. Dashboard: http://localhost:8080"
+        else
+            log_info "Starting in foreground..."
+            cd "$INSTALL_DIR"
+            python3 core/web_dashboard_server_native.py &
+            log_ok "Dashboard: http://localhost:8080"
+        fi
+    fi
 }
 
-create_launcher() {
-    log_info "Creating launcher..."
-    local bin_dir="$HOME/.local/bin"
-    mkdir -p "$bin_dir"
-    cat > "$bin_dir/magnatrix" << 'LAUNCHER_EOF'
-#!/bin/bash
-INSTALL_DIR="${MAGNATRIX_INSTALL_DIR:-$HOME/MAGNATRIX-OS}"
-DATA_DIR="${MAGNATRIX_DATA_DIR:-$HOME/.magnatrix}"
-cd "$INSTALL_DIR"
-
-case "${1:-help}" in
-    boot)
-        source .venv/bin/activate
-        exec python magnatrix.py boot "$@"
-        ;;
-    docker)
-        docker compose up -d
-        ;;
-    test)
-        source .venv/bin/activate
-        exec python tests/run_all_tests.py
-        ;;
-    stop)
-        docker compose down 2>/dev/null || true
-        pkill -f "magnatrix.py" 2>/dev/null || true
-        ;;
-    status)
-        source .venv/bin/activate
-        exec python magnatrix.py status
-        ;;
-    update)
-        cd "$INSTALL_DIR"
-        git fetch origin && git reset --hard origin/main
-        source .venv/bin/activate
-        pip install --no-cache-dir -e ".[all]"
-        echo "MAGNATRIX-OS updated."
-        ;;
-    *)
-        echo "MAGNATRIX-OS — Super AI Control Interface"
-        echo "Usage: magnatrix <command>"
-        echo "  boot     Start MAGNATRIX-OS"
-        echo "  docker   Start with Docker Compose"
-        echo "  test     Run all tests"
-        echo "  stop     Stop MAGNATRIX-OS"
-        echo "  status   Show layer status"
-        echo "  update   Update to latest"
-        ;;
-esac
-LAUNCHER_EOF
-    chmod +x "$bin_dir/magnatrix"
-    log_ok "Launcher installed: $bin_dir/magnatrix"
-    if [[ ":$PATH:" != *":$bin_dir:"* ]]; then
-        log_warn "$bin_dir is not in PATH"
-        log_info "Add to shell profile: export PATH=\"\$HOME/.local/bin:\$PATH\""
-    fi
+print_banner() {
+    echo -e "${BLUE}"
+    echo "  __  __   ___   _____   _   _   _____   _____   ____   _____   _____  ____"
+    echo " |  \\/  | / _ \\ |  __ \\ | | | | /  ___| |_   _| |  _ \\ |  __ \\ |_   _|/ ___|"
+    echo " | \\  / |/ /_\\ \\| |  | || | | | \\  '--.    | |   | |_) || |__) |  | |  \\  '--."
+    echo " | |\\/| ||  _  || |  | || | | |  '--. \\   | |   |  _ < |  _  /   | |   '--. \\"
+    echo " | |  | || | | || |__| || |_| | /\\__/ /  _| |_  | |_) || | \\ \\  _| |_ /\\__/ /"
+    echo " |_|  |_||_| |_||_____/  \\___/  \\____/  |_____| |____/ |_|  \\_\\|_____|\\____/"
+    echo -e "${NC}"
+    echo -e "${GREEN}Private. Uncensored. Open-Source AI Operating System.${NC}"
+    echo
 }
 
 main() {
-    echo -e "${CYAN}"
-    echo "  __  __                                   _       ____   _____ ____"
-    echo " |  \/  | __ _ _ __ ___  _   _ _ __   __ _| |_ ___/ ___| |_   _/ ___|"
-    echo " | |\/| |/ _\' | '_ \` _ \| | | | '_ \ / _\' | __/ _ \___ \   | | \___ \\"
-    echo " | |  | | (_| | | | | | | |_| | | | | (_| | ||  __/___) |  | |  ___) |"
-    echo " |_|  |_|\__,_|_| |_| |_|\__,_|_| |_|\__, |\__\___|____/   |_| |____/"
-    echo "                                      |___/"
-    echo -e "${NC}"
-    echo "MAGNATRIX-OS Installer — Private Uncensored Agentic AI OS"
-    echo "============================================================"
-    echo ""
-
-    check_deps
-    clone_repo
-    setup_data_dir
-    setup_python
-    build_cpp
-    build_rust
-    run_tests
-    create_launcher
-
-    echo ""
-    echo -e "${GREEN}MAGNATRIX-OS installed successfully!${NC}"
-    echo ""
-    log_info "Installation:  $INSTALL_DIR"
-    log_info "Data:          $DATA_DIR"
-    log_info "Launcher:      ~/.local/bin/magnatrix"
-    echo ""
-    log_info "Quick start:"
-    log_info "  magnatrix boot     Start MAGNATRIX-OS"
-    log_info "  magnatrix docker   Start with Docker"
-    log_info "  magnatrix test     Run tests"
-    log_info "  magnatrix help     Show commands"
-    echo ""
+    print_banner
+    log_info "Starting MAGNATRIX-OS installation..."
+    check_python
+    create_user
+    install_repo
+    create_dirs
+    install_systemd
+    log_ok "Installation complete!"
+    start_service
+    echo
+    log_info "Manage service: systemctl {start|stop|restart|status} magnatrix"
+    log_info "Dashboard:    http://localhost:8080"
+    log_info "Logs:           journalctl -u magnatrix -f"
 }
 
 main "$@"
