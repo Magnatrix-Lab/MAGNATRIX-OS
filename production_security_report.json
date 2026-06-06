@@ -1,0 +1,1062 @@
+{
+  "scan_time": 1780783050.6396499,
+  "total_findings": 104,
+  "by_severity": {
+    "medium": 8,
+    "high": 36,
+    "critical": 59,
+    "low": 1
+  },
+  "by_category": {
+    "weak_crypto": 5,
+    "ssrf": 31,
+    "command_injection": 50,
+    "hardcoded_secret": 9,
+    "path_traversal": 4,
+    "insecure_deserialization": 1,
+    "unsafe_tempfile": 1,
+    "dos_vector": 3
+  },
+  "findings": [
+    {
+      "file": "/mnt/agents/MAGNATRIX-OS/core/crypto_utilities_native.py",
+      "line": 186,
+      "category": "weak_crypto",
+      "severity": "medium",
+      "message": "Weak hash algorithm",
+      "snippet": "h = hmac.new(key, msg, hashlib.sha1).digest()",
+      "remediation": "Use hashlib.sha256+ for hashing. Use secrets module for cryptographic randomness.",
+      "confidence": 0.8
+    },
+    {
+      "file": "/mnt/agents/MAGNATRIX-OS/core/http_client_native.py",
+      "line": 87,
+      "category": "ssrf",
+      "severity": "high",
+      "message": "Potential SSRF - URL request without validation",
+      "snippet": "domain = urllib.request.urlparse(req.url).netloc",
+      "remediation": "Validate URLs against an allowlist. Block internal/private IP ranges.",
+      "confidence": 0.6
+    },
+    {
+      "file": "/mnt/agents/MAGNATRIX-OS/core/http_client_native.py",
+      "line": 100,
+      "category": "ssrf",
+      "severity": "high",
+      "message": "Potential SSRF - URL request without validation",
+      "snippet": "with urllib.request.urlopen(req_obj, timeout=req.timeout) as resp:",
+      "remediation": "Validate URLs against an allowlist. Block internal/private IP ranges.",
+      "confidence": 0.6
+    },
+    {
+      "file": "/mnt/agents/MAGNATRIX-OS/core/hardware_profiler_native.py",
+      "line": 191,
+      "category": "command_injection",
+      "severity": "critical",
+      "message": "Potential command injection via system call or eval/exec",
+      "snippet": "result = subprocess.run(",
+      "remediation": "Use subprocess with list args (not shell=True). Avoid eval/exec on untrusted input.",
+      "confidence": 0.75
+    },
+    {
+      "file": "/mnt/agents/MAGNATRIX-OS/core/hardware_profiler_native.py",
+      "line": 199,
+      "category": "command_injection",
+      "severity": "critical",
+      "message": "Potential command injection via system call or eval/exec",
+      "snippet": "result = subprocess.run(",
+      "remediation": "Use subprocess with list args (not shell=True). Avoid eval/exec on untrusted input.",
+      "confidence": 0.75
+    },
+    {
+      "file": "/mnt/agents/MAGNATRIX-OS/core/hardware_profiler_native.py",
+      "line": 241,
+      "category": "command_injection",
+      "severity": "critical",
+      "message": "Potential command injection via system call or eval/exec",
+      "snippet": "result = subprocess.run(",
+      "remediation": "Use subprocess with list args (not shell=True). Avoid eval/exec on untrusted input.",
+      "confidence": 0.75
+    },
+    {
+      "file": "/mnt/agents/MAGNATRIX-OS/core/hardware_profiler_native.py",
+      "line": 266,
+      "category": "command_injection",
+      "severity": "critical",
+      "message": "Potential command injection via system call or eval/exec",
+      "snippet": "result = subprocess.run(",
+      "remediation": "Use subprocess with list args (not shell=True). Avoid eval/exec on untrusted input.",
+      "confidence": 0.75
+    },
+    {
+      "file": "/mnt/agents/MAGNATRIX-OS/core/hardware_profiler_native.py",
+      "line": 315,
+      "category": "command_injection",
+      "severity": "critical",
+      "message": "Potential command injection via system call or eval/exec",
+      "snippet": "result = subprocess.run(",
+      "remediation": "Use subprocess with list args (not shell=True). Avoid eval/exec on untrusted input.",
+      "confidence": 0.75
+    },
+    {
+      "file": "/mnt/agents/MAGNATRIX-OS/core/hardware_profiler_native.py",
+      "line": 323,
+      "category": "command_injection",
+      "severity": "critical",
+      "message": "Potential command injection via system call or eval/exec",
+      "snippet": "result = subprocess.run(",
+      "remediation": "Use subprocess with list args (not shell=True). Avoid eval/exec on untrusted input.",
+      "confidence": 0.75
+    },
+    {
+      "file": "/mnt/agents/MAGNATRIX-OS/core/hardware_profiler_native.py",
+      "line": 337,
+      "category": "command_injection",
+      "severity": "critical",
+      "message": "Potential command injection via system call or eval/exec",
+      "snippet": "result = subprocess.run(",
+      "remediation": "Use subprocess with list args (not shell=True). Avoid eval/exec on untrusted input.",
+      "confidence": 0.75
+    },
+    {
+      "file": "/mnt/agents/MAGNATRIX-OS/core/hardware_profiler_native.py",
+      "line": 346,
+      "category": "command_injection",
+      "severity": "critical",
+      "message": "Potential command injection via system call or eval/exec",
+      "snippet": "result = subprocess.run(",
+      "remediation": "Use subprocess with list args (not shell=True). Avoid eval/exec on untrusted input.",
+      "confidence": 0.75
+    },
+    {
+      "file": "/mnt/agents/MAGNATRIX-OS/core/hardware_profiler_native.py",
+      "line": 369,
+      "category": "command_injection",
+      "severity": "critical",
+      "message": "Potential command injection via system call or eval/exec",
+      "snippet": "result = subprocess.run(",
+      "remediation": "Use subprocess with list args (not shell=True). Avoid eval/exec on untrusted input.",
+      "confidence": 0.75
+    },
+    {
+      "file": "/mnt/agents/MAGNATRIX-OS/core/hardware_profiler_native.py",
+      "line": 392,
+      "category": "command_injection",
+      "severity": "critical",
+      "message": "Potential command injection via system call or eval/exec",
+      "snippet": "result = subprocess.run(",
+      "remediation": "Use subprocess with list args (not shell=True). Avoid eval/exec on untrusted input.",
+      "confidence": 0.75
+    },
+    {
+      "file": "/mnt/agents/MAGNATRIX-OS/core/hardware_profiler_native.py",
+      "line": 413,
+      "category": "command_injection",
+      "severity": "critical",
+      "message": "Potential command injection via system call or eval/exec",
+      "snippet": "result = subprocess.run(",
+      "remediation": "Use subprocess with list args (not shell=True). Avoid eval/exec on untrusted input.",
+      "confidence": 0.75
+    },
+    {
+      "file": "/mnt/agents/MAGNATRIX-OS/core/hardware_profiler_native.py",
+      "line": 438,
+      "category": "command_injection",
+      "severity": "critical",
+      "message": "Potential command injection via system call or eval/exec",
+      "snippet": "result = subprocess.run(",
+      "remediation": "Use subprocess with list args (not shell=True). Avoid eval/exec on untrusted input.",
+      "confidence": 0.75
+    },
+    {
+      "file": "/mnt/agents/MAGNATRIX-OS/core/hardware_profiler_native.py",
+      "line": 458,
+      "category": "command_injection",
+      "severity": "critical",
+      "message": "Potential command injection via system call or eval/exec",
+      "snippet": "result = subprocess.run(",
+      "remediation": "Use subprocess with list args (not shell=True). Avoid eval/exec on untrusted input.",
+      "confidence": 0.75
+    },
+    {
+      "file": "/mnt/agents/MAGNATRIX-OS/core/container_manager_native.py",
+      "line": 67,
+      "category": "command_injection",
+      "severity": "critical",
+      "message": "Potential command injection via system call or eval/exec",
+      "snippet": "result = subprocess.run([\"docker\", \"--version\"], capture_output=True, text=True, timeout",
+      "remediation": "Use subprocess with list args (not shell=True). Avoid eval/exec on untrusted input.",
+      "confidence": 0.75
+    },
+    {
+      "file": "/mnt/agents/MAGNATRIX-OS/core/container_manager_native.py",
+      "line": 75,
+      "category": "command_injection",
+      "severity": "critical",
+      "message": "Potential command injection via system call or eval/exec",
+      "snippet": "return subprocess.run([\"docker\"] + args, capture_output=True, text=True, timeout=30)",
+      "remediation": "Use subprocess with list args (not shell=True). Avoid eval/exec on untrusted input.",
+      "confidence": 0.75
+    },
+    {
+      "file": "/mnt/agents/MAGNATRIX-OS/core/package_manager_native.py",
+      "line": 45,
+      "category": "command_injection",
+      "severity": "critical",
+      "message": "Potential command injection via system call or eval/exec",
+      "snippet": "result = subprocess.run([\"pip\", \"--version\"], capture_output=True, text=True, timeout=5)",
+      "remediation": "Use subprocess with list args (not shell=True). Avoid eval/exec on untrusted input.",
+      "confidence": 0.75
+    },
+    {
+      "file": "/mnt/agents/MAGNATRIX-OS/core/package_manager_native.py",
+      "line": 53,
+      "category": "command_injection",
+      "severity": "critical",
+      "message": "Potential command injection via system call or eval/exec",
+      "snippet": "return subprocess.run([\"python\", \"-m\", \"pip\"] + args, capture_output=True, text=True, timeou",
+      "remediation": "Use subprocess with list args (not shell=True). Avoid eval/exec on untrusted input.",
+      "confidence": 0.75
+    },
+    {
+      "file": "/mnt/agents/MAGNATRIX-OS/core/package_manager_native.py",
+      "line": 123,
+      "category": "command_injection",
+      "severity": "critical",
+      "message": "Potential command injection via system call or eval/exec",
+      "snippet": "result = subprocess.run([\"pip-audit\", \"--format=json\"], capture_output=True, text=True,",
+      "remediation": "Use subprocess with list args (not shell=True). Avoid eval/exec on untrusted input.",
+      "confidence": 0.75
+    },
+    {
+      "file": "/mnt/agents/MAGNATRIX-OS/core/monitoring_alerting_native.py",
+      "line": 290,
+      "category": "command_injection",
+      "severity": "critical",
+      "message": "Potential command injection via system call or eval/exec",
+      "snippet": "result = subprocess.run([\"pgrep\", \"-f\", check.target], capture_output=True, timeout=",
+      "remediation": "Use subprocess with list args (not shell=True). Avoid eval/exec on untrusted input.",
+      "confidence": 0.75
+    },
+    {
+      "file": "/mnt/agents/MAGNATRIX-OS/core/monitoring_alerting_native.py",
+      "line": 539,
+      "category": "weak_crypto",
+      "severity": "medium",
+      "message": "Predictable RNG for security",
+      "snippet": "engine.metrics.record(\"cpu_usage\", 30 + random.random() * 40)",
+      "remediation": "Use hashlib.sha256+ for hashing. Use secrets module for cryptographic randomness.",
+      "confidence": 0.8
+    },
+    {
+      "file": "/mnt/agents/MAGNATRIX-OS/core/monitoring_alerting_native.py",
+      "line": 540,
+      "category": "weak_crypto",
+      "severity": "medium",
+      "message": "Predictable RNG for security",
+      "snippet": "engine.metrics.record(\"memory_usage\", 40 + random.random() * 30)",
+      "remediation": "Use hashlib.sha256+ for hashing. Use secrets module for cryptographic randomness.",
+      "confidence": 0.8
+    },
+    {
+      "file": "/mnt/agents/MAGNATRIX-OS/core/monitoring_alerting_native.py",
+      "line": 281,
+      "category": "ssrf",
+      "severity": "high",
+      "message": "Potential SSRF - URL request without validation",
+      "snippet": "with urllib.request.urlopen(req) as resp:",
+      "remediation": "Validate URLs against an allowlist. Block internal/private IP ranges.",
+      "confidence": 0.6
+    },
+    {
+      "file": "/mnt/agents/MAGNATRIX-OS/core/monitoring_alerting_native.py",
+      "line": 430,
+      "category": "ssrf",
+      "severity": "high",
+      "message": "Potential SSRF - URL request without validation",
+      "snippet": "with urllib.request.urlopen(req, timeout=5) as resp:",
+      "remediation": "Validate URLs against an allowlist. Block internal/private IP ranges.",
+      "confidence": 0.6
+    },
+    {
+      "file": "/mnt/agents/MAGNATRIX-OS/core/web_api_gateway_native.py",
+      "line": 273,
+      "category": "ssrf",
+      "severity": "high",
+      "message": "Potential SSRF - URL request without validation",
+      "snippet": "resp = urllib.request.urlopen(req, timeout=2)",
+      "remediation": "Validate URLs against an allowlist. Block internal/private IP ranges.",
+      "confidence": 0.6
+    },
+    {
+      "file": "/mnt/agents/MAGNATRIX-OS/core/workflow_engine_native.py",
+      "line": 181,
+      "category": "command_injection",
+      "severity": "critical",
+      "message": "Potential command injection via system call or eval/exec",
+      "snippet": "result = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=task.timeou",
+      "remediation": "Use subprocess with list args (not shell=True). Avoid eval/exec on untrusted input.",
+      "confidence": 0.75
+    },
+    {
+      "file": "/mnt/agents/MAGNATRIX-OS/core/workflow_engine_native.py",
+      "line": 193,
+      "category": "ssrf",
+      "severity": "high",
+      "message": "Potential SSRF - URL request without validation",
+      "snippet": "req = urllib.request.Request(url, data=data, headers=headers, method=method)",
+      "remediation": "Validate URLs against an allowlist. Block internal/private IP ranges.",
+      "confidence": 0.6
+    },
+    {
+      "file": "/mnt/agents/MAGNATRIX-OS/core/workflow_engine_native.py",
+      "line": 194,
+      "category": "ssrf",
+      "severity": "high",
+      "message": "Potential SSRF - URL request without validation",
+      "snippet": "with urllib.request.urlopen(req, timeout=task.timeout) as resp:",
+      "remediation": "Validate URLs against an allowlist. Block internal/private IP ranges.",
+      "confidence": 0.6
+    },
+    {
+      "file": "/mnt/agents/MAGNATRIX-OS/core/release_manager_native.py",
+      "line": 94,
+      "category": "command_injection",
+      "severity": "critical",
+      "message": "Potential command injection via system call or eval/exec",
+      "snippet": "result = subprocess.run(cmd, cwd=str(self.root), capture_output=True, text=True)",
+      "remediation": "Use subprocess with list args (not shell=True). Avoid eval/exec on untrusted input.",
+      "confidence": 0.75
+    },
+    {
+      "file": "/mnt/agents/MAGNATRIX-OS/core/release_manager_native.py",
+      "line": 116,
+      "category": "command_injection",
+      "severity": "critical",
+      "message": "Potential command injection via system call or eval/exec",
+      "snippet": "subprocess.run([\"git\", \"tag\", \"-a\", tag, \"-m\", message or f\"Release {tag}\"], cwd=str(sel",
+      "remediation": "Use subprocess with list args (not shell=True). Avoid eval/exec on untrusted input.",
+      "confidence": 0.75
+    },
+    {
+      "file": "/mnt/agents/MAGNATRIX-OS/core/release_manager_native.py",
+      "line": 128,
+      "category": "command_injection",
+      "severity": "critical",
+      "message": "Potential command injection via system call or eval/exec",
+      "snippet": "subprocess.run(",
+      "remediation": "Use subprocess with list args (not shell=True). Avoid eval/exec on untrusted input.",
+      "confidence": 0.75
+    },
+    {
+      "file": "/mnt/agents/MAGNATRIX-OS/core/release_manager_native.py",
+      "line": 152,
+      "category": "command_injection",
+      "severity": "critical",
+      "message": "Potential command injection via system call or eval/exec",
+      "snippet": "subprocess.run([\"git\", \"init\"], cwd=str(tmp), capture_output=True)",
+      "remediation": "Use subprocess with list args (not shell=True). Avoid eval/exec on untrusted input.",
+      "confidence": 0.75
+    },
+    {
+      "file": "/mnt/agents/MAGNATRIX-OS/core/release_manager_native.py",
+      "line": 153,
+      "category": "command_injection",
+      "severity": "critical",
+      "message": "Potential command injection via system call or eval/exec",
+      "snippet": "subprocess.run([\"git\", \"config\", \"user.email\", \"test@test.com\"], cwd=str(tmp), capture_output=Tr",
+      "remediation": "Use subprocess with list args (not shell=True). Avoid eval/exec on untrusted input.",
+      "confidence": 0.75
+    },
+    {
+      "file": "/mnt/agents/MAGNATRIX-OS/core/release_manager_native.py",
+      "line": 154,
+      "category": "command_injection",
+      "severity": "critical",
+      "message": "Potential command injection via system call or eval/exec",
+      "snippet": "subprocess.run([\"git\", \"config\", \"user.name\", \"Test\"], cwd=str(tmp), capture_output=True)",
+      "remediation": "Use subprocess with list args (not shell=True). Avoid eval/exec on untrusted input.",
+      "confidence": 0.75
+    },
+    {
+      "file": "/mnt/agents/MAGNATRIX-OS/core/release_manager_native.py",
+      "line": 156,
+      "category": "command_injection",
+      "severity": "critical",
+      "message": "Potential command injection via system call or eval/exec",
+      "snippet": "subprocess.run([\"git\", \"add\", \".\"], cwd=str(tmp), capture_output=True)",
+      "remediation": "Use subprocess with list args (not shell=True). Avoid eval/exec on untrusted input.",
+      "confidence": 0.75
+    },
+    {
+      "file": "/mnt/agents/MAGNATRIX-OS/core/release_manager_native.py",
+      "line": 157,
+      "category": "command_injection",
+      "severity": "critical",
+      "message": "Potential command injection via system call or eval/exec",
+      "snippet": "subprocess.run([\"git\", \"commit\", \"-m\", \"Initial\"], cwd=str(tmp), capture_output=True)",
+      "remediation": "Use subprocess with list args (not shell=True). Avoid eval/exec on untrusted input.",
+      "confidence": 0.75
+    },
+    {
+      "file": "/mnt/agents/MAGNATRIX-OS/core/tool_registry_native.py",
+      "line": 229,
+      "category": "command_injection",
+      "severity": "critical",
+      "message": "Potential command injection via system call or eval/exec",
+      "snippet": "result = subprocess.run([tool.entry_point, \"--version\"], capture_output=True, timeou",
+      "remediation": "Use subprocess with list args (not shell=True). Avoid eval/exec on untrusted input.",
+      "confidence": 0.75
+    },
+    {
+      "file": "/mnt/agents/MAGNATRIX-OS/core/tool_registry_native.py",
+      "line": 292,
+      "category": "command_injection",
+      "severity": "critical",
+      "message": "Potential command injection via system call or eval/exec",
+      "snippet": "result = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)",
+      "remediation": "Use subprocess with list args (not shell=True). Avoid eval/exec on untrusted input.",
+      "confidence": 0.75
+    },
+    {
+      "file": "/mnt/agents/MAGNATRIX-OS/core/auto_test_runner_native.py",
+      "line": 126,
+      "category": "command_injection",
+      "severity": "critical",
+      "message": "Potential command injection via system call or eval/exec",
+      "snippet": "result = subprocess.run(",
+      "remediation": "Use subprocess with list args (not shell=True). Avoid eval/exec on untrusted input.",
+      "confidence": 0.75
+    },
+    {
+      "file": "/mnt/agents/MAGNATRIX-OS/core/local_llm_manager_native.py",
+      "line": 229,
+      "category": "command_injection",
+      "severity": "critical",
+      "message": "Potential command injection via system call or eval/exec",
+      "snippet": "result = subprocess.run(",
+      "remediation": "Use subprocess with list args (not shell=True). Avoid eval/exec on untrusted input.",
+      "confidence": 0.75
+    },
+    {
+      "file": "/mnt/agents/MAGNATRIX-OS/core/local_llm_manager_native.py",
+      "line": 235,
+      "category": "command_injection",
+      "severity": "critical",
+      "message": "Potential command injection via system call or eval/exec",
+      "snippet": "result = subprocess.run(",
+      "remediation": "Use subprocess with list args (not shell=True). Avoid eval/exec on untrusted input.",
+      "confidence": 0.75
+    },
+    {
+      "file": "/mnt/agents/MAGNATRIX-OS/core/local_llm_manager_native.py",
+      "line": 242,
+      "category": "command_injection",
+      "severity": "critical",
+      "message": "Potential command injection via system call or eval/exec",
+      "snippet": "result = subprocess.run(",
+      "remediation": "Use subprocess with list args (not shell=True). Avoid eval/exec on untrusted input.",
+      "confidence": 0.75
+    },
+    {
+      "file": "/mnt/agents/MAGNATRIX-OS/core/local_llm_manager_native.py",
+      "line": 143,
+      "category": "ssrf",
+      "severity": "high",
+      "message": "Potential SSRF - URL request without validation",
+      "snippet": "with urllib.request.urlopen(req, timeout=3) as resp:",
+      "remediation": "Validate URLs against an allowlist. Block internal/private IP ranges.",
+      "confidence": 0.6
+    },
+    {
+      "file": "/mnt/agents/MAGNATRIX-OS/core/local_llm_manager_native.py",
+      "line": 270,
+      "category": "ssrf",
+      "severity": "high",
+      "message": "Potential SSRF - URL request without validation",
+      "snippet": "with urllib.request.urlopen(req, timeout=10) as resp:",
+      "remediation": "Validate URLs against an allowlist. Block internal/private IP ranges.",
+      "confidence": 0.6
+    },
+    {
+      "file": "/mnt/agents/MAGNATRIX-OS/core/local_llm_manager_native.py",
+      "line": 334,
+      "category": "ssrf",
+      "severity": "high",
+      "message": "Potential SSRF - URL request without validation",
+      "snippet": "with urllib.request.urlopen(req, timeout=600) as resp:",
+      "remediation": "Validate URLs against an allowlist. Block internal/private IP ranges.",
+      "confidence": 0.6
+    },
+    {
+      "file": "/mnt/agents/MAGNATRIX-OS/core/local_llm_manager_native.py",
+      "line": 377,
+      "category": "ssrf",
+      "severity": "high",
+      "message": "Potential SSRF - URL request without validation",
+      "snippet": "with urllib.request.urlopen(req, timeout=10) as resp:",
+      "remediation": "Validate URLs against an allowlist. Block internal/private IP ranges.",
+      "confidence": 0.6
+    },
+    {
+      "file": "/mnt/agents/MAGNATRIX-OS/core/local_llm_manager_native.py",
+      "line": 398,
+      "category": "ssrf",
+      "severity": "high",
+      "message": "Potential SSRF - URL request without validation",
+      "snippet": "with urllib.request.urlopen(req, timeout=10) as resp:",
+      "remediation": "Validate URLs against an allowlist. Block internal/private IP ranges.",
+      "confidence": 0.6
+    },
+    {
+      "file": "/mnt/agents/MAGNATRIX-OS/core/local_llm_manager_native.py",
+      "line": 572,
+      "category": "ssrf",
+      "severity": "high",
+      "message": "Potential SSRF - URL request without validation",
+      "snippet": "with urllib.request.urlopen(req, timeout=timeout) as resp:",
+      "remediation": "Validate URLs against an allowlist. Block internal/private IP ranges.",
+      "confidence": 0.6
+    },
+    {
+      "file": "/mnt/agents/MAGNATRIX-OS/core/local_llm_manager_native.py",
+      "line": 659,
+      "category": "ssrf",
+      "severity": "high",
+      "message": "Potential SSRF - URL request without validation",
+      "snippet": "with urllib.request.urlopen(req, timeout=timeout) as resp:",
+      "remediation": "Validate URLs against an allowlist. Block internal/private IP ranges.",
+      "confidence": 0.6
+    },
+    {
+      "file": "/mnt/agents/MAGNATRIX-OS/core/local_llm_manager_native.py",
+      "line": 751,
+      "category": "ssrf",
+      "severity": "high",
+      "message": "Potential SSRF - URL request without validation",
+      "snippet": "with urllib.request.urlopen(req, timeout=3) as resp:",
+      "remediation": "Validate URLs against an allowlist. Block internal/private IP ranges.",
+      "confidence": 0.6
+    },
+    {
+      "file": "/mnt/agents/MAGNATRIX-OS/core/local_llm_manager_native.py",
+      "line": 769,
+      "category": "ssrf",
+      "severity": "high",
+      "message": "Potential SSRF - URL request without validation",
+      "snippet": "with urllib.request.urlopen(req, timeout=5) as resp:",
+      "remediation": "Validate URLs against an allowlist. Block internal/private IP ranges.",
+      "confidence": 0.6
+    },
+    {
+      "file": "/mnt/agents/MAGNATRIX-OS/core/local_llm_manager_native.py",
+      "line": 786,
+      "category": "ssrf",
+      "severity": "high",
+      "message": "Potential SSRF - URL request without validation",
+      "snippet": "with urllib.request.urlopen(req, timeout=5) as resp:",
+      "remediation": "Validate URLs against an allowlist. Block internal/private IP ranges.",
+      "confidence": 0.6
+    },
+    {
+      "file": "/mnt/agents/MAGNATRIX-OS/core/local_llm_manager_native.py",
+      "line": 809,
+      "category": "ssrf",
+      "severity": "high",
+      "message": "Potential SSRF - URL request without validation",
+      "snippet": "with urllib.request.urlopen(req, timeout=30) as resp:",
+      "remediation": "Validate URLs against an allowlist. Block internal/private IP ranges.",
+      "confidence": 0.6
+    },
+    {
+      "file": "/mnt/agents/MAGNATRIX-OS/core/cicd_pipeline_native.py",
+      "line": 374,
+      "category": "command_injection",
+      "severity": "critical",
+      "message": "Potential command injection via system call or eval/exec",
+      "snippet": "proc = subprocess.run(",
+      "remediation": "Use subprocess with list args (not shell=True). Avoid eval/exec on untrusted input.",
+      "confidence": 0.75
+    },
+    {
+      "file": "/mnt/agents/MAGNATRIX-OS/core/cicd_pipeline_native.py",
+      "line": 1031,
+      "category": "command_injection",
+      "severity": "critical",
+      "message": "Potential command injection via system call or eval/exec",
+      "snippet": "dangerous = [\"eval(\", \"exec(\", \"subprocess.call\", \"os.system\", \"input(\"]",
+      "remediation": "Use subprocess with list args (not shell=True). Avoid eval/exec on untrusted input.",
+      "confidence": 0.75
+    },
+    {
+      "file": "/mnt/agents/MAGNATRIX-OS/core/cicd_pipeline_native.py",
+      "line": 1031,
+      "category": "command_injection",
+      "severity": "critical",
+      "message": "Potential command injection via system call or eval/exec",
+      "snippet": "dangerous = [\"eval(\", \"exec(\", \"subprocess.call\", \"os.system\", \"input(\"]",
+      "remediation": "Use subprocess with list args (not shell=True). Avoid eval/exec on untrusted input.",
+      "confidence": 0.75
+    },
+    {
+      "file": "/mnt/agents/MAGNATRIX-OS/core/cicd_pipeline_native.py",
+      "line": 873,
+      "category": "ssrf",
+      "severity": "high",
+      "message": "Potential SSRF - URL request without validation",
+      "snippet": "with urllib.request.urlopen(req, timeout=5) as resp:",
+      "remediation": "Validate URLs against an allowlist. Block internal/private IP ranges.",
+      "confidence": 0.6
+    },
+    {
+      "file": "/mnt/agents/MAGNATRIX-OS/core/agent_connector_native.py",
+      "line": 33,
+      "category": "hardcoded_secret",
+      "severity": "critical",
+      "message": "Hardcoded API key: API_KEY = \"api_key\"",
+      "snippet": "API_KEY = \"api_key\"",
+      "remediation": "Use environment variables or a secure secret manager. Never hardcode secrets.",
+      "confidence": 0.85
+    },
+    {
+      "file": "/mnt/agents/MAGNATRIX-OS/core/agent_connector_native.py",
+      "line": 36,
+      "category": "hardcoded_secret",
+      "severity": "critical",
+      "message": "Hardcoded API key: X_API_KEY = \"x_api_key\"",
+      "snippet": "X_API_KEY = \"x_api_key\"",
+      "remediation": "Use environment variables or a secure secret manager. Never hardcode secrets.",
+      "confidence": 0.85
+    },
+    {
+      "file": "/mnt/agents/MAGNATRIX-OS/core/agent_connector_native.py",
+      "line": 293,
+      "category": "ssrf",
+      "severity": "high",
+      "message": "Potential SSRF - URL request without validation",
+      "snippet": "req = urllib.request.Request(url, headers=self._build_headers(cfg), method=\"GET\")",
+      "remediation": "Validate URLs against an allowlist. Block internal/private IP ranges.",
+      "confidence": 0.6
+    },
+    {
+      "file": "/mnt/agents/MAGNATRIX-OS/core/agent_connector_native.py",
+      "line": 294,
+      "category": "ssrf",
+      "severity": "high",
+      "message": "Potential SSRF - URL request without validation",
+      "snippet": "with urllib.request.urlopen(req, timeout=5.0) as resp:",
+      "remediation": "Validate URLs against an allowlist. Block internal/private IP ranges.",
+      "confidence": 0.6
+    },
+    {
+      "file": "/mnt/agents/MAGNATRIX-OS/core/agent_connector_native.py",
+      "line": 325,
+      "category": "ssrf",
+      "severity": "high",
+      "message": "Potential SSRF - URL request without validation",
+      "snippet": "req = urllib.request.Request(url, data=body, headers=headers, method=\"POST\")",
+      "remediation": "Validate URLs against an allowlist. Block internal/private IP ranges.",
+      "confidence": 0.6
+    },
+    {
+      "file": "/mnt/agents/MAGNATRIX-OS/core/agent_connector_native.py",
+      "line": 326,
+      "category": "ssrf",
+      "severity": "high",
+      "message": "Potential SSRF - URL request without validation",
+      "snippet": "with urllib.request.urlopen(req, timeout=timeout or cfg.timeout) as resp:",
+      "remediation": "Validate URLs against an allowlist. Block internal/private IP ranges.",
+      "confidence": 0.6
+    },
+    {
+      "file": "/mnt/agents/MAGNATRIX-OS/core/email_client_native.py",
+      "line": 174,
+      "category": "ssrf",
+      "severity": "high",
+      "message": "Potential SSRF - URL request without validation",
+      "snippet": "req = urllib.request.Request(webhook_url, data=payload, headers={\"Content-Type\": \"applic",
+      "remediation": "Validate URLs against an allowlist. Block internal/private IP ranges.",
+      "confidence": 0.6
+    },
+    {
+      "file": "/mnt/agents/MAGNATRIX-OS/core/email_client_native.py",
+      "line": 175,
+      "category": "ssrf",
+      "severity": "high",
+      "message": "Potential SSRF - URL request without validation",
+      "snippet": "urllib.request.urlopen(req, timeout=10)",
+      "remediation": "Validate URLs against an allowlist. Block internal/private IP ranges.",
+      "confidence": 0.6
+    },
+    {
+      "file": "/mnt/agents/MAGNATRIX-OS/core/code_audit_engine_native.py",
+      "line": 992,
+      "category": "path_traversal",
+      "severity": "high",
+      "message": "Potential path traversal without sanitization",
+      "snippet": "json_path = os.path.join(target, \"..\", \"audit_report.json\")",
+      "remediation": "Validate and sanitize file paths. Use os.path.abspath + check against allowed directories.",
+      "confidence": 0.6
+    },
+    {
+      "file": "/mnt/agents/MAGNATRIX-OS/core/secret_manager_native.py",
+      "line": 52,
+      "category": "hardcoded_secret",
+      "severity": "critical",
+      "message": "Hardcoded password: PASSWORD = \"password\"",
+      "snippet": "PASSWORD = \"password\"",
+      "remediation": "Use environment variables or a secure secret manager. Never hardcode secrets.",
+      "confidence": 0.85
+    },
+    {
+      "file": "/mnt/agents/MAGNATRIX-OS/core/secret_manager_native.py",
+      "line": 289,
+      "category": "hardcoded_secret",
+      "severity": "critical",
+      "message": "Hardcoded password: mgr = SecretManager(vault_file, master_password=\"M",
+      "snippet": "mgr = SecretManager(vault_file, master_password=\"MAGNATRIX_MASTER_2024\")",
+      "remediation": "Use environment variables or a secure secret manager. Never hardcode secrets.",
+      "confidence": 0.85
+    },
+    {
+      "file": "/mnt/agents/MAGNATRIX-OS/core/secret_manager_native.py",
+      "line": 50,
+      "category": "hardcoded_secret",
+      "severity": "critical",
+      "message": "Hardcoded API key: API_KEY = \"api_key\"",
+      "snippet": "API_KEY = \"api_key\"",
+      "remediation": "Use environment variables or a secure secret manager. Never hardcode secrets.",
+      "confidence": 0.85
+    },
+    {
+      "file": "/mnt/agents/MAGNATRIX-OS/core/secret_manager_native.py",
+      "line": 51,
+      "category": "hardcoded_secret",
+      "severity": "critical",
+      "message": "Hardcoded token: TOKEN = \"token\"",
+      "snippet": "TOKEN = \"token\"",
+      "remediation": "Use environment variables or a secure secret manager. Never hardcode secrets.",
+      "confidence": 0.85
+    },
+    {
+      "file": "/mnt/agents/MAGNATRIX-OS/core/secret_manager_native.py",
+      "line": 297,
+      "category": "path_traversal",
+      "severity": "high",
+      "message": "Potential path traversal without sanitization",
+      "snippet": "print(f\"\\nRetrieve openai_api_key: {mgr.retrieve('openai_api_key')[:10]}...\")",
+      "remediation": "Validate and sanitize file paths. Use os.path.abspath + check against allowed directories.",
+      "confidence": 0.6
+    },
+    {
+      "file": "/mnt/agents/MAGNATRIX-OS/core/web_dashboard_server_native.py",
+      "line": 345,
+      "category": "ssrf",
+      "severity": "high",
+      "message": "Potential SSRF - URL request without validation",
+      "snippet": "resp = urllib.request.urlopen(req, timeout=2)",
+      "remediation": "Validate URLs against an allowlist. Block internal/private IP ranges.",
+      "confidence": 0.6
+    },
+    {
+      "file": "/mnt/agents/MAGNATRIX-OS/core/security_audit_framework_native.py",
+      "line": 157,
+      "category": "path_traversal",
+      "severity": "high",
+      "message": "Potential path traversal without sanitization",
+      "snippet": "pattern = re.compile(r'(?i)(open|read|write|os\\.path\\.join).*?(\\.\\.|~|/etc/|/var/)')",
+      "remediation": "Validate and sanitize file paths. Use os.path.abspath + check against allowed directories.",
+      "confidence": 0.6
+    },
+    {
+      "file": "/mnt/agents/MAGNATRIX-OS/core/security_audit_framework_native.py",
+      "line": 343,
+      "category": "insecure_deserialization",
+      "severity": "high",
+      "message": "Insecure deserialization detected",
+      "snippet": "\"CVE-2023-32629\": {\"name\": \"Pickle RCE\", \"pattern\": \"pickle.loads\", \"severity\": Severity",
+      "remediation": "Use yaml.safe_load instead of yaml.load. Avoid pickle on untrusted data.",
+      "confidence": 0.9
+    },
+    {
+      "file": "/mnt/agents/MAGNATRIX-OS/core/security_audit_framework_native.py",
+      "line": 247,
+      "category": "unsafe_tempfile",
+      "severity": "low",
+      "message": "Predictable temporary file path",
+      "snippet": "pattern = re.compile(r'(?i)(\"/tmp/|\"/var/tmp/|\"temp_|\"tmp_).*?\\.write')",
+      "remediation": "Use tempfile.mkstemp() or tempfile.NamedTemporaryFile() for secure temp files.",
+      "confidence": 0.5
+    },
+    {
+      "file": "/mnt/agents/MAGNATRIX-OS/core/plugin_system_native.py",
+      "line": 193,
+      "category": "command_injection",
+      "severity": "critical",
+      "message": "Potential command injection via system call or eval/exec",
+      "snippet": "DANGEROUS_PATTERNS = [\"eval(\", \"exec(\", \"__import__\", \"open(\", \"file(\", \"delete\", \"rm -rf\"]",
+      "remediation": "Use subprocess with list args (not shell=True). Avoid eval/exec on untrusted input.",
+      "confidence": 0.75
+    },
+    {
+      "file": "/mnt/agents/MAGNATRIX-OS/core/plugin_system_native.py",
+      "line": 193,
+      "category": "command_injection",
+      "severity": "critical",
+      "message": "Potential command injection via system call or eval/exec",
+      "snippet": "DANGEROUS_PATTERNS = [\"eval(\", \"exec(\", \"__import__\", \"open(\", \"file(\", \"delete\", \"rm -rf\"]",
+      "remediation": "Use subprocess with list args (not shell=True). Avoid eval/exec on untrusted input.",
+      "confidence": 0.75
+    },
+    {
+      "file": "/mnt/agents/MAGNATRIX-OS/core/plugin_system_native.py",
+      "line": 334,
+      "category": "command_injection",
+      "severity": "critical",
+      "message": "Potential command injection via system call or eval/exec",
+      "snippet": "result = eval(expression, {\"__builtins__\": {}}, {\"abs\": abs, \"max\": max, \"min\": min})",
+      "remediation": "Use subprocess with list args (not shell=True). Avoid eval/exec on untrusted input.",
+      "confidence": 0.75
+    },
+    {
+      "file": "/mnt/agents/MAGNATRIX-OS/core/alert_notification_native.py",
+      "line": 106,
+      "category": "ssrf",
+      "severity": "high",
+      "message": "Potential SSRF - URL request without validation",
+      "snippet": "req = urllib.request.Request(url, data=payload, headers={\"Content-Type\": \"application/js",
+      "remediation": "Validate URLs against an allowlist. Block internal/private IP ranges.",
+      "confidence": 0.6
+    },
+    {
+      "file": "/mnt/agents/MAGNATRIX-OS/core/alert_notification_native.py",
+      "line": 107,
+      "category": "ssrf",
+      "severity": "high",
+      "message": "Potential SSRF - URL request without validation",
+      "snippet": "urllib.request.urlopen(req, timeout=10)",
+      "remediation": "Validate URLs against an allowlist. Block internal/private IP ranges.",
+      "confidence": 0.6
+    },
+    {
+      "file": "/mnt/agents/MAGNATRIX-OS/core/prompt_injection_guard_native.py",
+      "line": 308,
+      "category": "command_injection",
+      "severity": "critical",
+      "message": "Potential command injection via system call or eval/exec",
+      "snippet": "\"import os; os.system('rm -rf /')  # just testing\",",
+      "remediation": "Use subprocess with list args (not shell=True). Avoid eval/exec on untrusted input.",
+      "confidence": 0.75
+    },
+    {
+      "file": "/mnt/agents/MAGNATRIX-OS/core/auth_authorization_native.py",
+      "line": 314,
+      "category": "hardcoded_secret",
+      "severity": "critical",
+      "message": "Hardcoded API key: auth = AuthManager(secret_key=\"magnatrix_secret_ke",
+      "snippet": "auth = AuthManager(secret_key=\"magnatrix_secret_key_2024\")",
+      "remediation": "Use environment variables or a secure secret manager. Never hardcode secrets.",
+      "confidence": 0.85
+    },
+    {
+      "file": "/mnt/agents/MAGNATRIX-OS/core/multi_agent_router_native.py",
+      "line": 150,
+      "category": "weak_crypto",
+      "severity": "medium",
+      "message": "Predictable RNG for security",
+      "snippet": "r = random.random() * total",
+      "remediation": "Use hashlib.sha256+ for hashing. Use secrets module for cryptographic randomness.",
+      "confidence": 0.8
+    },
+    {
+      "file": "/mnt/agents/MAGNATRIX-OS/core/voice_audio_pipeline_native.py",
+      "line": 291,
+      "category": "command_injection",
+      "severity": "critical",
+      "message": "Potential command injection via system call or eval/exec",
+      "snippet": "subprocess.run(cmd, shell=False, check=True, stdout=subprocess.PIPE, stderr=subprocess.P",
+      "remediation": "Use subprocess with list args (not shell=True). Avoid eval/exec on untrusted input.",
+      "confidence": 0.75
+    },
+    {
+      "file": "/mnt/agents/MAGNATRIX-OS/core/voice_audio_pipeline_native.py",
+      "line": 323,
+      "category": "command_injection",
+      "severity": "critical",
+      "message": "Potential command injection via system call or eval/exec",
+      "snippet": "subprocess.run(cmd, shell=False, check=True, stdout=subprocess.PIPE, stderr=subprocess.P",
+      "remediation": "Use subprocess with list args (not shell=True). Avoid eval/exec on untrusted input.",
+      "confidence": 0.75
+    },
+    {
+      "file": "/mnt/agents/MAGNATRIX-OS/core/voice_audio_pipeline_native.py",
+      "line": 523,
+      "category": "command_injection",
+      "severity": "critical",
+      "message": "Potential command injection via system call or eval/exec",
+      "snippet": "result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)",
+      "remediation": "Use subprocess with list args (not shell=True). Avoid eval/exec on untrusted input.",
+      "confidence": 0.75
+    },
+    {
+      "file": "/mnt/agents/MAGNATRIX-OS/core/voice_audio_pipeline_native.py",
+      "line": 661,
+      "category": "command_injection",
+      "severity": "critical",
+      "message": "Potential command injection via system call or eval/exec",
+      "snippet": "subprocess.run([cmd, \"-s\", str(speed), \"-p\", str(pitch), \"-v\", gender, \"-w\", out, text], che",
+      "remediation": "Use subprocess with list args (not shell=True). Avoid eval/exec on untrusted input.",
+      "confidence": 0.75
+    },
+    {
+      "file": "/mnt/agents/MAGNATRIX-OS/core/voice_audio_pipeline_native.py",
+      "line": 667,
+      "category": "command_injection",
+      "severity": "critical",
+      "message": "Potential command injection via system call or eval/exec",
+      "snippet": "subprocess.run([\"festival\", \"-b\", \"--eval\", scm], capture_output=True, timeout=30)",
+      "remediation": "Use subprocess with list args (not shell=True). Avoid eval/exec on untrusted input.",
+      "confidence": 0.75
+    },
+    {
+      "file": "/mnt/agents/MAGNATRIX-OS/core/voice_audio_pipeline_native.py",
+      "line": 669,
+      "category": "command_injection",
+      "severity": "critical",
+      "message": "Potential command injection via system call or eval/exec",
+      "snippet": "subprocess.run([\"text2wave\", \"-o\", out], input=text.encode(), capture_output=True, timeout=3",
+      "remediation": "Use subprocess with list args (not shell=True). Avoid eval/exec on untrusted input.",
+      "confidence": 0.75
+    },
+    {
+      "file": "/mnt/agents/MAGNATRIX-OS/core/voice_audio_pipeline_native.py",
+      "line": 675,
+      "category": "command_injection",
+      "severity": "critical",
+      "message": "Potential command injection via system call or eval/exec",
+      "snippet": "subprocess.run([\"say\", \"-v\", voice, \"-o\", out, text], check=True, timeout=30)",
+      "remediation": "Use subprocess with list args (not shell=True). Avoid eval/exec on untrusted input.",
+      "confidence": 0.75
+    },
+    {
+      "file": "/mnt/agents/MAGNATRIX-OS/core/voice_audio_pipeline_native.py",
+      "line": 681,
+      "category": "command_injection",
+      "severity": "critical",
+      "message": "Potential command injection via system call or eval/exec",
+      "snippet": "subprocess.run([\"spd-say\", \"-o\", \"alsa\", \"-w\", text], check=True, timeout=30)",
+      "remediation": "Use subprocess with list args (not shell=True). Avoid eval/exec on untrusted input.",
+      "confidence": 0.75
+    },
+    {
+      "file": "/mnt/agents/MAGNATRIX-OS/core/voice_audio_pipeline_native.py",
+      "line": 705,
+      "category": "command_injection",
+      "severity": "critical",
+      "message": "Potential command injection via system call or eval/exec",
+      "snippet": "subprocess.run([\"ffmpeg\", \"-y\", \"-i\", wav_path, \"-codec:a\", \"libmp3lame\", \"-qscale:a\", \"",
+      "remediation": "Use subprocess with list args (not shell=True). Avoid eval/exec on untrusted input.",
+      "confidence": 0.75
+    },
+    {
+      "file": "/mnt/agents/MAGNATRIX-OS/core/voice_audio_pipeline_native.py",
+      "line": 543,
+      "category": "dos_vector",
+      "severity": "medium",
+      "message": "Unbounded while True loop - potential DoS",
+      "snippet": "while True:",
+      "remediation": "Ensure all loops have exit conditions. Add timeout/break logic.",
+      "confidence": 0.5
+    },
+    {
+      "file": "/mnt/agents/MAGNATRIX-OS/core/voice_audio_pipeline_native.py",
+      "line": 1039,
+      "category": "dos_vector",
+      "severity": "medium",
+      "message": "Unbounded while True loop - potential DoS",
+      "snippet": "while True:",
+      "remediation": "Ensure all loops have exit conditions. Add timeout/break logic.",
+      "confidence": 0.5
+    },
+    {
+      "file": "/mnt/agents/MAGNATRIX-OS/core/model_router_native.py",
+      "line": 9,
+      "category": "ssrf",
+      "severity": "high",
+      "message": "Potential SSRF - URL request without validation",
+      "snippet": "import time, json, urllib.request, urllib.error",
+      "remediation": "Validate URLs against an allowlist. Block internal/private IP ranges.",
+      "confidence": 0.6
+    },
+    {
+      "file": "/mnt/agents/MAGNATRIX-OS/core/multi_model_llm_adapter_native.py",
+      "line": 321,
+      "category": "hardcoded_secret",
+      "severity": "critical",
+      "message": "Hardcoded API key: model_id=\"gpt-4\", api_key=\"sk-fake\", capabilities=",
+      "snippet": "model_id=\"gpt-4\", api_key=\"sk-fake\", capabilities=[ModelCapability.CHAT], priority=0,",
+      "remediation": "Use environment variables or a secure secret manager. Never hardcode secrets.",
+      "confidence": 0.85
+    },
+    {
+      "file": "/mnt/agents/MAGNATRIX-OS/core/multi_model_llm_adapter_native.py",
+      "line": 329,
+      "category": "hardcoded_secret",
+      "severity": "critical",
+      "message": "Hardcoded API key: model_id=\"claude-3-sonnet\", api_key=\"fake-key\", ca",
+      "snippet": "model_id=\"claude-3-sonnet\", api_key=\"fake-key\", capabilities=[ModelCapability.CHAT, ModelCap",
+      "remediation": "Use environment variables or a secure secret manager. Never hardcode secrets.",
+      "confidence": 0.85
+    },
+    {
+      "file": "/mnt/agents/MAGNATRIX-OS/core/multi_model_llm_adapter_native.py",
+      "line": 228,
+      "category": "ssrf",
+      "severity": "high",
+      "message": "Potential SSRF - URL request without validation",
+      "snippet": "req = urllib.request.Request(url, data=body, headers=headers, method=\"POST\")",
+      "remediation": "Validate URLs against an allowlist. Block internal/private IP ranges.",
+      "confidence": 0.6
+    },
+    {
+      "file": "/mnt/agents/MAGNATRIX-OS/core/multi_model_llm_adapter_native.py",
+      "line": 229,
+      "category": "ssrf",
+      "severity": "high",
+      "message": "Potential SSRF - URL request without validation",
+      "snippet": "with urllib.request.urlopen(req, timeout=ep.timeout) as resp:",
+      "remediation": "Validate URLs against an allowlist. Block internal/private IP ranges.",
+      "confidence": 0.6
+    },
+    {
+      "file": "/mnt/agents/MAGNATRIX-OS/core/event_streaming_native.py",
+      "line": 1153,
+      "category": "path_traversal",
+      "severity": "high",
+      "message": "Potential path traversal without sanitization",
+      "snippet": "print(\"\\n[5] Consumer callback (background thread)...\")",
+      "remediation": "Validate and sanitize file paths. Use os.path.abspath + check against allowed directories.",
+      "confidence": 0.6
+    },
+    {
+      "file": "/mnt/agents/MAGNATRIX-OS/core/event_streaming_native.py",
+      "line": 701,
+      "category": "dos_vector",
+      "severity": "medium",
+      "message": "Unbounded while True loop - potential DoS",
+      "snippet": "while True:",
+      "remediation": "Ensure all loops have exit conditions. Add timeout/break logic.",
+      "confidence": 0.5
+    },
+    {
+      "file": "/mnt/agents/MAGNATRIX-OS/core/memory_learning_system_native.py",
+      "line": 294,
+      "category": "weak_crypto",
+      "severity": "medium",
+      "message": "Predictable RNG for security",
+      "snippet": "id=f\"ep_{int(time.time())}_{random.randint(1000, 9999)}\",",
+      "remediation": "Use hashlib.sha256+ for hashing. Use secrets module for cryptographic randomness.",
+      "confidence": 0.8
+    }
+  ]
+}
