@@ -127,6 +127,9 @@ class ModuleRegistry:
         ("genesis_hub", "core.genesis_integration_hub_native", "GenesisIntegrationHub"),
         # --- Deployment Layer ---
         ("deployment", "core.auto_deployment_native", "AutoDeploymentManager"),
+        ("graphql", "core.graphql_engine_native", "GraphQLServer"),
+        ("ai_training", "core.ai_training_pipeline_native", "AITrainingPipeline"),
+        ("nlq", "core.nlq_engine_native", "NLQEngine"),
     ]
 
     def __init__(self, repo_root: str) -> None:
