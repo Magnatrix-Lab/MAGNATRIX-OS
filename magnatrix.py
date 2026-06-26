@@ -468,6 +468,34 @@ class SystemManager:
         except Exception as e:
             print(f"  [Skip] Dashboard server: {e}")
 
+    def boot_optimized(self, quick: bool = False) -> Dict[str, Any]:
+        """Boot with parallel loading and lazy initialization."""
+        print("=" * 60)
+        print("  MAGNATRIX-OS Boot Sequence (Optimized)")
+        print("  Private, Uncensored AI Operating System")
+        print("=" * 60)
+
+        try:
+            from core.boot_optimizer_native import BootOptimizer
+            optimizer = BootOptimizer(self.registry, max_workers=8)
+            result = optimizer.optimized_boot(quick=quick)
+        except Exception as e:
+            print(f"  [Optimizer failed] {e}")
+            result = self.registry.boot()
+
+        print(f"\n  Modules loaded: {result['loaded']}/{result['total']}")
+        print(f"  Failed: {result['failed']}")
+        print(f"  Lazy: {result.get('lazy_count', 0)}")
+        print(f"  Boot time: {result['boot_time_ms']}ms")
+
+        self._wire_services()
+        self._start_dashboard()
+
+        print(f"\n  System ready at: http://0.0.0.0:8080")
+        print("=" * 60)
+
+        return result
+
     def shutdown(self) -> None:
         """Graceful shutdown."""
         print("\n  MAGNATRIX-OS shutting down...")
@@ -507,6 +535,7 @@ def _cli() -> None:
     start_p = sub.add_parser("start", help="Start the full system")
     start_p.add_argument("--quick", action="store_true", help="Quick boot (essential modules only)")
     start_p.add_argument("--port", type=int, default=8080, help="Dashboard port")
+    start_p.add_argument("--optimized", action="store_true", help="Use parallel boot optimizer")
 
     # status
     sub.add_parser("status", help="Check system status")
@@ -545,7 +574,10 @@ def _cli() -> None:
 
     if args.command == "start":
         manager = SystemManager(repo_root)
-        manager.boot(quick=args.quick)
+        if args.optimized:
+            manager.boot_optimized(quick=args.quick)
+        else:
+            manager.boot(quick=args.quick)
         manager.wait()
 
     elif args.command == "status":
