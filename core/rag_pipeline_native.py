@@ -43,7 +43,7 @@ class RAGResult:
 class RAGPipeline:
     """End-to-end RAG pipeline: retrieve -> contextualize -> generate."""
 
-    def __init__(self, knowledge_base: Any, llm_adapter: Any, context_manager: Optional[Any] = None, prompt_guard: Optional[Any] = None) -> None:
+    def __init__(self, knowledge_base: Any = None, llm_adapter: Any = None, context_manager: Optional[Any] = None, prompt_guard: Optional[Any] = None) -> None:
         self.kb = knowledge_base
         self.llm = llm_adapter
         self.ctx = context_manager

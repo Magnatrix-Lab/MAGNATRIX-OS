@@ -66,7 +66,7 @@ class SnapshotRecord:
 class BackupSnapshotManager:
     """Manages repository snapshots, integrity verification, and rollback."""
 
-    def __init__(self, repo_root: str, backup_dir: str) -> None:
+    def __init__(self, repo_root: str = ".", backup_dir: str = "./backups") -> None:
         self.repo_root = Path(repo_root).resolve()
         self.backup_dir = Path(backup_dir).resolve()
         self.backup_dir.mkdir(parents=True, exist_ok=True)

@@ -167,7 +167,7 @@ class IntentParser:
 class TaskPlanner:
     """Plan execution steps from parsed intent."""
 
-    def __init__(self, registry: Any) -> None:
+    def __init__(self, registry: Any = None) -> None:
         self.registry = registry
 
     def plan(self, intent: Dict[str, Any]) -> Plan:
@@ -248,7 +248,7 @@ class TaskPlanner:
 class TaskExecutor:
     """Execute tasks against MAGNATRIX-OS modules."""
 
-    def __init__(self, registry: Any) -> None:
+    def __init__(self, registry: Any = None) -> None:
         self.registry = registry
         self._lock = threading.Lock()
         self._results: Dict[str, Any] = {}
@@ -431,7 +431,7 @@ class TaskExecutor:
 class AgentOrchestrator:
     """Main orchestrator combining parser, planner, and executor."""
 
-    def __init__(self, registry: Any) -> None:
+    def __init__(self, registry: Any = None) -> None:
         self.registry = registry
         self.parser = IntentParser()
         self.planner = TaskPlanner(registry)

@@ -10,7 +10,7 @@ import time
 from dataclasses import dataclass, field
 from enum import Enum, auto
 from typing import Any, Dict, List, Optional, Callable
-from acs_policy_engine_native import ACSPolicyEngine, Verdict, VerdictType
+from governance.acs_policy_engine_native import ACSPolicyEngine, Verdict, VerdictType
 
 
 class InterventionPoint(Enum):

@@ -1,6 +1,8 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+<meta name="theme-color" content="#6366f1">
+<link rel="manifest" href="/manifest.json">
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>MAGNATRIX-OS Dashboard</title>
@@ -922,6 +924,29 @@ body {
   loadModules();
 })();
 
+</script>
+<script>
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/sw.js').then(reg => {
+    console.log('[PWA] Service worker registered:', reg.scope);
+    // Request background sync
+    if ('sync' in reg) {
+      reg.sync.register('sync-chat').catch(() => {});
+    }
+    // Request push notification permission
+    if ('Notification' in window) {
+      Notification.requestPermission().then(perm => {
+        console.log('[PWA] Notification permission:', perm);
+      });
+    }
+  }).catch(err => console.error('[PWA] SW registration failed:', err));
+}
+let deferredPrompt;
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  deferredPrompt = e;
+  console.log('[PWA] Install prompt available');
+});
 </script>
 </body>
 </html>

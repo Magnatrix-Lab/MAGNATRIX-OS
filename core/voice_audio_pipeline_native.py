@@ -73,6 +73,7 @@ class AudioBackend(Enum):
     PAPLAY = "paplay"
     AFPLAY = "afplay"
     MPV = "mpv"
+    FFPLAY = "ffplay"
     MOCK = "mock"
 
 

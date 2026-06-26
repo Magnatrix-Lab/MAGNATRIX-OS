@@ -96,7 +96,7 @@ class PluginInstance:
 class PluginSandbox:
     """Sandbox for loading, executing, and monitoring external plugins."""
 
-    def __init__(self, plugin_dir: str, max_total_plugins: int = 50) -> None:
+    def __init__(self, plugin_dir: str = "./plugins", max_total_plugins: int = 50) -> None:
         self.plugin_dir = Path(plugin_dir)
         self.plugin_dir.mkdir(parents=True, exist_ok=True)
         self.max_total = max_total_plugins

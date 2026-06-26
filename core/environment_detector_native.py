@@ -70,7 +70,7 @@ class EnvironmentDetector:
         cpu_count = os.cpu_count() or 1
         memory_total = self._get_memory()
         hostname = platform.node()
-        username = os.getlogin() if hasattr(os, "getlogin") else "unknown"
+        username = "unknown" if hasattr(os, "getlogin") else "unknown"
         timezone = self._get_timezone()
         capabilities = self._detect_capabilities()
         constraints = self._detect_constraints()

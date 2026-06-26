@@ -13,7 +13,10 @@ from typing import Any, Dict, List, Optional
 from pathlib import Path
 
 # Import semua ACS governance modules
-from governance.acs_policy_engine_native import ACSPolicyEngine, PolicyBundle, VerdictType
+try:
+    from governance.acs_policy_engine_native import ACSPolicyEngine, PolicyBundle, VerdictType
+except ImportError:
+    pass
 from governance.acs_intervention_native import ACSInterventionHandler, InterventionBinding, InterventionPoint
 from governance.acs_verdict_native import VerdictComposer, TransformEngine, ApprovalQueue
 from governance.acs_manifest_native import ManifestResolver

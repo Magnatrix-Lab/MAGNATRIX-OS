@@ -105,7 +105,7 @@ class MultiAgentCollaboration:
         AgentRole.SPECIALIST: ["antigravity", "autoclaw", "kimi_code"],
     }
 
-    def __init__(self, connector: Any) -> None:
+    def __init__(self, connector: Any = None) -> None:
         self.connector = connector
         self._history: List[CollaborationResult] = []
         self._strength_match_threshold = 0.3

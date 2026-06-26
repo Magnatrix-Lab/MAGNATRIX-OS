@@ -59,7 +59,7 @@ class ModuleRegistry:
         ("advanced", "core.advanced_rag_pipeline_native", "AdvancedRAGPipeline"),
         ("agent", "core.agent_attribution_native", "AgentAttribution"),
         ("agent_1", "core.agent_connector_native", "AgentConnector"),
-        ("agent_2", "core.agent_orchestrator_native", "MockRegistry"),
+        ("agent_2", "core.agent_orchestrator_native", "AgentOrchestrator"),
         ("agent_3", "core.agent_plugin_marketplace_native", "PluginMarketplace"),
         ("ai_model_registry", "core.ai_model_registry_native", "ModelRegistry"),
         ("ai_training", "core.ai_training_pipeline_native", "AITrainingPipeline"),
@@ -86,7 +86,7 @@ class ModuleRegistry:
         ("cli", "core.cli_native", "MagnatrixCLI"),
         ("cli_tui", "core.cli_tui_manager_native", "TUIManager"),
         ("code", "core.code_audit_engine_native", "CodeAuditEngine"),
-        ("code_quality_checker", "core.code_quality_checker_native", "Good"),
+        ("code_quality_checker", "core.code_quality_checker_native", "CodeQualityChecker"),
         ("compression", "core.compression_engine_native", "CompressionEngine"),
         ("config", "core.config_manager_native", "ConfigManager"),
         ("container", "core.container_manager_native", "ContainerManager"),
@@ -99,7 +99,7 @@ class ModuleRegistry:
         ("data_1", "core.data_lineage_native", "DataLineage"),
         ("data_2", "core.data_pipeline_native", "DataPipeline"),
         ("data_3", "core.data_quality_engine_native", "DataQualityEngine"),
-        ("database", "core.database_abstraction_native", "TransactionContext"),
+        ("database", "core.database_abstraction_native", "DatabaseAbstraction"),
         ("database_layer", "core.database_layer_native", "DatabaseManager"),
         ("dependency", "core.dependency_graph_native", "DependencyGraph"),
         ("distributed", "core.distributed_mesh_engine_native", "DistributedMeshEngine"),
@@ -151,16 +151,16 @@ class ModuleRegistry:
         ("model_1", "core.model_serving_native", "ModelServingEngine"),
         ("module_registry", "core.module_registry_native", "ModuleRegistry"),
         ("monitoring_alerting", "core.monitoring_alerting_native", "MonitoringEngine"),
-        ("multi_agent_collaboration", "core.multi_agent_collaboration_native", "MockResp"),
+        ("multi_agent_collaboration", "core.multi_agent_collaboration_native", "MultiAgentCollaboration"),
         ("multi", "core.multi_agent_router_native", "MultiAgentRouter"),
         ("multi_model", "core.multi_model_llm_adapter_native", "MultiModelLLMAdapter"),
-        ("nlq", "core.nlq_engine_native", "MockRegistry"),
+        ("nlq", "core.nlq_engine_native", "NLQEngine"),
         ("outreach", "core.outreach_engine_native", "OutreachEngine"),
         ("package", "core.package_manager_native", "PackageManager"),
         ("performance", "core.performance_profiler_native", "PerformanceProfiler"),
         ("plugin", "core.plugin_sandbox_native", "PluginSandbox"),
-        ("plugin_1", "core.plugin_sdk_native", "Plugin"),
-        ("plugin_2", "core.plugin_system_native", "LoggerPlugin"),
+        ("plugin_1", "core.plugin_sdk_native", "HookRegistry"),
+        ("plugin_2", "core.plugin_system_native", "PluginSystem"),
         ("process", "core.process_manager_native", "ProcessManager"),
         ("prompt", "core.prompt_chaining_native", "PromptChain"),
         ("prompt_injection", "core.prompt_injection_guard_native", "PromptInjectionGuard"),
@@ -191,7 +191,7 @@ class ModuleRegistry:
         ("tool_registry", "core.tool_registry_native", "ToolRegistry"),
         ("tool", "core.tool_use_framework_native", "ToolUseFramework"),
         ("unified", "core.unified_orchestrator_native", "UnifiedOrchestrator"),
-        ("voice", "core.voice_audio_pipeline_native", "VoiceEvent"),
+        ("voice", "core.voice_audio_pipeline_native", "VoiceAudioPipelineNative"),
         ("voice_1", "core.voice_ui_native", "VoiceUI"),
         ("web", "core.web_api_gateway_native", "WebAPIGateway"),
         ("web_1", "core.web_dashboard_server_native", "DashboardServer"),
@@ -224,8 +224,10 @@ class ModuleRegistry:
             try:
                 import inspect
                 sig = inspect.signature(cls.__init__)
-                if "repo_root" in sig.parameters or "root" in sig.parameters:
+                if "repo_root" in sig.parameters:
                     sig_args["repo_root"] = str(self.root)
+                if "root" in sig.parameters:
+                    sig_args["root"] = str(self.root)
                 if "store_dir" in sig.parameters:
                     sig_args["store_dir"] = str(self.root / "data" / name)
             except Exception:

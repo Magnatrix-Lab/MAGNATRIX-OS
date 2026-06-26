@@ -815,7 +815,7 @@ class ReportGenerator:
 class CodeAuditEngine:
     """Orchestrates all analysis passes and produces a dashboard-ready report."""
 
-    def __init__(self, target_path: str):
+    def __init__(self, target_path: str = "."):
         self.target_path = pathlib.Path(target_path)
         self.duplicate_detector = DuplicateDetector()
         self.dead_analyzer = DeadCodeAnalyzer()

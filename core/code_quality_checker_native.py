@@ -60,7 +60,7 @@ class FileQuality:
 class CodeQualityChecker:
     """Analyzes Python code quality via AST."""
 
-    def __init__(self, repo_root: str) -> None:
+    def __init__(self, repo_root: str = None) -> None:
         self.root = Path(repo_root).resolve()
 
     def check_file(self, path: Path) -> FileQuality:

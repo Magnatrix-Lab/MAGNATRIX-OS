@@ -96,7 +96,7 @@ class NodeDiscovery:
     MULTICAST_PORT = 19000
     BEACON_INTERVAL = 5
 
-    def __init__(self, node_id: str, host: str, port: int) -> None:
+    def __init__(self, node_id: str = None, host: str = None, port: int = 0) -> None:
         self._node_id = node_id
         self._host = host
         self._port = port
@@ -297,7 +297,7 @@ class ConsensusEngine:
 class DistributedMeshEngine:
     """Main P2P mesh orchestrator."""
 
-    def __init__(self, node_id: str, host: str, port: int) -> None:
+    def __init__(self, node_id: str = None, host: str = None, port: int = 0) -> None:
         self.node_id = node_id
         self.host = host
         self.port = port

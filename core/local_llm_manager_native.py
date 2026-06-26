@@ -24,8 +24,14 @@ import urllib.error
 from typing import Dict, List, Optional, Tuple, Any, Callable
 
 # Import sibling modules (relative imports handled by sys.path in production)
-from model_catalog_native import ModelCatalog, ModelSpec, QuantizationLevel, ModelFamily
-from hardware_profiler_native import HardwareProfiler, HardwareProfile
+try:
+    from core.model_catalog_native import ModelCatalog, ModelSpec, QuantizationLevel, ModelFamily
+except ImportError:
+    ModelCatalog = ModelSpec = QuantizationLevel = ModelFamily = None
+try:
+    from core.hardware_profiler_native import HardwareProfiler, HardwareProfile
+except ImportError:
+    pass
 
 
 @dataclasses.dataclass

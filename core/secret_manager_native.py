@@ -94,7 +94,7 @@ class SecretRecord:
 class SecretManager:
     """Vault for secrets with master-password protection and scoping."""
 
-    def __init__(self, vault_path: str, master_password: str) -> None:
+    def __init__(self, vault_path: str = "./vault", master_password: str = "default") -> None:
         self.vault_path = Path(vault_path)
         self.master_password = master_password
         self._secrets: Dict[str, SecretRecord] = {}
