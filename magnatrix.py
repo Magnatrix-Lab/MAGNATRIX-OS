@@ -214,6 +214,11 @@ class ModuleRegistry:
         ("hft_trading", "core.hft_trading_engine_native", "TradingEngine"),
         ("grpc_transport", "core.grpc_transport_native", "GRPCTransport"),
         ("docker_compose", "core.docker_compose_native", "BootstrapManager"),
+        # Phase 3+4: Integration + Proto-AGI + Data + Constitution
+        ("integration_hybrid", "core.integration_hybrid_mode_native", "IntegrationHybridManager"),
+        ("proto_agi", "core.proto_agi_self_improvement_native", "SelfImprovementLoop"),
+        ("data_connectors", "core.data_connectors_native", "DataConnectorManager"),
+        ("constitution", "core.magnatrix_constitution_native", "ConstitutionGovernor"),
     ]
 
     def __init__(self, repo_root: str) -> None:
