@@ -177,7 +177,7 @@ class NLQParser:
 class QueryExecutor:
     """Execute parsed NL query against MAGNATRIX-OS data."""
 
-    def __init__(self, registry: Any) -> None:
+    def __init__(self, registry: Any = None) -> None:
         self.registry = registry
 
     def execute(self, query: NLQuery) -> Any:
@@ -269,7 +269,7 @@ class ResultFormatter:
 class NLQEngine:
     """Main NLQ engine."""
 
-    def __init__(self, registry: Any) -> None:
+    def __init__(self, registry: Any = None) -> None:
         self.parser = NLQParser()
         self.executor = QueryExecutor(registry)
         self.formatter = ResultFormatter()

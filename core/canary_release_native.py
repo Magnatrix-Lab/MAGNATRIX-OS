@@ -5,7 +5,7 @@ import hashlib, random
 from typing import Any, Dict, List
 
 class CanaryRelease:
-    def __init__(self, version: str, traffic_percent: float = 10.0) -> None:
+    def __init__(self, version: str = "1.0.0", traffic_percent: float = 10.0) -> None:
         self.version = version
         self.traffic_percent = traffic_percent
         self._users: List[str] = []
