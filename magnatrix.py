@@ -198,6 +198,18 @@ class ModuleRegistry:
         ("websocket", "core.websocket_engine_native", "RealtimeEngine"),
         ("workflow", "core.workflow_engine_native", "WorkflowEngine"),
         ("zerotrust", "core.zerotrust_policy_native", "ZeroTrustPolicy"),
+        # New modules: Integration Layer + 8 Modules + Test Suite + Dashboard
+        ("integration", "core.integration_layer_native", "IntegrationManager"),
+        ("quantum_safe", "core.quantum_safe_crypto_native", "QuantumSafeCrypto"),
+        ("wasm", "core.wasm_runtime_native", "WASMRuntime"),
+        ("intent", "core.intent_orchestrator_native", "IntentOrchestrator"),
+        ("temporal", "core.temporal_workflow_native", "TemporalWorkflowEngine"),
+        ("code_reasoning", "core.code_reasoning_engine_native", "CodeReasoningEngine"),
+        ("self_healing", "core.self_healing_native", "SelfHealingEngine"),
+        ("audit_forensics", "core.audit_forensics_native", "AuditForensicsEngine"),
+        ("anomaly_viz", "core.anomaly_visualization_native", "AnomalyVizEngine"),
+        ("test_suite", "core.test_suite_engine_native", "TestSuiteEngine"),
+        ("dashboard_pro", "core.dashboard_production_native", "DashboardServer"),
     ]
 
     def __init__(self, repo_root: str) -> None:
