@@ -130,6 +130,9 @@ class ModuleRegistry:
         ("graphql", "core.graphql_engine_native", "GraphQLServer"),
         ("ai_training", "core.ai_training_pipeline_native", "AITrainingPipeline"),
         ("nlq", "core.nlq_engine_native", "NLQEngine"),
+        ("analytics", "core.analytics_engine_native", "AnalyticsEngine"),
+        ("model_registry", "core.ai_model_registry_native", "ModelRegistry"),
+        ("search", "core.search_engine_native", "SearchEngine"),
     ]
 
     def __init__(self, repo_root: str) -> None:
