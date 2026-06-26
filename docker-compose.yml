@@ -1,37 +1,72 @@
-version: "3.8"
-
+version: 3.8
 services:
-  magnatrix:
+  magnatrix-core:
+    image: magnatrix-os:latest
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: magnatrix-os
     ports:
-      - "8080:8080"
+      - 8080:8080
     volumes:
-      - magnatrix-data:/opt/magnatrix/data
-      - magnatrix-logs:/opt/magnatrix/logs
+      - magnatrix-data:/data
+      - magnatrix-logs:/logs
     environment:
-      - MAGNATRIX_ENV=production
-      - MAGNATRIX_LOG_LEVEL=INFO
-      - MAGNATRIX_HOST=0.0.0.0
-      - MAGNATRIX_PORT=8080
+      MAGNATRIX_ENV: production
+      MAGNATRIX_LOG_LEVEL: info
+      MAGNATRIX_PORT: 8080
+    command: python magnatrix.py start --port 8080
     restart: unless-stopped
-    networks:
-      - magnatrix-net
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/api/health', timeout=5)"]
+      test:
+        - CMD
+        - curl
+        - -f
+        - http://localhost:8080/api/status
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 10s
-
+      start_period: 40s
+    networks:
+      - magnatrix-net
+    labels:
+      app: magnatrix-core
+      tier: core
+  magnatrix-dashboard:
+    image: magnatrix-os:latest
+    ports:
+      - 8081:8081
+    environment:
+      MAGNATRIX_DASHBOARD_PORT: 8081
+      MAGNATRIX_CORE_HOST: magnatrix-core
+    command: python -c 'from core.dashboard_production_native import DashboardServer; DashboardServer(port=8081).start()
+    restart: unless-stopped
+    depends_on:
+      - magnatrix-core
+    networks:
+      - magnatrix-net
+    labels:
+      app: magnatrix-dashboard
+      tier: frontend
+  magnatrix-logs:
+    image: magnatrix-os:latest
+    volumes:
+      - magnatrix-logs:/logs
+    environment:
+      MAGNATRIX_LOG_AGGREGATOR: true
+    command: python -c 'import time; time.sleep(999999)'
+    restart: unless-stopped
+    depends_on:
+      - magnatrix-core
+    networks:
+      - magnatrix-net
+    labels:
+      app: magnatrix-logs
+      tier: support
 volumes:
   magnatrix-data:
     driver: local
   magnatrix-logs:
     driver: local
-
 networks:
   magnatrix-net:
     driver: bridge

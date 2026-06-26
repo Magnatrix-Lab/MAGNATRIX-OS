@@ -1,36 +1,25 @@
-# MAGNATRIX-OS Dockerfile
-# Production-ready container for the uncensored AI operating system
+FROM python:3.11-slim
 
-FROM python:3.12-slim
+WORKDIR /app
 
-LABEL maintainer="MAGNATRIX-Lab"
-LABEL description="MAGNATRIX-OS - Private Uncensored Open-Source AI Operating System"
+# Install minimal system deps
+RUN apt-get update -qq && \
+    apt-get install -y -qq curl git && \
+    rm -rf /var/lib/apt/lists/*
 
-# Prevent interactive prompts
-ENV DEBIAN_FRONTEND=noninteractive
-ENV PYTHONDONTWRITEBYTECODE=1
+# Copy source
+COPY . /app/
+
+# Set environment
 ENV PYTHONUNBUFFERED=1
-ENV MAGNATRIX_HOME=/opt/magnatrix
-
-# Install system dependencies
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    git \
-    curl \
-    ca-certificates \
-    && rm -rf /var/lib/apt/lists/*
-
-# Create app directory
-WORKDIR $MAGNATRIX_HOME
-
-# Copy repository
-COPY . $MAGNATRIX_HOME/
-
-# Expose dashboard port
-EXPOSE 8080
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV MAGNATRIX_ENV=production
 
 # Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8080/api/health', timeout=5)" || exit 1
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+    CMD curl -f http://localhost:8080/api/status || exit 1
 
-# Default command: start dashboard server
-CMD ["python", "-u", "core/web_dashboard_server_native.py"]
+EXPOSE 8080 8081
+
+ENTRYPOINT ["python", "magnatrix.py"]
+CMD ["start", "--port", "8080"]

@@ -1,123 +1,129 @@
-#!/bin/bash
-# MAGNATRIX-OS Installation Script
-# Quick installer for Linux/macOS systems
+#!/usr/bin/env bash
+# MAGNATRIX-OS One-Command Installer
+# Cross-platform: Linux, macOS, Windows (WSL)
 
 set -e
 
 REPO_URL="https://github.com/Magnatrix-Lab/MAGNATRIX-OS.git"
-INSTALL_DIR="${MAGNATRIX_HOME:-/opt/magnatrix}"
-PYTHON_MIN="3.10"
-USER="magnatrix"
+INSTALL_DIR="${HOME}/magnatrix-os"
+DASHBOARD_URL="http://localhost:8080"
 
-# Colors
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-NC='\033[0m'
-
-log_info() { echo -e "${BLUE}[INFO]${NC} $1"; }
-log_ok() { echo -e "${GREEN}[OK]${NC} $1"; }
-log_warn() { echo -e "${YELLOW}[WARN]${NC} $1"; }
-log_err() { echo -e "${RED}[ERR]${NC} $1"; }
-
-check_python() {
-    log_info "Checking Python version..."
-    if ! command -v python3 &> /dev/null; then
-        log_err "Python3 is not installed. Please install Python ${PYTHON_MIN} or higher."
-        exit 1
-    fi
-    PYVER=$(python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')
-    if [ "$(printf '%s\n' "$PYTHON_MIN" "$PYVER" | sort -V | head -n1)" != "$PYTHON_MIN" ]; then
-        log_err "Python ${PYTHON_MIN} or higher is required. Found: ${PYVER}"
-        exit 1
-    fi
-    log_ok "Python ${PYVER} found"
+detect_os() {
+    case "$(uname -s)" in
+        Linux*)     echo "linux";;
+        Darwin*)    echo "macos";;
+        CYGWIN*|MINGW*|MSYS*) echo "windows";;
+        *)          echo "unknown";;
+    esac
 }
 
-create_user() {
-    if ! id "$USER" &>/dev/null; then
-        log_info "Creating system user: ${USER}"
-        useradd -r -s /bin/false -d "$INSTALL_DIR" -M "$USER" 2>/dev/null || true
+check_prerequisites() {
+    echo "[1/5] Checking prerequisites..."
+    OS=$(detect_os)
+    echo "    OS: $OS"
+    if command -v docker &> /dev/null; then
+        echo "    Docker: OK"
     else
-        log_ok "User ${USER} already exists"
+        echo "    Docker: NOT FOUND"
+        return 1
     fi
-}
-
-install_repo() {
-    if [ -d "$INSTALL_DIR/.git" ]; then
-        log_warn "Repository already exists at ${INSTALL_DIR}. Pulling latest..."
-        cd "$INSTALL_DIR"
-        git pull origin main
+    if command -v docker-compose &> /dev/null || docker compose version &> /dev/null; then
+        echo "    Docker Compose: OK"
     else
-        log_info "Cloning MAGNATRIX-OS repository..."
-        mkdir -p "$(dirname "$INSTALL_DIR")"
-        git clone "$REPO_URL" "$INSTALL_DIR"
+        echo "    Docker Compose: NOT FOUND"
+        return 1
     fi
-    chown -R "$USER:$USER" "$INSTALL_DIR"
-    log_ok "Repository installed at ${INSTALL_DIR}"
+    return 0
 }
 
-install_systemd() {
-    if command -v systemctl &> /dev/null; then
-        log_info "Installing systemd service..."
-        cp "$INSTALL_DIR/magnatrix.service" /etc/systemd/system/
-        systemctl daemon-reload
-        systemctl enable magnatrix.service
-        log_ok "Systemd service installed. Run: systemctl start magnatrix"
-    else
-        log_warn "systemctl not found. Skipping systemd service installation."
-    fi
-}
-
-create_dirs() {
-    mkdir -p "$INSTALL_DIR/data" "$INSTALL_DIR/logs"
-    chown -R "$USER:$USER" "$INSTALL_DIR"
-}
-
-start_service() {
-    read -p "Start MAGNATRIX-OS now? [y/N]: " -n 1 -r
-    echo
-    if [[ $REPLY =~ ^[Yy]$ ]]; then
-        if command -v systemctl &> /dev/null; then
-            systemctl start magnatrix
-            log_ok "Service started. Dashboard: http://localhost:8080"
-        else
-            log_info "Starting in foreground..."
-            cd "$INSTALL_DIR"
-            python3 core/web_dashboard_server_native.py &
-            log_ok "Dashboard: http://localhost:8080"
+install_docker() {
+    OS=$(detect_os)
+    echo "[2/5] Installing Docker..."
+    if [ "$OS" = "linux" ]; then
+        if command -v apt-get &> /dev/null; then
+            sudo apt-get update -qq
+            sudo apt-get install -y -qq docker.io docker-compose
+        elif command -v yum &> /dev/null; then
+            sudo yum install -y -q docker docker-compose
+        elif command -v pacman &> /dev/null; then
+            sudo pacman -S --noconfirm docker docker-compose
         fi
+    elif [ "$OS" = "macos" ]; then
+        if command -v brew &> /dev/null; then
+            brew install --cask docker
+        else
+            echo "    Please install Docker Desktop for Mac manually."
+            exit 1
+        fi
+    elif [ "$OS" = "windows" ]; then
+        echo "    Please install Docker Desktop for Windows manually."
+        exit 1
+    fi
+    sudo systemctl start docker 2>/dev/null || true
+}
+
+clone_repo() {
+    echo "[3/5] Cloning MAGNATRIX-OS repository..."
+    if [ -d "$INSTALL_DIR" ]; then
+        echo "    Directory exists, pulling latest..."
+        cd "$INSTALL_DIR" && git pull --quiet || true
+    else
+        git clone --depth 1 "$REPO_URL" "$INSTALL_DIR"
     fi
 }
 
-print_banner() {
-    echo -e "${BLUE}"
-    echo "  __  __   ___   _____   _   _   _____   _____   ____   _____   _____  ____"
-    echo " |  \\/  | / _ \\ |  __ \\ | | | | /  ___| |_   _| |  _ \\ |  __ \\ |_   _|/ ___|"
-    echo " | \\  / |/ /_\\ \\| |  | || | | | \\  '--.    | |   | |_) || |__) |  | |  \\  '--."
-    echo " | |\\/| ||  _  || |  | || | | |  '--. \\   | |   |  _ < |  _  /   | |   '--. \\"
-    echo " | |  | || | | || |__| || |_| | /\\__/ /  _| |_  | |_) || | \\ \\  _| |_ /\\__/ /"
-    echo " |_|  |_||_| |_||_____/  \\___/  \\____/  |_____| |____/ |_|  \\_\\|_____|\\____/"
-    echo -e "${NC}"
-    echo -e "${GREEN}Private. Uncensored. Open-Source AI Operating System.${NC}"
-    echo
+run_compose() {
+    echo "[4/5] Building and starting MAGNATRIX-OS..."
+    cd "$INSTALL_DIR"
+    if docker-compose version &> /dev/null; then
+        docker-compose up -d --build
+    else
+        docker compose up -d --build
+    fi
+}
+
+verify_install() {
+    echo "[5/5] Verifying installation..."
+    for i in {1..30}; do
+        if curl -sf "$DASHBOARD_URL/api/status" &> /dev/null; then
+            echo ""
+            echo "=========================================="
+            echo "  MAGNATRIX-OS installed successfully!"
+            echo "  Dashboard: $DASHBOARD_URL"
+            echo "  Install dir: $INSTALL_DIR"
+            echo "=========================================="
+            exit 0
+        fi
+        sleep 2
+        echo -n "."
+    done
+    echo ""
+    echo "  WARNING: Health check timeout. Check logs:"
+    echo "    cd $INSTALL_DIR && docker-compose logs"
 }
 
 main() {
-    print_banner
-    log_info "Starting MAGNATRIX-OS installation..."
-    check_python
-    create_user
-    install_repo
-    create_dirs
-    install_systemd
-    log_ok "Installation complete!"
-    start_service
-    echo
-    log_info "Manage service: systemctl {start|stop|restart|status} magnatrix"
-    log_info "Dashboard:    http://localhost:8080"
-    log_info "Logs:           journalctl -u magnatrix -f"
+    echo "=========================================="
+    echo "  MAGNATRIX-OS Installer"
+    echo "=========================================="
+    OS=$(detect_os)
+    echo "  Detected OS: $OS"
+    echo ""
+
+    if ! check_prerequisites; then
+        read -p "Docker not found. Install automatically? (y/n) " -n 1 -r
+        echo
+        if [[ $REPLY =~ ^[Yy]$ ]]; then
+            install_docker
+        else
+            echo "  Please install Docker and Docker Compose, then re-run."
+            exit 1
+        fi
+    fi
+
+    clone_repo
+    run_compose
+    verify_install
 }
 
 main "$@"

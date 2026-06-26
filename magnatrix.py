@@ -210,6 +210,10 @@ class ModuleRegistry:
         ("anomaly_viz", "core.anomaly_visualization_native", "AnomalyVizEngine"),
         ("test_suite", "core.test_suite_engine_native", "TestSuiteEngine"),
         ("dashboard_pro", "core.dashboard_production_native", "DashboardServer"),
+        # Phase 2: HFT + gRPC + Docker Installer
+        ("hft_trading", "core.hft_trading_engine_native", "TradingEngine"),
+        ("grpc_transport", "core.grpc_transport_native", "GRPCTransport"),
+        ("docker_compose", "core.docker_compose_native", "BootstrapManager"),
     ]
 
     def __init__(self, repo_root: str) -> None:
