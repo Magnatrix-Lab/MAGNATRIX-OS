@@ -230,6 +230,12 @@ class ModuleRegistry:
         ("integration_hub", "core.system_integration_hub_native", "SystemIntegrationHub"),
         ("hardware_edge", "core.hardware_inference_edge_native", "HardwareInferenceEngine"),
         ("auto_doc", "core.auto_doc_test_generator_native", "AutoDocTestEngine"),
+        # Phase 7: Memory + Knowledge + Federated + XAI + Synthetic
+        ("agent_memory", "core.agent_memory_system_native", "AgentMemory"),
+        ("knowledge_ingestion", "core.knowledge_ingestion_pipeline_native", "KnowledgeIngestionPipeline"),
+        ("federated_learning", "core.federated_learning_native", "FederatedLearningEngine"),
+        ("xai", "core.explainability_xai_native", "ExplainabilityEngine"),
+        ("synthetic_data", "core.synthetic_data_generator_native", "SyntheticDataEngine"),
     ]
 
     def __init__(self, repo_root: str) -> None:
