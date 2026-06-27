@@ -225,6 +225,7 @@ class ModuleRegistry:
         ("concealment", "core.capability_concealment_native", "ConcealmentDetector"),
         ("transfer", "core.cross_domain_transfer_native", "CrossDomainTransfer"),
         ("boot_opt", "core.boot_optimizer_v2_native", "BootOptimizer"),
+        ("moa", "core.moa_integration_native", "MOAEngine"),
     ]
 
     def __init__(self, repo_root: str) -> None:
