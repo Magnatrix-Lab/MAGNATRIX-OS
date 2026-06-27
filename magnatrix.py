@@ -236,6 +236,12 @@ class ModuleRegistry:
         ("federated_learning", "core.federated_learning_native", "FederatedLearningEngine"),
         ("xai", "core.explainability_xai_native", "ExplainabilityEngine"),
         ("synthetic_data", "core.synthetic_data_generator_native", "SyntheticDataEngine"),
+        # Phase 8: Final 5 — Goal Formation + RSI v2 + MultiModal + Deployment + Benchmark
+        ("goal_formation", "core.emergent_goal_formation_native", "EmergentGoalFormation"),
+        ("rsi_v2", "core.recursive_self_improvement_v2_native", "RecursiveSelfImprovement"),
+        ("multimodal", "core.multimodal_pipeline_native", "MultiModalPipeline"),
+        ("deployment", "core.live_deployment_manager_native", "LiveDeploymentManager"),
+        ("benchmark", "core.auto_benchmark_leaderboard_native", "AutoBenchmarkEngine"),
     ]
 
     def __init__(self, repo_root: str) -> None:
