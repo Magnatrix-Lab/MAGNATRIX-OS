@@ -219,6 +219,12 @@ class ModuleRegistry:
         ("proto_agi", "core.proto_agi_self_improvement_native", "SelfImprovementLoop"),
         ("data_connectors", "core.data_connectors_native", "DataConnectorManager"),
         ("constitution", "core.magnatrix_constitution_native", "ConstitutionGovernor"),
+        # Phase 5: Swarm + Exchange + Security + Transfer + Optimizer
+        ("swarm", "core.swarm_intelligence_native", "SwarmIntelligence"),
+        ("exchange", "core.live_exchange_integration_native", "ExchangeConnector"),
+        ("concealment", "core.capability_concealment_native", "ConcealmentDetector"),
+        ("transfer", "core.cross_domain_transfer_native", "CrossDomainTransfer"),
+        ("boot_opt", "core.boot_optimizer_v2_native", "BootOptimizer"),
     ]
 
     def __init__(self, repo_root: str) -> None:
