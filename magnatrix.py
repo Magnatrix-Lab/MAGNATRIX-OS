@@ -226,6 +226,10 @@ class ModuleRegistry:
         ("transfer", "core.cross_domain_transfer_native", "CrossDomainTransfer"),
         ("boot_opt", "core.boot_optimizer_v2_native", "BootOptimizer"),
         ("moa", "core.moa_integration_native", "MOAEngine"),
+        # Phase 6: Integration Hub + Hardware + Auto Doc
+        ("integration_hub", "core.system_integration_hub_native", "SystemIntegrationHub"),
+        ("hardware_edge", "core.hardware_inference_edge_native", "HardwareInferenceEngine"),
+        ("auto_doc", "core.auto_doc_test_generator_native", "AutoDocTestEngine"),
     ]
 
     def __init__(self, repo_root: str) -> None:
