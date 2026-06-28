@@ -25,7 +25,7 @@ class DataQualityEngine:
             value = record.get(rule.field)
             if rule.check == "not_null" and (value is None or value == ""):
                 errors.append({"field": rule.field, "check": "not_null", "msg": "Value is null"})
-            elif rule.check == "type" and not isinstance(value, eval(rule.params.get("type", "str"))):
+            elif rule.check == "type" and not isinstance(value, ast.literal_eval(rule.params.get("type", "str"))):
                 errors.append({"field": rule.field, "check": "type", "msg": f"Expected {rule.params.get('type')}"})
             elif rule.check == "regex" and value and not re.match(rule.params.get("pattern", ".*"), str(value)):
                 errors.append({"field": rule.field, "check": "regex", "msg": "Pattern mismatch"})

@@ -263,6 +263,11 @@ class ModuleRegistry:
         ("compliance", "core.compliance_auditor_native", "ComplianceAuditor"),
         ("lineage", "core.data_lineage_native", "DataLineageTracker"),
         ("drift", "core.model_drift_detector_native", "ModelDriftDetector"),
+        ("quantum_ml", "core.quantum_machine_learning_native", "QuantumML"),
+        ("bioinformatics", "core.bioinformatics_engine_native", "BioinformaticsEngine"),
+        ("aerospace", "core.aerospace_flight_control_native", "AerospaceFlightControl"),
+        ("smart_agri", "core.smart_agriculture_native", "SmartAgriculture"),
+        ("space_debris", "core.space_debris_tracker_native", "SpaceDebrisTracker"),
     ]
 
     def __init__(self, repo_root: str) -> None:
