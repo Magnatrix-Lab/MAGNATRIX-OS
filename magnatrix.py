@@ -274,6 +274,12 @@ class ModuleRegistry:
         ("classloader_mon", "core.classloader_monitor_native", "ClassLoaderMonitor"),
         ("webshell_detect", "core.webshell_session_detector_native", "WebshellSessionDetector"),
         ("forensics_counter", "core.forensics_countermeasures_native", "ForensicsCountermeasuresDetector"),
+        ("vnpy_gateway", "core.vnpy_gateway_adapter_native", "vnpyGatewayAdapter"),
+        ("cta_engine", "core.cta_strategy_engine_native", "CTAStrategyEngine"),
+        ("alpha_factor", "core.alpha_factor_engine_native", "AlphaFactorEngine"),
+        ("ml_predictor", "core.ml_predictor_native", "MLPredictor"),
+        ("order_flow", "core.order_flow_controller_native", "OrderFlowController"),
+        ("data_recorder", "core.market_data_recorder_native", "MarketDataRecorder"),
     ]
 
     def __init__(self, repo_root: str) -> None:
