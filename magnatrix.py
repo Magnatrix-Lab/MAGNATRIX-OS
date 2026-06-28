@@ -269,6 +269,11 @@ class ModuleRegistry:
         ("smart_agri", "core.smart_agriculture_native", "SmartAgriculture"),
         ("space_debris", "core.space_debris_tracker_native", "SpaceDebrisTracker"),
         ("disposable_agent", "core.disposable_agent_generator_native", "DisposableAgentGenerator"),
+        ("implant_detector", "core.memory_implant_detector_native", "MemoryImplantDetector"),
+        ("enc_channel", "core.encrypted_channel_analyzer_native", "EncryptedChannelAnalyzer"),
+        ("classloader_mon", "core.classloader_monitor_native", "ClassLoaderMonitor"),
+        ("webshell_detect", "core.webshell_session_detector_native", "WebshellSessionDetector"),
+        ("forensics_counter", "core.forensics_countermeasures_native", "ForensicsCountermeasuresDetector"),
     ]
 
     def __init__(self, repo_root: str) -> None:
