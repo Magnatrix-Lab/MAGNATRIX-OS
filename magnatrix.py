@@ -268,6 +268,7 @@ class ModuleRegistry:
         ("aerospace", "core.aerospace_flight_control_native", "AerospaceFlightControl"),
         ("smart_agri", "core.smart_agriculture_native", "SmartAgriculture"),
         ("space_debris", "core.space_debris_tracker_native", "SpaceDebrisTracker"),
+        ("disposable_agent", "core.disposable_agent_generator_native", "DisposableAgentGenerator"),
     ]
 
     def __init__(self, repo_root: str) -> None:
