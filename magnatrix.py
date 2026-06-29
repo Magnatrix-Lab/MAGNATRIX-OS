@@ -471,6 +471,16 @@ class ModuleRegistry:
         ("writeup_parser", "core.research_writeup_parser_native", "ResearchWriteupParser"),
         ("exploit_classifier", "core.exploit_classifier_native", "ExploitClassifier"),
         ("target_recon", "core.target_reconnaissance_native", "TargetReconnaissance"),
+        ("fugu_orchestrator", "core.fugu_orchestrator_native", "FuguOrchestrator"),
+        ("agent_native_memory", "core.agent_native_memory_native", "AgentNativeMemory"),
+        ("autodata_synthetic", "core.autodata_synthetic_native", "AutodataSynthetic"),
+        ("agent_critique", "core.agent_critique_analyzer_native", "AgentCritiqueAnalyzer"),
+        ("agent_router", "core.agent_router_native", "AgentRouter"),
+        ("agent_comm_taxonomy", "core.agent_comm_taxonomy_native", "AgentCommTaxonomy"),
+        ("self_play_autonomy", "core.self_play_autonomy_native", "SelfPlayAutonomyTrainer"),
+        ("skill_mas_evolver", "core.skill_mas_evolver_native", "SkillMASEvolver"),
+        ("llm_judge_evaluator", "core.llm_judge_evaluator_native", "LLMJudgeEvaluator"),
+        ("nature_bench", "core.nature_bench_native", "NatureBench"),
     ]
 
     def __init__(self, repo_root: str) -> None:
