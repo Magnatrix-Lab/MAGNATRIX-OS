@@ -280,6 +280,7 @@ class ModuleRegistry:
         ("ml_predictor", "core.ml_predictor_native", "MLPredictor"),
         ("order_flow", "core.order_flow_controller_native", "OrderFlowController"),
         ("data_recorder", "core.market_data_recorder_native", "MarketDataRecorder"),
+        ("loop_engine", "core.loop_engineering_engine_native", "LoopEngineeringEngine"),
     ]
 
     def __init__(self, repo_root: str) -> None:
