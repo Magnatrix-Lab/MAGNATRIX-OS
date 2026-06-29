@@ -391,6 +391,14 @@ class ModuleRegistry:
         ("email_posture", "core.email_posture_analyzer_native", "EmailPostureAnalyzer"),
         ("secret_detector", "core.exposed_secret_detector_native", "ExposedSecretDetector"),
         ("asset_scoring", "core.asset_scoring_engine_native", "AssetScoringEngine"),
+        ("scalability_fundamentals", "core.scalability_fundamentals_native", "ScalabilityFundamentals"),
+        ("database_scaling", "core.database_scaling_engine_native", "DatabaseScalingEngine"),
+        ("caching_strategy", "core.caching_strategy_engine_native", "CachingStrategyEngine"),
+        ("load_balancer", "core.load_balancer_simulator_native", "LoadBalancerSimulator"),
+        ("cap_theorem", "core.cap_theorem_analyzer_native", "CAPTheoremAnalyzer"),
+        ("microservices", "core.microservices_orchestrator_native", "MicroservicesOrchestrator"),
+        ("message_queue", "core.message_queue_engine_native", "MessageQueueEngine"),
+        ("system_design_interviewer", "core.system_design_interviewer_native", "SystemDesignInterviewer"),
     ]
 
     def __init__(self, repo_root: str) -> None:
