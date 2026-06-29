@@ -431,6 +431,14 @@ class ModuleRegistry:
         ("agent_workflow", "core.agent_workflow_builder_native", "AgentWorkflowBuilder"),
         ("flow_deployer", "core.flow_deployer_native", "FlowDeployer"),
         ("component_lib", "core.component_library_native", "ComponentLibrary"),
+        ("recon_engine", "core.reconnaissance_engine_native", "ReconnaissanceEngine"),
+        ("exploit_matcher", "core.exploit_pattern_matcher_native", "ExploitPatternMatcher"),
+        ("c2_simulator", "core.c2_simulator_native", "C2Simulator"),
+        ("payload_obfuscator", "core.payload_obfuscator_native", "PayloadObfuscator"),
+        ("lateral_tracker", "core.lateral_movement_tracker_native", "LateralMovementTracker"),
+        ("post_exploitation", "core.post_exploitation_native", "PostExploitation"),
+        ("redteam_planner", "core.redteam_operation_planner_native", "RedTeamOperationPlanner"),
+        ("evasion_library", "core.evasion_technique_library_native", "EvasionTechniqueLibrary"),
     ]
 
     def __init__(self, repo_root: str) -> None:
