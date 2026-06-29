@@ -407,6 +407,14 @@ class ModuleRegistry:
         ("style_engine", "core.style_engine_native", "StyleEngine"),
         ("self_evolution_forge", "core.self_evolution_forge_native", "SelfEvolutionForge"),
         ("agent_hook_manager", "core.agent_hook_manager_native", "AgentHookManager"),
+        ("yagni_engine", "core.yagni_engine_native", "YAGNIEngine"),
+        ("code_reuse_detector", "core.code_reuse_detector_native", "CodeReuseDetector"),
+        ("comprehension_guard", "core.comprehension_first_guard_native", "ComprehensionFirstGuard"),
+        ("minimalism_scoreboard", "core.minimalism_scoreboard_native", "MinimalismScoreboard"),
+        ("agent_skills_library", "core.agent_skills_library_native", "AgentSkillsLibrary"),
+        ("subagent_injector", "core.subagent_rules_injector_native", "SubagentRulesInjector"),
+        ("lazy_senior_dev", "core.lazy_senior_dev_native", "LazySeniorDev"),
+        ("agentic_benchmark", "core.agentic_benchmark_native", "AgenticBenchmark"),
     ]
 
     def __init__(self, repo_root: str) -> None:
