@@ -359,6 +359,14 @@ class ModuleRegistry:
         ("copilot_cookbook", "core.copilot_cookbook_engine_native", "CopilotCookbookEngine"),
         ("copilot_plugin", "core.copilot_plugin_manager_native", "CopilotPluginManager"),
         ("copilot_workflow", "core.copilot_workflow_automator_native", "CopilotWorkflowAutomator"),
+        ("stock_data", "core.stock_data_provider_native", "StockDataProvider"),
+        ("stock_analysis", "core.stock_analysis_engine_native", "StockAnalysisEngine"),
+        ("stock_signal", "core.stock_signal_generator_native", "StockSignalGenerator"),
+        ("financial_news", "core.financial_news_aggregator_native", "FinancialNewsAggregator"),
+        ("portfolio", "core.portfolio_tracker_native", "PortfolioTracker"),
+        ("stock_scheduler", "core.stock_scheduler_native", "StockScheduler"),
+        ("stock_alert", "core.stock_alert_engine_native", "StockAlertEngine"),
+        ("technical_indicator", "core.technical_indicator_native", "TechnicalIndicator"),
     ]
 
     def __init__(self, repo_root: str) -> None:
