@@ -1,0 +1,100 @@
+{
+  "providers": {
+    "google": {
+      "provider_id": "google",
+      "name": "Google Gemini",
+      "base_url": "https://generativelanguage.googleapis.com",
+      "free_tier": true,
+      "requires_card": false,
+      "requires_phone": true,
+      "signup_url": "https://ai.google.dev/",
+      "docs_url": "https://ai.google.dev/gemini-api/docs",
+      "status": "active",
+      "last_checked": ""
+    },
+    "groq": {
+      "provider_id": "groq",
+      "name": "Groq",
+      "base_url": "https://api.groq.com/openai/v1",
+      "free_tier": true,
+      "requires_card": false,
+      "requires_phone": false,
+      "signup_url": "https://console.groq.com/",
+      "docs_url": "https://console.groq.com/docs",
+      "status": "active",
+      "last_checked": ""
+    },
+    "nvidia": {
+      "provider_id": "nvidia",
+      "name": "NVIDIA NIM",
+      "base_url": "https://integrate.api.nvidia.com/v1",
+      "free_tier": true,
+      "requires_card": false,
+      "requires_phone": false,
+      "signup_url": "https://build.nvidia.com/",
+      "docs_url": "https://docs.nvidia.com/nim/large-language-models/latest/index.html",
+      "status": "active",
+      "last_checked": ""
+    },
+    "openrouter": {
+      "provider_id": "openrouter",
+      "name": "OpenRouter",
+      "base_url": "https://openrouter.ai/api/v1",
+      "free_tier": true,
+      "requires_card": false,
+      "requires_phone": false,
+      "signup_url": "https://openrouter.ai/",
+      "docs_url": "https://openrouter.ai/docs",
+      "status": "active",
+      "last_checked": ""
+    },
+    "cerebras": {
+      "provider_id": "cerebras",
+      "name": "Cerebras",
+      "base_url": "https://api.cerebras.ai/v1",
+      "free_tier": true,
+      "requires_card": false,
+      "requires_phone": false,
+      "signup_url": "https://cloud.cerebras.ai/",
+      "docs_url": "https://inference-docs.cerebras.ai/",
+      "status": "active",
+      "last_checked": ""
+    },
+    "samba": {
+      "provider_id": "samba",
+      "name": "SambaNova",
+      "base_url": "https://fast-api.snova.ai/v1",
+      "free_tier": true,
+      "requires_card": false,
+      "requires_phone": false,
+      "signup_url": "https://cloud.sambanova.ai/",
+      "docs_url": "https://docs.sambanova.ai/",
+      "status": "active",
+      "last_checked": ""
+    },
+    "together": {
+      "provider_id": "together",
+      "name": "Together AI",
+      "base_url": "https://api.together.xyz/v1",
+      "free_tier": true,
+      "requires_card": false,
+      "requires_phone": false,
+      "signup_url": "https://api.together.xyz/",
+      "docs_url": "https://docs.together.ai/",
+      "status": "active",
+      "last_checked": ""
+    },
+    "deepinfra": {
+      "provider_id": "deepinfra",
+      "name": "DeepInfra",
+      "base_url": "https://api.deepinfra.com/v1/openai",
+      "free_tier": true,
+      "requires_card": false,
+      "requires_phone": false,
+      "signup_url": "https://deepinfra.com/",
+      "docs_url": "https://deepinfra.com/docs",
+      "status": "active",
+      "last_checked": ""
+    }
+  }
+}

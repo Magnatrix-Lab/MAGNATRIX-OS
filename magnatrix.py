@@ -584,6 +584,15 @@ class ModuleRegistry:
         ("squad_terminal", "core.squad_terminal_coordinator_native", "SquadTerminalCoordinator"),
         ("squad_inspector", "core.squad_inspector_native", "SquadInspector"),
         ("squad_collaboration_log", "core.squad_collaboration_log_native", "SquadCollaborationLog"),
+        # Domain: Free LLM APIs
+        ("freellm_provider_registry", "core.freellm_provider_registry_native", "FreellmProviderRegistry"),
+        ("freellm_model_catalog", "core.freellm_model_catalog_native", "FreellmModelCatalog"),
+        ("freellm_config_generator", "core.freellm_config_generator_native", "FreellmConfigGenerator"),
+        ("freellm_rate_limit_tracker", "core.freellm_rate_limit_tracker_native", "FreellmRateLimitTracker"),
+        ("freellm_provider_monitor", "core.freellm_provider_monitor_native", "FreellmProviderMonitor"),
+        ("freellm_api_key_manager", "core.freellm_api_key_manager_native", "FreellmApiKeyManager"),
+        ("freellm_capability_matcher", "core.freellm_capability_matcher_native", "FreellmCapabilityMatcher"),
+        ("freellm_free_tier_quota", "core.freellm_free_tier_quota_native", "FreellmFreeTierQuota"),
     ]
 
     def __init__(self, repo_root: str) -> None:
