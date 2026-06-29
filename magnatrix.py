@@ -329,6 +329,12 @@ class ModuleRegistry:
         ("dyn_verify", "core.dynamic_verification_engine_native", "DynamicVerificationEngine"),
         ("vuln_discover", "core.vulnerability_discovery_pipeline_native", "VulnerabilityDiscoveryPipeline"),
         ("sandbox_exploit", "core.sandboxed_exploit_runner_native", "SandboxedExploitRunner"),
+        ("social_scraper", "core.social_media_scraper_native", "SocialMediaScraper"),
+        ("youtube_transcript", "core.youtube_transcript_native", "YouTubeTranscriptExtractor"),
+        ("web_reader", "core.web_content_reader_native", "WebContentReader"),
+        ("aggregator", "core.content_aggregator_native", "ContentAggregator"),
+        ("backend_router", "core.multi_backend_router_native", "MultiBackendRouter"),
+        ("internet_search", "core.internet_search_engine_native", "InternetSearchEngine"),
     ]
 
     def __init__(self, repo_root: str) -> None:
