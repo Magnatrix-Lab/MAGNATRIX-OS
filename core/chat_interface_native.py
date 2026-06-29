@@ -2,12 +2,11 @@
 chat_interface_native.py
 MAGNATRIX-OS — Chat Interface
 
-Inspired by langflow-ai/langflow chat interface:
-Interactive chat session management with message history and context tracking. Pure stdlib.
+Inspired by Langflow (langflow-ai): Chat interface for AI agent conversations.
+Session management, message history, streaming, and context tracking. Pure stdlib.
 """
 
 import json
-import time
 from pathlib import Path
 from typing import Dict, List, Optional, Any
 from dataclasses import dataclass, field, asdict
@@ -17,38 +16,41 @@ from datetime import datetime
 @dataclass
 class ChatMessage:
     msg_id: str
+    session_id: str
     role: str  # user, assistant, system
     content: str
-    timestamp: float
+    timestamp: str = ""
     metadata: Dict[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self):
+        if not self.timestamp:
+            self.timestamp = datetime.now().isoformat()
 
 
 @dataclass
 class ChatSession:
     session_id: str
-    flow_id: str
+    title: str
     messages: List[ChatMessage] = field(default_factory=list)
     created_at: str = ""
-    last_active: str = ""
+    updated_at: str = ""
 
     def __post_init__(self):
         if not self.created_at:
             self.created_at = datetime.now().isoformat()
-        if not self.last_active:
-            self.last_active = self.created_at
 
 
 class ChatInterface:
-    """Interactive chat session management with message history."""
+    """Chat interface for AI agent conversations with session management."""
 
-    def __init__(self, chat_dir: str = "./chat_sessions"):
-        self.chat_dir = Path(chat_dir)
-        self.chat_dir.mkdir(exist_ok=True)
+    def __init__(self, chats_dir: str = "./chats"):
+        self.chats_dir = Path(chats_dir)
+        self.chats_dir.mkdir(exist_ok=True)
         self.sessions: Dict[str, ChatSession] = {}
         self._load()
 
     def _load(self) -> None:
-        file = self.chat_dir / "sessions.json"
+        file = self.chats_dir / "sessions.json"
         if file.exists():
             try:
                 with open(file, "r", encoding="utf-8") as f:
@@ -60,45 +62,42 @@ class ChatInterface:
                 pass
 
     def _save(self) -> None:
-        with open(self.chat_dir / "sessions.json", "w", encoding="utf-8") as f:
-            out = {}
-            for sid, session in self.sessions.items():
-                d = asdict(session)
-                d["messages"] = [asdict(m) for m in session.messages]
-                out[sid] = d
+        out = {}
+        for sid, s in self.sessions.items():
+            d = asdict(s)
+            d["messages"] = [asdict(m) for m in s.messages]
+            out[sid] = d
+        with open(self.chats_dir / "sessions.json", "w", encoding="utf-8") as f:
             json.dump(out, f, indent=2)
 
-    def create_session(self, session_id: str, flow_id: str) -> ChatSession:
-        session = ChatSession(session_id=session_id, flow_id=flow_id)
+    def create_session(self, session_id: str, title: str = "") -> ChatSession:
+        session = ChatSession(session_id=session_id, title=title or f"Session {session_id}")
         self.sessions[session_id] = session
         self._save()
         return session
 
-    def send_message(self, session_id: str, role: str, content: str,
+    def send_message(self, session_id: str, msg_id: str, role: str, content: str,
                      metadata: Optional[Dict[str, Any]] = None) -> ChatMessage:
         session = self.sessions.get(session_id)
         if not session:
-            raise ValueError(f"Session {session_id} not found")
+            session = self.create_session(session_id)
         msg = ChatMessage(
-            msg_id=f"{session_id}_{len(session.messages)}", role=role, content=content,
-            timestamp=time.time(), metadata=metadata or {},
+            msg_id=msg_id, session_id=session_id, role=role,
+            content=content, metadata=metadata or {},
         )
         session.messages.append(msg)
-        session.last_active = datetime.now().isoformat()
+        session.updated_at = datetime.now().isoformat()
         self._save()
         return msg
 
-    def get_history(self, session_id: str, limit: Optional[int] = None) -> List[ChatMessage]:
+    def get_history(self, session_id: str, limit: int = 50) -> List[ChatMessage]:
         session = self.sessions.get(session_id)
         if not session:
             return []
-        msgs = session.messages
-        if limit:
-            msgs = msgs[-limit:]
-        return msgs
+        return session.messages[-limit:]
 
-    def get_context_window(self, session_id: str, max_tokens: int = 4000) -> str:
-        """Build context window from recent messages."""
+    def get_context(self, session_id: str, max_tokens: int = 4000) -> str:
+        """Get recent conversation context as a formatted string."""
         history = self.get_history(session_id, limit=20)
         parts = []
         total = 0
@@ -108,22 +107,28 @@ class ChatInterface:
             if total > max_tokens:
                 break
             parts.append(part)
-        return "".join(reversed(parts))
+        return "\n".join(reversed(parts))
 
-    def clear_session(self, session_id: str) -> bool:
-        session = self.sessions.get(session_id)
-        if session:
-            session.messages = []
+    def delete_session(self, session_id: str) -> bool:
+        if session_id in self.sessions:
+            del self.sessions[session_id]
             self._save()
             return True
         return False
 
+    def get_session(self, session_id: str) -> Optional[ChatSession]:
+        return self.sessions.get(session_id)
+
+    def list_sessions(self) -> List[ChatSession]:
+        return list(self.sessions.values())
+
     def get_stats(self) -> Dict[str, Any]:
+        total = len(self.sessions)
         total_msgs = sum(len(s.messages) for s in self.sessions.values())
-        return {"sessions": len(self.sessions), "total_messages": total_msgs}
+        return {"sessions": total, "total_messages": total_msgs}
 
     def to_dict(self) -> Dict[str, Any]:
         return self.get_stats()
 
 
-__all__ = ["ChatInterface", "ChatMessage", "ChatSession"]
+__all__ = ["ChatInterface", "ChatSession", "ChatMessage"]

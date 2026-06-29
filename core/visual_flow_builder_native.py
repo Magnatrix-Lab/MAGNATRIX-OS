@@ -2,14 +2,15 @@
 visual_flow_builder_native.py
 MAGNATRIX-OS — Visual Flow Builder
 
-Inspired by langflow-ai/langflow visual node-based editor:
-Build AI workflows with nodes, edges, and visual canvas. Pure stdlib.
+Inspired by Langflow (langflow-ai): Visual drag-and-drop AI workflow builder.
+Define flows with nodes and edges, serialize to JSON, and validate. Pure stdlib.
 """
 
 import json
 from pathlib import Path
 from typing import Dict, List, Optional, Any
 from dataclasses import dataclass, field, asdict
+from datetime import datetime
 
 
 @dataclass
@@ -17,8 +18,8 @@ class FlowNode:
     node_id: str
     node_type: str
     label: str
-    position: Dict[str, int]  # x, y
-    config: Dict[str, Any] = field(default_factory=dict)
+    position: Dict[str, float] = field(default_factory=dict)
+    data: Dict[str, Any] = field(default_factory=dict)
     inputs: List[str] = field(default_factory=list)
     outputs: List[str] = field(default_factory=list)
 
@@ -28,27 +29,38 @@ class FlowEdge:
     edge_id: str
     source: str
     target: str
-    source_handle: str = ""
-    target_handle: str = ""
+    label: str = ""
+    condition: str = ""
 
 
 @dataclass
-class FlowCanvas:
+class Flow:
     flow_id: str
     name: str
+    description: str
     nodes: List[FlowNode] = field(default_factory=list)
     edges: List[FlowEdge] = field(default_factory=list)
+    created_at: str = ""
+    updated_at: str = ""
+
+    def __post_init__(self):
+        if not self.created_at:
+            self.created_at = datetime.now().isoformat()
 
 
 class VisualFlowBuilder:
-    """Visual node-based flow builder for AI workflows."""
+    """Visual drag-and-drop AI workflow builder."""
 
-    NODE_TYPES = ["input", "prompt", "llm", "output", "memory", "tool", "agent", "condition", "vector_store"]
+    NODE_TYPES = [
+        "chat_input", "chat_output", "prompt", "llm", "memory",
+        "agent", "tool", "condition", "loop", "aggregator",
+        "text_splitter", "embedding", "vector_store", "retriever",
+    ]
 
     def __init__(self, flows_dir: str = "./flows"):
         self.flows_dir = Path(flows_dir)
         self.flows_dir.mkdir(exist_ok=True)
-        self.flows: Dict[str, FlowCanvas] = {}
+        self.flows: Dict[str, Flow] = {}
         self._load()
 
     def _load(self) -> None:
@@ -60,47 +72,49 @@ class VisualFlowBuilder:
                     for fid, fd in data.items():
                         fd["nodes"] = [FlowNode(**n) for n in fd.get("nodes", [])]
                         fd["edges"] = [FlowEdge(**e) for e in fd.get("edges", [])]
-                        self.flows[fid] = FlowCanvas(**fd)
+                        self.flows[fid] = Flow(**fd)
             except Exception:
                 pass
 
     def _save(self) -> None:
+        out = {}
+        for fid, f in self.flows.items():
+            d = asdict(f)
+            d["nodes"] = [asdict(n) for n in f.nodes]
+            d["edges"] = [asdict(e) for e in f.edges]
+            out[fid] = d
         with open(self.flows_dir / "flows.json", "w", encoding="utf-8") as f:
-            out = {}
-            for fid, flow in self.flows.items():
-                d = asdict(flow)
-                d["nodes"] = [asdict(n) for n in flow.nodes]
-                d["edges"] = [asdict(e) for e in flow.edges]
-                out[fid] = d
             json.dump(out, f, indent=2)
 
-    def create_flow(self, flow_id: str, name: str) -> FlowCanvas:
-        flow = FlowCanvas(flow_id=flow_id, name=name)
+    def create_flow(self, flow_id: str, name: str, description: str = "") -> Flow:
+        flow = Flow(flow_id=flow_id, name=name, description=description)
         self.flows[flow_id] = flow
         self._save()
         return flow
 
     def add_node(self, flow_id: str, node_id: str, node_type: str, label: str,
-                 x: int, y: int, config: Optional[Dict[str, Any]] = None) -> FlowNode:
+                 x: float = 0.0, y: float = 0.0, data: Optional[Dict[str, Any]] = None) -> bool:
         flow = self.flows.get(flow_id)
-        if not flow:
-            raise ValueError(f"Flow {flow_id} not found")
+        if not flow or node_type not in self.NODE_TYPES:
+            return False
         node = FlowNode(
             node_id=node_id, node_type=node_type, label=label,
-            position={"x": x, "y": y}, config=config or {},
+            position={"x": x, "y": y}, data=data or {},
         )
         flow.nodes.append(node)
+        flow.updated_at = datetime.now().isoformat()
         self._save()
-        return node
+        return True
 
-    def connect(self, flow_id: str, edge_id: str, source: str, target: str) -> FlowEdge:
+    def add_edge(self, flow_id: str, edge_id: str, source: str, target: str, label: str = "") -> bool:
         flow = self.flows.get(flow_id)
         if not flow:
-            raise ValueError(f"Flow {flow_id} not found")
-        edge = FlowEdge(edge_id=edge_id, source=source, target=target)
+            return False
+        edge = FlowEdge(edge_id=edge_id, source=source, target=target, label=label)
         flow.edges.append(edge)
+        flow.updated_at = datetime.now().isoformat()
         self._save()
-        return edge
+        return True
 
     def remove_node(self, flow_id: str, node_id: str) -> bool:
         flow = self.flows.get(flow_id)
@@ -111,36 +125,45 @@ class VisualFlowBuilder:
         self._save()
         return True
 
-    def get_flow(self, flow_id: str) -> Optional[FlowCanvas]:
-        return self.flows.get(flow_id)
-
-    def validate_flow(self, flow_id: str) -> List[str]:
-        """Validate flow connectivity and configuration."""
+    def validate(self, flow_id: str) -> List[str]:
         flow = self.flows.get(flow_id)
         if not flow:
             return ["Flow not found"]
         errors = []
         node_ids = {n.node_id for n in flow.nodes}
-        for edge in flow.edges:
-            if edge.source not in node_ids or edge.target not in node_ids:
-                errors.append(f"Edge {edge.edge_id} connects to non-existent node")
-        # Check for disconnected nodes
-        connected = set()
-        for edge in flow.edges:
-            connected.add(edge.source)
-            connected.add(edge.target)
-        for node in flow.nodes:
-            if node.node_id not in connected and len(flow.nodes) > 1:
-                errors.append(f"Node {node.node_id} is disconnected")
+        for e in flow.edges:
+            if e.source not in node_ids:
+                errors.append(f"Edge {e.edge_id}: source node {e.source} not found")
+            if e.target not in node_ids:
+                errors.append(f"Edge {e.edge_id}: target node {e.target} not found")
+        disconnected = [n.node_id for n in flow.nodes if not any(e.source == n.node_id or e.target == n.node_id for e in flow.edges)]
+        if len(flow.nodes) > 1 and disconnected:
+            errors.append(f"Disconnected nodes: {disconnected}")
         return errors
 
+    def export(self, flow_id: str) -> Optional[str]:
+        flow = self.flows.get(flow_id)
+        if not flow:
+            return None
+        d = asdict(flow)
+        d["nodes"] = [asdict(n) for n in flow.nodes]
+        d["edges"] = [asdict(e) for e in flow.edges]
+        return json.dumps(d, indent=2)
+
+    def get_flow(self, flow_id: str) -> Optional[Flow]:
+        return self.flows.get(flow_id)
+
+    def list_flows(self) -> List[Flow]:
+        return list(self.flows.values())
+
     def get_stats(self) -> Dict[str, Any]:
+        total = len(self.flows)
         total_nodes = sum(len(f.nodes) for f in self.flows.values())
         total_edges = sum(len(f.edges) for f in self.flows.values())
-        return {"flows": len(self.flows), "total_nodes": total_nodes, "total_edges": total_edges}
+        return {"flows": total, "nodes": total_nodes, "edges": total_edges}
 
     def to_dict(self) -> Dict[str, Any]:
         return self.get_stats()
 
 
-__all__ = ["VisualFlowBuilder", "FlowNode", "FlowEdge", "FlowCanvas"]
+__all__ = ["VisualFlowBuilder", "Flow", "FlowNode", "FlowEdge"]

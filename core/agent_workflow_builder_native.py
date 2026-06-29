@@ -2,24 +2,25 @@
 agent_workflow_builder_native.py
 MAGNATRIX-OS — Agent Workflow Builder
 
-Inspired by langflow-ai/langflow agent workflows:
-Build multi-agent workflows with reasoning, tool use, and delegation. Pure stdlib.
+Inspired by Langflow (langflow-ai): Agent-specific workflow builder with reasoning loops.
+Build agent workflows with tool calling, reasoning steps, and memory integration. Pure stdlib.
 """
 
 import json
 from pathlib import Path
 from typing import Dict, List, Optional, Any
 from dataclasses import dataclass, field, asdict
+from datetime import datetime
 
 
 @dataclass
-class AgentStep:
+class AgentWorkflowStep:
     step_id: str
-    agent_name: str
-    action: str
-    input_data: str
-    output_data: str = ""
-    tool_used: str = ""
+    step_type: str  # think, tool_call, observe, respond
+    description: str
+    tool_name: str = ""
+    tool_args: Dict[str, Any] = field(default_factory=dict)
+    result: str = ""
     status: str = "pending"
 
 
@@ -27,14 +28,19 @@ class AgentStep:
 class AgentWorkflow:
     workflow_id: str
     name: str
-    objective: str
-    steps: List[AgentStep] = field(default_factory=list)
-    agents: List[str] = field(default_factory=list)
-    tools: List[str] = field(default_factory=list)
+    task: str
+    steps: List[AgentWorkflowStep] = field(default_factory=list)
+    status: str = "pending"
+    final_answer: str = ""
+    created_at: str = ""
+
+    def __post_init__(self):
+        if not self.created_at:
+            self.created_at = datetime.now().isoformat()
 
 
 class AgentWorkflowBuilder:
-    """Build multi-agent workflows with reasoning and tool use."""
+    """Build agent workflows with reasoning loops and tool calling."""
 
     def __init__(self, workflows_dir: str = "./agent_workflows"):
         self.workflows_dir = Path(workflows_dir)
@@ -49,78 +55,90 @@ class AgentWorkflowBuilder:
                 with open(file, "r", encoding="utf-8") as f:
                     data = json.load(f)
                     for wid, wd in data.items():
-                        wd["steps"] = [AgentStep(**s) for s in wd.get("steps", [])]
+                        wd["steps"] = [AgentWorkflowStep(**s) for s in wd.get("steps", [])]
                         self.workflows[wid] = AgentWorkflow(**wd)
             except Exception:
                 pass
 
     def _save(self) -> None:
+        out = {}
+        for wid, w in self.workflows.items():
+            d = asdict(w)
+            d["steps"] = [asdict(s) for s in w.steps]
+            out[wid] = d
         with open(self.workflows_dir / "workflows.json", "w", encoding="utf-8") as f:
-            out = {}
-            for wid, wf in self.workflows.items():
-                d = asdict(wf)
-                d["steps"] = [asdict(s) for s in wf.steps]
-                out[wid] = d
             json.dump(out, f, indent=2)
 
-    def create_workflow(self, workflow_id: str, name: str, objective: str) -> AgentWorkflow:
-        wf = AgentWorkflow(workflow_id=workflow_id, name=name, objective=objective)
+    def create(self, workflow_id: str, name: str, task: str) -> AgentWorkflow:
+        wf = AgentWorkflow(workflow_id=workflow_id, name=name, task=task)
         self.workflows[workflow_id] = wf
         self._save()
         return wf
 
-    def add_agent(self, workflow_id: str, agent_name: str) -> bool:
+    def add_think_step(self, workflow_id: str, step_id: str, description: str) -> bool:
         wf = self.workflows.get(workflow_id)
         if not wf:
             return False
-        if agent_name not in wf.agents:
-            wf.agents.append(agent_name)
-            self._save()
-            return True
-        return False
-
-    def add_tool(self, workflow_id: str, tool_name: str) -> bool:
-        wf = self.workflows.get(workflow_id)
-        if not wf:
-            return False
-        if tool_name not in wf.tools:
-            wf.tools.append(tool_name)
-            self._save()
-            return True
-        return False
-
-    def add_step(self, workflow_id: str, step_id: str, agent_name: str, action: str,
-                 input_data: str) -> AgentStep:
-        wf = self.workflows.get(workflow_id)
-        if not wf:
-            raise ValueError(f"Workflow {workflow_id} not found")
-        step = AgentStep(step_id=step_id, agent_name=agent_name, action=action, input_data=input_data)
+        step = AgentWorkflowStep(step_id=step_id, step_type="think", description=description)
         wf.steps.append(step)
         self._save()
-        return step
+        return True
 
-    def execute_step(self, workflow_id: str, step_id: str, output: str, tool_used: str = "") -> bool:
+    def add_tool_step(self, workflow_id: str, step_id: str, description: str, tool_name: str, tool_args: Dict[str, Any]) -> bool:
         wf = self.workflows.get(workflow_id)
         if not wf:
             return False
-        for step in wf.steps:
-            if step.step_id == step_id:
-                step.output_data = output
-                step.tool_used = tool_used
-                step.status = "completed"
+        step = AgentWorkflowStep(
+            step_id=step_id, step_type="tool_call", description=description,
+            tool_name=tool_name, tool_args=tool_args,
+        )
+        wf.steps.append(step)
+        self._save()
+        return True
+
+    def add_respond_step(self, workflow_id: str, step_id: str, description: str) -> bool:
+        wf = self.workflows.get(workflow_id)
+        if not wf:
+            return False
+        step = AgentWorkflowStep(step_id=step_id, step_type="respond", description=description)
+        wf.steps.append(step)
+        self._save()
+        return True
+
+    def complete_step(self, workflow_id: str, step_id: str, result: str) -> bool:
+        wf = self.workflows.get(workflow_id)
+        if not wf:
+            return False
+        for s in wf.steps:
+            if s.step_id == step_id:
+                s.result = result
+                s.status = "completed"
                 self._save()
                 return True
         return False
 
+    def finalize(self, workflow_id: str, final_answer: str) -> bool:
+        wf = self.workflows.get(workflow_id)
+        if not wf:
+            return False
+        wf.final_answer = final_answer
+        wf.status = "completed"
+        self._save()
+        return True
+
     def get_workflow(self, workflow_id: str) -> Optional[AgentWorkflow]:
         return self.workflows.get(workflow_id)
 
+    def list_workflows(self) -> List[AgentWorkflow]:
+        return list(self.workflows.values())
+
     def get_stats(self) -> Dict[str, Any]:
-        total_steps = sum(len(w.steps) for w in self.workflows.values())
-        return {"workflows": len(self.workflows), "total_steps": total_steps}
+        total = len(self.workflows)
+        completed = sum(1 for w in self.workflows.values() if w.status == "completed")
+        return {"total": total, "completed": completed}
 
     def to_dict(self) -> Dict[str, Any]:
         return self.get_stats()
 
 
-__all__ = ["AgentWorkflowBuilder", "AgentWorkflow", "AgentStep"]
+__all__ = ["AgentWorkflowBuilder", "AgentWorkflow", "AgentWorkflowStep"]

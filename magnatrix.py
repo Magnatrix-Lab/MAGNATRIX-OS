@@ -423,6 +423,14 @@ class ModuleRegistry:
         ("message_gateway", "core.message_gateway_native", "MessageGateway"),
         ("skill_engine", "core.skill_execution_engine_native", "SkillExecutionEngine"),
         ("agent_harness", "core.agent_harness_native", "AgentHarness"),
+        ("visual_flow", "core.visual_flow_builder_native", "VisualFlowBuilder"),
+        ("flow_component", "core.flow_component_node_native", "FlowComponentNode"),
+        ("flow_execution", "core.flow_execution_engine_native", "FlowExecutionEngine"),
+        ("vector_store", "core.vector_store_connector_native", "VectorStoreConnector"),
+        ("chat", "core.chat_interface_native", "ChatInterface"),
+        ("agent_workflow", "core.agent_workflow_builder_native", "AgentWorkflowBuilder"),
+        ("flow_deployer", "core.flow_deployer_native", "FlowDeployer"),
+        ("component_lib", "core.component_library_native", "ComponentLibrary"),
     ]
 
     def __init__(self, repo_root: str) -> None:
