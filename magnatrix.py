@@ -505,6 +505,14 @@ class ModuleRegistry:
         ("graph_visualizer", "core.graph_visualizer_native", "GraphVisualizer"),
         ("prompt_factory", "core.prompt_factory_native", "PromptFactory"),
         ("graph_community_detector", "core.graph_community_detector_native", "GraphCommunityDetector"),
+        ("conversation_buffer", "core.conversation_buffer_memory_native", "ConversationBufferMemory"),
+        ("sliding_window_memory", "core.sliding_window_memory_native", "SlidingWindowMemory"),
+        ("summary_buffer", "core.summary_buffer_memory_native", "SummaryBufferMemory"),
+        ("token_buffer", "core.token_buffer_memory_native", "TokenBufferMemory"),
+        ("memory_consolidation", "core.memory_consolidation_engine_native", "MemoryConsolidationEngine"),
+        ("temporal_memory", "core.temporal_memory_native", "TemporalMemory"),
+        ("forgetting_decay", "core.forgetting_decay_engine_native", "ForgettingDecayEngine"),
+        ("multi_agent_shared", "core.multi_agent_shared_memory_native", "MultiAgentSharedMemory"),
     ]
 
     def __init__(self, repo_root: str) -> None:

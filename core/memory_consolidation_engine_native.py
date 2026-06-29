@@ -1,166 +1,109 @@
-
 """
 memory_consolidation_engine_native.py
 MAGNATRIX-OS — Memory Consolidation Engine
 
-Inspired by Synapse consolidation engine:
-- Hebbian strengthening of co-occurring entities
-- Contradiction detection across temporal facts
-- Synaptic pruning of weak connections
-- Sleep replay pattern for background consolidation
-
-Pure Python standard library.
+Inspired by Agent Memory Techniques: Merge similar memories to reduce redundancy. Pure stdlib.
 """
 
 import json
-from typing import Dict, List, Optional, Set, Tuple, Any
-from dataclasses import dataclass, asdict
-from datetime import datetime, timedelta
+import re
 from pathlib import Path
+from typing import Dict, List, Optional, Any
+from dataclasses import dataclass, field, asdict
+from datetime import datetime
 
 
 @dataclass
-class ConsolidationReport:
-    strengthened: int = 0
-    contradictions_found: int = 0
-    pruned: int = 0
-    new_connections: int = 0
-    timestamp: str = ""
+class MemoryEntry:
+    entry_id: str
+    content: str
+    memory_type: str
+    importance: float
+    created_at: str
+    access_count: int = 0
+    last_accessed: str = ""
 
     def __post_init__(self):
-        if not self.timestamp:
-            self.timestamp = datetime.now().isoformat()
+        if not self.created_at:
+            self.created_at = datetime.now().isoformat()
 
 
 class MemoryConsolidationEngine:
-    """Background consolidation engine for temporal knowledge graph."""
+    """Merge similar memories to reduce redundancy."""
 
-    def __init__(self, graph=None, hippocampus=None):
-        self.graph = graph
-        self.hippocampus = hippocampus
-        self.reports: List[ConsolidationReport] = []
-        self.contradiction_log: List[Dict] = []
+    def __init__(self, cache_dir: str = "./memory_consolidation"):
+        self.cache_dir = Path(cache_dir)
+        self.cache_dir.mkdir(exist_ok=True)
+        self.memories: Dict[str, MemoryEntry] = {}
+        self._load()
 
-    def consolidate(self) -> ConsolidationReport:
-        """Run full consolidation cycle (sleep replay)."""
-        report = ConsolidationReport()
-        if self.graph:
-            report.strengthened = self._hebbian_strengthening()
-            report.contradictions_found = self._detect_contradictions()
-            report.pruned = self._synaptic_pruning()
-            report.new_connections = self._discover_connections()
-        if self.hippocampus:
-            self.hippocampus.prune_forgotten()
-        self.reports.append(report)
-        return report
+    def _load(self) -> None:
+        file = self.cache_dir / "memories.json"
+        if file.exists():
+            try:
+                with open(file, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                    for eid, ed in data.items():
+                        self.memories[eid] = MemoryEntry(**ed)
+            except Exception:
+                pass
 
-    def _hebbian_strengthening(self) -> int:
-        """Strengthen edges between entities that co-occur in facts."""
-        if not self.graph:
-            return 0
-        strengthened = 0
-        entity_facts: Dict[str, List[str]] = {}
-        for fact in self.graph.facts.values():
-            for entity in [fact.subject, fact.object]:
-                entity_facts.setdefault(entity, []).append(fact.fact_id)
-        # Find co-occurring entities and strengthen edges
-        for fact in self.graph.facts.values():
-            subject = fact.subject
-            obj = fact.object
-            for edge in self.graph.edges.values():
-                if (edge.from_entity == subject and edge.to_entity == obj) or \
-                   (edge.from_entity == obj and edge.to_entity == subject):
-                    # Hebbian learning: fire together, wire together
-                    edge.weight = min(1.0, edge.weight + 0.1)
-                    strengthened += 1
-        self.graph._save()
-        return strengthened
+    def _save(self) -> None:
+        with open(self.cache_dir / "memories.json", "w", encoding="utf-8") as f:
+            json.dump({eid: asdict(m) for eid, m in self.memories.items()}, f, indent=2)
 
-    def _detect_contradictions(self) -> int:
-        """Find contradictory facts about the same entity."""
-        if not self.graph:
-            return 0
-        contradictions = 0
-        entity_facts: Dict[str, List[Any]] = {}
-        for fact in self.graph.facts.values():
-            key = f"{fact.subject}:{fact.predicate}"
-            entity_facts.setdefault(key, []).append(fact)
-        # Check for contradictory objects
-        for key, facts in entity_facts.items():
-            if len(facts) < 2:
-                continue
-            # Sort by time
-            sorted_facts = sorted(facts, key=lambda f: f.valid_from)
-            for i in range(1, len(sorted_facts)):
-                prev = sorted_facts[i - 1]
-                curr = sorted_facts[i]
-                # If same predicate but different object, check if previous was invalidated
-                if prev.object != curr.object and prev.valid_until is None:
-                    # Contradiction: previous fact still valid but different object claimed
-                    self.contradiction_log.append({
-                        "subject": curr.subject,
-                        "predicate": curr.predicate,
-                        "previous": prev.object,
-                        "current": curr.object,
-                        "resolved": False,
-                    })
-                    # Mark previous as invalid (newer fact supersedes)
-                    prev.valid_until = curr.valid_from
-                    contradictions += 1
-        if contradictions > 0:
-            self.graph._save()
-        return contradictions
+    def _similarity(self, a: str, b: str) -> float:
+        words_a = set(re.findall(r'\w+', a.lower()))
+        words_b = set(re.findall(r'\w+', b.lower()))
+        if not words_a or not words_b:
+            return 0.0
+        intersection = len(words_a & words_b)
+        union = len(words_a | words_b)
+        return intersection / union
 
-    def _synaptic_pruning(self) -> int:
-        """Remove weak connections."""
-        if not self.graph:
-            return 0
+    def add(self, entry_id: str, content: str, memory_type: str, importance: float) -> MemoryEntry:
+        entry = MemoryEntry(
+            entry_id=entry_id, content=content, memory_type=memory_type, importance=importance,
+        )
+        self.memories[entry_id] = entry
+        self._save()
+        return entry
+
+    def consolidate(self, threshold: float = 0.7) -> int:
+        """Merge similar memories above threshold."""
+        merged = 0
         to_remove = []
-        for eid, edge in self.graph.edges.items():
-            if edge.weight < 0.2:
-                to_remove.append(eid)
+        entries = list(self.memories.values())
+        for i in range(len(entries)):
+            if entries[i].entry_id in to_remove:
+                continue
+            for j in range(i + 1, len(entries)):
+                if entries[j].entry_id in to_remove:
+                    continue
+                sim = self._similarity(entries[i].content, entries[j].content)
+                if sim >= threshold and entries[i].memory_type == entries[j].memory_type:
+                    # Merge: keep higher importance, combine content
+                    entries[i].content = f"{entries[i].content} | {entries[j].content}"
+                    entries[i].importance = max(entries[i].importance, entries[j].importance)
+                    entries[i].access_count += entries[j].access_count
+                    to_remove.append(entries[j].entry_id)
+                    merged += 1
         for eid in to_remove:
-            del self.graph.edges[eid]
-        if to_remove:
-            self.graph._save()
-        return len(to_remove)
+            if eid in self.memories:
+                del self.memories[eid]
+        self._save()
+        return merged
 
-    def _discover_connections(self) -> int:
-        """Discover new connections through transitive relationships."""
-        if not self.graph:
-            return 0
-        new_connections = 0
-        # Simple transitive closure: A->B, B->C implies A->C
-        for e1 in self.graph.edges.values():
-            for e2 in self.graph.edges.values():
-                if e1.to_entity == e2.from_entity and e1.from_entity != e2.to_entity:
-                    # Check if connection already exists
-                    exists = False
-                    for e3 in self.graph.edges.values():
-                        if e3.from_entity == e1.from_entity and e3.to_entity == e2.to_entity:
-                            exists = True
-                            break
-                    if not exists:
-                        self.graph.add_edge(
-                            e1.from_entity, e2.to_entity, "derived",
-                            weight=e1.weight * e2.weight * 0.5,
-                            properties={"via": e1.to_entity, "transitive": True}
-                        )
-                        new_connections += 1
-        return new_connections
+    def get_memories(self, memory_type: Optional[str] = None) -> List[MemoryEntry]:
+        if memory_type:
+            return [m for m in self.memories.values() if m.memory_type == memory_type]
+        return list(self.memories.values())
 
-    def get_stats(self) -> Dict:
-        return {
-            "total_reports": len(self.reports),
-            "total_contradictions": len(self.contradiction_log),
-            "last_report": asdict(self.reports[-1]) if self.reports else {},
-        }
+    def get_stats(self) -> Dict[str, Any]:
+        return {"total_memories": len(self.memories), "types": list(set(m.memory_type for m in self.memories.values()))}
 
-    def to_dict(self) -> Dict:
-        return {
-            "reports": len(self.reports),
-            "contradictions": len(self.contradiction_log),
-        }
+    def to_dict(self) -> Dict[str, Any]:
+        return self.get_stats()
 
 
-__all__ = ["MemoryConsolidationEngine", "ConsolidationReport"]
+__all__ = ["MemoryConsolidationEngine", "MemoryEntry"]
