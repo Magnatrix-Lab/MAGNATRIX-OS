@@ -383,6 +383,14 @@ class ModuleRegistry:
         ("water_filling", "core.water_filling_optimizer_native", "WaterFillingOptimizer"),
         ("packed_decode", "core.packed_decode_layout_native", "PackedDecodeLayout"),
         ("inference_optimizer", "core.inference_memory_optimizer_native", "InferenceMemoryOptimizer"),
+        ("attack_surface", "core.attack_surface_mapper_native", "AttackSurfaceMapper"),
+        ("subdomain_enum", "core.subdomain_enumerator_native", "SubdomainEnumerator"),
+        ("port_scanner", "core.port_scanner_native", "PortScanner"),
+        ("web_asset", "core.web_asset_discoverer_native", "WebAssetDiscoverer"),
+        ("tls_monitor", "core.tls_certificate_monitor_native", "TLSCertificateMonitor"),
+        ("email_posture", "core.email_posture_analyzer_native", "EmailPostureAnalyzer"),
+        ("secret_detector", "core.exposed_secret_detector_native", "ExposedSecretDetector"),
+        ("asset_scoring", "core.asset_scoring_engine_native", "AssetScoringEngine"),
     ]
 
     def __init__(self, repo_root: str) -> None:
