@@ -367,6 +367,14 @@ class ModuleRegistry:
         ("stock_scheduler", "core.stock_scheduler_native", "StockScheduler"),
         ("stock_alert", "core.stock_alert_engine_native", "StockAlertEngine"),
         ("technical_indicator", "core.technical_indicator_native", "TechnicalIndicator"),
+        ("game_theory", "core.game_theory_engine_native", "GameTheoryEngine"),
+        ("nash_solver", "core.nash_equilibrium_solver_native", "NashEquilibriumSolver"),
+        ("mixed_strategy", "core.mixed_strategy_calculator_native", "MixedStrategyCalculator"),
+        ("backward_induction", "core.backward_induction_engine_native", "BackwardInductionEngine"),
+        ("subgame_perfect", "core.subgame_perfect_solver_native", "SubgamePerfectSolver"),
+        ("bayesian_game", "core.bayesian_game_solver_native", "BayesianGameSolver"),
+        ("cooperative_game", "core.cooperative_game_native", "CooperativeGame"),
+        ("evolutionary_game", "core.evolutionary_game_theory_native", "EvolutionaryGameTheory"),
     ]
 
     def __init__(self, repo_root: str) -> None:
