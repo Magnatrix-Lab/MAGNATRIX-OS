@@ -63,21 +63,16 @@ class ADRGenerator:
                 with open(path) as fh:
                     content = fh.read()
                 with open(path, "w") as fh:
-                    fh.write(content + f"
-**Related:** ADR-{dst_num:04d}
-")
+                    fh.write(content + f"\n**Related:** ADR-{dst_num:04d}\n")
 
     def export_index(self, path: str) -> None:
         with open(path, "w") as f:
-            f.write("# Architecture Decision Records
-
-")
+            f.write("# Architecture Decision Records\n\n")
             for f in self.registry:
                 f_path = os.path.join(self.dir, f)
                 with open(f_path) as fh:
                     first = fh.readline().strip()
-                f.write(f"- [{first}](adr/{f})
-")
+                f.write(f"- [{first}](adr/{f})\n")
 
 if __name__ == "__main__":
     adr = ADRGenerator("/tmp/adr")

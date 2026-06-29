@@ -26,8 +26,7 @@ class ContractParser:
         return result
 
     def extract_obligations(self, text: str) -> List[str]:
-        sentences = re.split(r'[.
-]+', text)
+        sentences = re.split(r'[.\n]+', text)
         obligations = []
         for s in sentences:
             if any(w in s.lower() for w in ["shall", "must", "will", "agrees to", "is required"]):

@@ -61,8 +61,7 @@ class DeploymentGuide:
         lines.append("- Permission denied: check file ownership")
         lines.append("")
 
-        content = "
-".join(lines)
+        content = "\n".join(lines)
         with open(output, "w") as f:
             f.write(content)
         return output

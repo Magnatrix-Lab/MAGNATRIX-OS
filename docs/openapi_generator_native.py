@@ -73,21 +73,13 @@ class OpenAPIGenerator:
 
     def export_yaml(self, path: str) -> None:
         with open(path, "w") as f:
-            f.write(f"openapi: 3.0.3
-")
-            f.write(f"info:
-  title: {self.title}
-  version: {self.version}
-")
-            f.write(f"paths:
-")
+            f.write(f"openapi: 3.0.3\n")
+            f.write(f"info:\n  title: {self.title}\n  version: {self.version}\n")
+            f.write(f"paths:\n")
             for ep in self.endpoints:
-                f.write(f"  {ep.path}:
-")
-                f.write(f"    {ep.method}:
-")
-                f.write(f"      summary: {ep.summary}
-")
+                f.write(f"  {ep.path}:\n")
+                f.write(f"    {ep.method}:\n")
+                f.write(f"      summary: {ep.summary}\n")
 
 if __name__ == "__main__":
     gen = OpenAPIGenerator("MAGNATRIX", "1.0")

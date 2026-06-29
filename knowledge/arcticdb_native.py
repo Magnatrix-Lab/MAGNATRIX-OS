@@ -95,7 +95,7 @@ class ArcticDBNative:
         data_path = os.path.join(table_dir, "data.jsonl")
         with open(data_path, "w") as f:
             for row in self._tables[name]["data"]:
-                f.write(json.dumps(row) + )
+                f.write(json.dumps(row) + "\n")
 
     def list_tables(self) -> List[str]:
         return [d for d in os.listdir(self.db_path) if os.path.isdir(os.path.join(self.db_path, d))]
