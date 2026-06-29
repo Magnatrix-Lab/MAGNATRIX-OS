@@ -341,6 +341,12 @@ class ModuleRegistry:
         ("driver_emulate", "core.driver_emulation_engine_native", "DriverEmulationEngine"),
         ("driver_blocklist", "core.vulnerable_driver_blocklist_native", "VulnerableDriverBlocklistManager"),
         ("byovd_hunter", "core.byovd_hunter_pipeline_native", "BYOVDHunterPipeline"),
+        ("poly_shellcode", "core.polymorphic_shellcode_detector_native", "PolymorphicShellcodeDetector"),
+        ("peb_resolver", "core.peb_api_resolver_detector_native", "PEBAPIResolverDetector"),
+        ("chacha20_analyze", "core.chacha20_payload_analyzer_native", "ChaCha20PayloadAnalyzer"),
+        ("c2_detect", "core.c2_communications_detector_native", "C2CommunicationsDetector"),
+        ("coff_analyze", "core.coff_layout_analyzer_native", "COFFLayoutAnalyzer"),
+        ("mythic_detect", "core.mythic_framework_detector_native", "MythicFrameworkDetector"),
     ]
 
     def __init__(self, repo_root: str) -> None:
