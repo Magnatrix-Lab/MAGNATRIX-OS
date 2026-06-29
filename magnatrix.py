@@ -299,6 +299,12 @@ class ModuleRegistry:
         ("tab_redactor", "core.sensitive_tab_redactor_native", "SensitiveTabRedactor"),
         ("tab_session", "core.tab_session_isolator_native", "TabSessionIsolator"),
         ("browser_agent", "core.browser_automation_agent_native", "BrowserAutomationAgent"),
+        ("temporal_graph", "core.temporal_knowledge_graph_native", "TemporalKnowledgeGraph"),
+        ("hippocampus", "core.hippocampus_memory_native", "HippocampusMemoryLayer"),
+        ("consolidation", "core.memory_consolidation_engine_native", "MemoryConsolidationEngine"),
+        ("entity_extract", "core.entity_extractor_native", "EntityExtractor"),
+        ("memory_retrieve", "core.memory_retrieval_engine_native", "MemoryRetrievalEngine"),
+        ("brain_prompt", "core.brain_aware_prompt_native", "BrainAwarePromptGenerator"),
     ]
 
     def __init__(self, repo_root: str) -> None:
