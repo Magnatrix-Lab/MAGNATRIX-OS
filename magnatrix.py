@@ -399,6 +399,14 @@ class ModuleRegistry:
         ("microservices", "core.microservices_orchestrator_native", "MicroservicesOrchestrator"),
         ("message_queue", "core.message_queue_engine_native", "MessageQueueEngine"),
         ("system_design_interviewer", "core.system_design_interviewer_native", "SystemDesignInterviewer"),
+        ("persona_manager", "core.persona_manager_native", "PersonaManager"),
+        ("skill_library", "core.skill_library_native", "SkillLibrary"),
+        ("code_graph_analyzer", "core.code_graph_analyzer_native", "CodeGraphAnalyzer"),
+        ("security_suite", "core.security_suite_native", "SecuritySuite"),
+        ("tech_persona_card", "core.tech_persona_card_native", "TechPersonaCardEngine"),
+        ("style_engine", "core.style_engine_native", "StyleEngine"),
+        ("self_evolution_forge", "core.self_evolution_forge_native", "SelfEvolutionForge"),
+        ("agent_hook_manager", "core.agent_hook_manager_native", "AgentHookManager"),
     ]
 
     def __init__(self, repo_root: str) -> None:
