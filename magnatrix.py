@@ -481,6 +481,14 @@ class ModuleRegistry:
         ("skill_mas_evolver", "core.skill_mas_evolver_native", "SkillMASEvolver"),
         ("llm_judge_evaluator", "core.llm_judge_evaluator_native", "LLMJudgeEvaluator"),
         ("nature_bench", "core.nature_bench_native", "NatureBench"),
+        ("skill_tree", "core.skill_tree_builder_native", "SkillTreeBuilder"),
+        ("skill_dag", "core.skill_dag_orchestrator_native", "SkillDAGOrchestrator"),
+        ("skill_search", "core.skill_search_engine_native", "SkillSearchEngine"),
+        ("skill_registry", "core.skill_registry_native", "SkillRegistry"),
+        ("workflow_executor", "core.workflow_executor_native", "WorkflowExecutor"),
+        ("benchmark_engine", "core.benchmark_engine_native", "BenchmarkEngine"),
+        ("human_in_loop", "core.human_in_loop_controller_native", "HumanInLoopController"),
+        ("skill_scanner", "core.skill_scanner_indexer_native", "SkillScannerIndexer"),
     ]
 
     def __init__(self, repo_root: str) -> None:

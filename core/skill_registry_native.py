@@ -1,157 +1,115 @@
-
 """
 skill_registry_native.py
 MAGNATRIX-OS — Skill Registry
 
-Inspired by SkillKit (rohitg00/skillkit):
-Central skill registry with portable skill definitions, versioning,
-metadata, and cross-platform compatibility tracking.
-
-Pure Python standard library.
+Inspired by AgentSkillOS: Extensible registry for skill registration, versioning, and metadata. Pure stdlib.
 """
 
 import json
-import hashlib
 from pathlib import Path
-from typing import Dict, List, Optional, Set, Any
+from typing import Dict, List, Optional, Any
 from dataclasses import dataclass, field, asdict
 from datetime import datetime
-from enum import Enum, auto
-
-
-class SkillFormat(Enum):
-    CLAUDE = "claude"           # Claude Code / Claude Desktop
-    CURSOR = "cursor"           # Cursor IDE
-    CODEX = "codex"             # OpenAI Codex
-    COPILOT = "copilot"         # GitHub Copilot
-    WINDSURF = "windsurf"       # Windsurf/Codium
-    HERMES = "hermes"           # Hermes Agent
-    AIDER = "aider"             # Aider
-    OPENCODE = "opencode"       # OpenCode
-    GENERIC = "generic"         # Generic/markdown
 
 
 @dataclass
-class SkillDefinition:
+class SkillEntry:
     skill_id: str
     name: str
     description: str
-    version: str = "1.0.0"
-    author: str = ""
+    version: str
+    author: str
+    language: str
     tags: List[str] = field(default_factory=list)
-    formats: Dict[str, str] = field(default_factory=dict)  # format -> content
-    metadata: Dict[str, Any] = field(default_factory=dict)
     dependencies: List[str] = field(default_factory=list)
+    is_active: bool = True
+    stars: int = 0
+    downloads: int = 0
     created_at: str = ""
-    updated_at: str = ""
-    usage_count: int = 0
-    rating: float = 0.0
 
     def __post_init__(self):
         if not self.created_at:
             self.created_at = datetime.now().isoformat()
-        if not self.updated_at:
-            self.updated_at = self.created_at
-
-    def fingerprint(self) -> str:
-        content = json.dumps({"name": self.name, "version": self.version, "tags": sorted(self.tags)}, sort_keys=True)
-        return hashlib.sha256(content.encode()).hexdigest()[:16]
 
 
 class SkillRegistry:
-    """Central registry for portable AI agent skills."""
+    """Extensible registry for skill registration, versioning, and metadata."""
 
-    def __init__(self, registry_file: str = "skill_registry.json"):
-        self.registry_file = Path(registry_file)
-        self.skills: Dict[str, SkillDefinition] = {}
-        self.tags_index: Dict[str, Set[str]] = {}
-        self.author_index: Dict[str, Set[str]] = {}
+    def __init__(self, registry_dir: str = "./skill_registry"):
+        self.registry_dir = Path(registry_dir)
+        self.registry_dir.mkdir(exist_ok=True)
+        self.skills: Dict[str, SkillEntry] = {}
         self._load()
 
     def _load(self) -> None:
-        if self.registry_file.exists():
-            with open(self.registry_file, "r", encoding="utf-8") as f:
-                data = json.load(f)
-                for sid, sd in data.items():
-                    self.skills[sid] = SkillDefinition(**sd)
-                self._rebuild_indexes()
+        file = self.registry_dir / "skills.json"
+        if file.exists():
+            try:
+                with open(file, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                    for sid, sd in data.items():
+                        self.skills[sid] = SkillEntry(**sd)
+            except Exception:
+                pass
 
     def _save(self) -> None:
-        self.registry_file.parent.mkdir(parents=True, exist_ok=True)
-        with open(self.registry_file, "w", encoding="utf-8") as f:
+        with open(self.registry_dir / "skills.json", "w", encoding="utf-8") as f:
             json.dump({sid: asdict(s) for sid, s in self.skills.items()}, f, indent=2)
 
-    def _rebuild_indexes(self) -> None:
-        self.tags_index = {}
-        self.author_index = {}
-        for sid, skill in self.skills.items():
-            for tag in skill.tags:
-                self.tags_index.setdefault(tag, set()).add(sid)
-            if skill.author:
-                self.author_index.setdefault(skill.author, set()).add(sid)
-
-    def register(self, skill: SkillDefinition) -> bool:
-        self.skills[skill.skill_id] = skill
-        self._rebuild_indexes()
+    def register(self, skill_id: str, name: str, description: str, version: str,
+                 author: str, language: str, tags: Optional[List[str]] = None,
+                 dependencies: Optional[List[str]] = None) -> SkillEntry:
+        entry = SkillEntry(
+            skill_id=skill_id, name=name, description=description, version=version,
+            author=author, language=language, tags=tags or [], dependencies=dependencies or [],
+        )
+        self.skills[skill_id] = entry
         self._save()
-        return True
+        return entry
 
-    def unregister(self, skill_id: str) -> bool:
-        if skill_id in self.skills:
-            del self.skills[skill_id]
-            self._rebuild_indexes()
+    def update_version(self, skill_id: str, new_version: str) -> Optional[SkillEntry]:
+        skill = self.skills.get(skill_id)
+        if skill:
+            skill.version = new_version
+            self._save()
+            return skill
+        return None
+
+    def activate(self, skill_id: str) -> bool:
+        skill = self.skills.get(skill_id)
+        if skill:
+            skill.is_active = True
             self._save()
             return True
         return False
 
-    def get(self, skill_id: str) -> Optional[SkillDefinition]:
-        return self.skills.get(skill_id)
-
-    def get_format(self, skill_id: str, format: SkillFormat) -> Optional[str]:
+    def deactivate(self, skill_id: str) -> bool:
         skill = self.skills.get(skill_id)
         if skill:
-            return skill.formats.get(format.value) or skill.formats.get(SkillFormat.GENERIC.value)
-        return None
+            skill.is_active = False
+            self._save()
+            return True
+        return False
 
-    def search(self, query: str) -> List[SkillDefinition]:
-        """Search skills by name, description, tags."""
+    def get_skill(self, skill_id: str) -> Optional[SkillEntry]:
+        return self.skills.get(skill_id)
+
+    def search(self, query: str) -> List[SkillEntry]:
         q = query.lower()
-        results = []
-        for skill in self.skills.values():
-            if q in skill.name.lower() or q in skill.description.lower() or q in " ".join(skill.tags).lower():
-                results.append(skill)
-        return results
+        return [s for s in self.skills.values() if q in s.name.lower() or q in s.description.lower() or q in s.tags]
 
-    def search_by_tag(self, tag: str) -> List[SkillDefinition]:
-        sids = self.tags_index.get(tag, set())
-        return [self.skills[sid] for sid in sids if sid in self.skills]
+    def get_by_language(self, language: str) -> List[SkillEntry]:
+        return [s for s in self.skills.values() if s.language == language]
 
-    def list_by_author(self, author: str) -> List[SkillDefinition]:
-        sids = self.author_index.get(author, set())
-        return [self.skills[sid] for sid in sids if sid in self.skills]
+    def get_stats(self) -> Dict[str, Any]:
+        active = sum(1 for s in self.skills.values() if s.is_active)
+        languages = {}
+        for s in self.skills.values():
+            languages[s.language] = languages.get(s.language, 0) + 1
+        return {"total": len(self.skills), "active": active, "languages": languages}
 
-    def get_all_formats(self, skill_id: str) -> Dict[str, str]:
-        skill = self.skills.get(skill_id)
-        return skill.formats if skill else {}
-
-    def increment_usage(self, skill_id: str) -> None:
-        if skill_id in self.skills:
-            self.skills[skill_id].usage_count += 1
-            self._save()
-
-    def rate(self, skill_id: str, rating: float) -> None:
-        if skill_id in self.skills:
-            s = self.skills[skill_id]
-            # EMA rating update
-            s.rating = 0.7 * s.rating + 0.3 * rating if s.rating > 0 else rating
-            self._save()
-
-    def to_dict(self) -> Dict:
-        return {
-            "total_skills": len(self.skills),
-            "total_tags": len(self.tags_index),
-            "total_authors": len(self.author_index),
-        }
+    def to_dict(self) -> Dict[str, Any]:
+        return self.get_stats()
 
 
-__all__ = ["SkillRegistry", "SkillDefinition", "SkillFormat"]
+__all__ = ["SkillRegistry", "SkillEntry"]
