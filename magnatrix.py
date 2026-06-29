@@ -489,6 +489,14 @@ class ModuleRegistry:
         ("benchmark_engine", "core.benchmark_engine_native", "BenchmarkEngine"),
         ("human_in_loop", "core.human_in_loop_controller_native", "HumanInLoopController"),
         ("skill_scanner", "core.skill_scanner_indexer_native", "SkillScannerIndexer"),
+        ("nuclei_template_builder", "core.nuclei_template_builder_native", "NucleiTemplateBuilder"),
+        ("nuclei_template_validator", "core.nuclei_template_validator_native", "NucleiTemplateValidator"),
+        ("nuclei_matcher_engine", "core.nuclei_matcher_engine_native", "NucleiMatcherEngine"),
+        ("nuclei_extractor_engine", "core.nuclei_extractor_engine_native", "NucleiExtractorEngine"),
+        ("nuclei_template_scanner", "core.nuclei_template_scanner_native", "NucleiTemplateScanner"),
+        ("nuclei_workflow_engine", "core.nuclei_workflow_engine_native", "NucleiWorkflowEngine"),
+        ("nuclei_template_library", "core.nuclei_template_library_native", "NucleiTemplateLibrary"),
+        ("nuclei_dsl_executor", "core.nuclei_dsl_executor_native", "NucleiDSLExecutor"),
     ]
 
     def __init__(self, repo_root: str) -> None:
