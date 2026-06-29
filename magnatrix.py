@@ -593,6 +593,15 @@ class ModuleRegistry:
         ("freellm_api_key_manager", "core.freellm_api_key_manager_native", "FreellmApiKeyManager"),
         ("freellm_capability_matcher", "core.freellm_capability_matcher_native", "FreellmCapabilityMatcher"),
         ("freellm_free_tier_quota", "core.freellm_free_tier_quota_native", "FreellmFreeTierQuota"),
+        # Domain: TMax Terminal Agent Training
+        ("tmax_training_pipeline", "core.tmax_training_pipeline_native", "TmaxTrainingPipeline"),
+        ("tmax_rl_data_generator", "core.tmax_rl_data_generator_native", "TmaxRLDataGenerator"),
+        ("tmax_evaluation_suite", "core.tmax_evaluation_suite_native", "TmaxEvaluationSuite"),
+        ("tmax_task_builder", "core.tmax_task_builder_native", "TmaxTaskBuilder"),
+        ("tmax_dataset_curator", "core.tmax_dataset_curator_native", "TmaxDatasetCurator"),
+        ("tmax_training_launcher", "core.tmax_training_launcher_native", "TmaxTrainingLauncher"),
+        ("tmax_agent_rollout", "core.tmax_agent_rollout_simulator_native", "TmaxAgentRolloutSimulator"),
+        ("tmax_reward_processor", "core.tmax_reward_signal_processor_native", "TmaxRewardSignalProcessor"),
     ]
 
     def __init__(self, repo_root: str) -> None:
