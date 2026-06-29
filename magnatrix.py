@@ -455,6 +455,14 @@ class ModuleRegistry:
         ("milestone_planner", "core.milestone_planner_native", "MilestonePlanner"),
         ("implementation_guardrails", "core.implementation_guardrails_native", "ImplementationGuardrails"),
         ("ai_slop_cleaner", "core.ai_slop_cleaner_native", "AISlopCleaner"),
+        ("llm_gateway", "core.llm_gateway_native", "LLMGateway"),
+        ("free_api_key_hunter", "core.free_api_key_hunter_native", "FreeAPIKeyHunter"),
+        ("token_compression", "core.token_compression_native", "TokenCompressionEngine"),
+        ("provider_fallback", "core.provider_fallback_native", "ProviderFallbackEngine"),
+        ("mcp_a2a_bridge", "core.mcp_a2a_bridge_native", "MCPA2ABridge"),
+        ("multimodal_api", "core.multimodal_api_native", "MultimodalAPI"),
+        ("api_key_vault", "core.api_key_vault_native", "APIKeyVault"),
+        ("provider_health", "core.provider_health_monitor_native", "ProviderHealthMonitor"),
     ]
 
     def __init__(self, repo_root: str) -> None:
