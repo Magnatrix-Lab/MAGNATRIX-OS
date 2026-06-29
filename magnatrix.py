@@ -415,6 +415,14 @@ class ModuleRegistry:
         ("subagent_injector", "core.subagent_rules_injector_native", "SubagentRulesInjector"),
         ("lazy_senior_dev", "core.lazy_senior_dev_native", "LazySeniorDev"),
         ("agentic_benchmark", "core.agentic_benchmark_native", "AgenticBenchmark"),
+        ("longhorizon_task", "core.longhorizon_task_engine_native", "LongHorizonTaskEngine"),
+        ("sandbox", "core.sandbox_executor_native", "SandboxExecutor"),
+        ("agent_memory", "core.agent_memory_store_native", "AgentMemoryStore"),
+        ("subagent_orchestrator", "core.subagent_orchestrator_native", "SubagentOrchestrator"),
+        ("agentic_tools", "core.agentic_tool_registry_native", "AgenticToolRegistry"),
+        ("message_gateway", "core.message_gateway_native", "MessageGateway"),
+        ("skill_engine", "core.skill_execution_engine_native", "SkillExecutionEngine"),
+        ("agent_harness", "core.agent_harness_native", "AgentHarness"),
     ]
 
     def __init__(self, repo_root: str) -> None:
