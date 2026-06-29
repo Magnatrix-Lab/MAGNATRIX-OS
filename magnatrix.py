@@ -602,6 +602,33 @@ class ModuleRegistry:
         ("tmax_training_launcher", "core.tmax_training_launcher_native", "TmaxTrainingLauncher"),
         ("tmax_agent_rollout", "core.tmax_agent_rollout_simulator_native", "TmaxAgentRolloutSimulator"),
         ("tmax_reward_processor", "core.tmax_reward_signal_processor_native", "TmaxRewardSignalProcessor"),
+        # Domain: Blockchain
+        ("blockchain_mempool", "core.blockchain_mempool_native", "BlockchainMempool"),
+        ("blockchain_wallet", "core.blockchain_wallet_native", "BlockchainWallet"),
+        ("blockchain_tx_builder", "core.blockchain_tx_builder_native", "BlockchainTxBuilder"),
+        ("blockchain_utxo", "core.blockchain_utxo_native", "BlockchainUTXOManager"),
+        ("blockchain_block", "core.blockchain_block_native", "BlockchainBlockBuilder"),
+        ("blockchain_merkle", "core.blockchain_merkle_native", "BlockchainMerkleTree"),
+        ("blockchain_smart_contract", "core.blockchain_smart_contract_native", "BlockchainSmartContractVM"),
+        ("blockchain_gas", "core.blockchain_gas_estimator_native", "BlockchainGasEstimator"),
+        # Domain: Computer Vision
+        ("cv_classifier", "core.cv_image_classifier_native", "CVImageClassifier"),
+        ("cv_detector", "core.cv_object_detector_native", "CVObjectDetector"),
+        ("cv_edge", "core.cv_edge_detector_native", "CVEdgeDetector"),
+        ("cv_segment", "core.cv_image_segmentation_native", "CVImageSegmentation"),
+        ("cv_feature", "core.cv_feature_extractor_native", "CVFeatureExtractor"),
+        ("cv_denoise", "core.cv_image_denoiser_native", "CVImageDenoiser"),
+        ("cv_face", "core.cv_face_detector_native", "CVFaceDetector"),
+        ("cv_transform", "core.cv_image_transform_native", "CVImageTransform"),
+        # Domain: Database Engine
+        ("db_sql_parser", "core.db_sql_parser_native", "DBSQLParser"),
+        ("db_query_planner", "core.db_query_planner_native", "DBQueryPlanner"),
+        ("db_btree", "core.db_btree_index_native", "DBBTreeIndex"),
+        ("db_lsm", "core.db_lsm_tree_native", "DBLSMTree"),
+        ("db_transaction", "core.db_transaction_manager_native", "DBTransactionManager"),
+        ("db_wal", "core.db_write_ahead_log_native", "DBWriteAheadLog"),
+        ("db_mvcc", "core.db_mvcc_engine_native", "DBMVCCengine"),
+        ("db_pool", "core.db_connection_pool_native", "DBConnectionPool"),
     ]
 
     def __init__(self, repo_root: str) -> None:

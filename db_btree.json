@@ -1,0 +1,14 @@
+{
+  "nodes": {
+    "root": {
+      "node_id": "root",
+      "keys": [],
+      "values": [],
+      "children": [],
+      "leaf": true,
+      "parent": ""
+    }
+  },
+  "root_id": "root",
+  "order": 4
+}
