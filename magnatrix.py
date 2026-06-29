@@ -293,6 +293,12 @@ class ModuleRegistry:
         ("fitness", "core.fitness_evaluator_native", "FitnessEvaluator"),
         ("population", "core.population_manager_native", "PopulationManager"),
         ("adaptive_harness", "core.adaptive_harness_native", "AdaptiveHarness"),
+        ("browser_context", "core.browser_context_manager_native", "BrowserContextManager"),
+        ("browser_bridge", "core.browser_extension_bridge_native", "BrowserExtensionBridge"),
+        ("quick_cmd", "core.quick_command_processor_native", "QuickCommandProcessor"),
+        ("tab_redactor", "core.sensitive_tab_redactor_native", "SensitiveTabRedactor"),
+        ("tab_session", "core.tab_session_isolator_native", "TabSessionIsolator"),
+        ("browser_agent", "core.browser_automation_agent_native", "BrowserAutomationAgent"),
     ]
 
     def __init__(self, repo_root: str) -> None:
