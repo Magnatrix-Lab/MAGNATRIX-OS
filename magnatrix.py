@@ -497,6 +497,14 @@ class ModuleRegistry:
         ("nuclei_workflow_engine", "core.nuclei_workflow_engine_native", "NucleiWorkflowEngine"),
         ("nuclei_template_library", "core.nuclei_template_library_native", "NucleiTemplateLibrary"),
         ("nuclei_dsl_executor", "core.nuclei_dsl_executor_native", "NucleiDSLExecutor"),
+        ("triple_extractor", "core.triple_extractor_native", "TripleExtractor"),
+        ("text_chunker", "core.text_chunker_native", "TextChunker"),
+        ("entity_standardizer", "core.entity_standardizer_native", "EntityStandardizer"),
+        ("relationship_inference", "core.relationship_inference_native", "RelationshipInferenceEngine"),
+        ("knowledge_graph", "core.knowledge_graph_builder_native", "KnowledgeGraphBuilder"),
+        ("graph_visualizer", "core.graph_visualizer_native", "GraphVisualizer"),
+        ("prompt_factory", "core.prompt_factory_native", "PromptFactory"),
+        ("graph_community_detector", "core.graph_community_detector_native", "GraphCommunityDetector"),
     ]
 
     def __init__(self, repo_root: str) -> None:
