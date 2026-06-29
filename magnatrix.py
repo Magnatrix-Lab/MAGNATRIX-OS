@@ -317,6 +317,12 @@ class ModuleRegistry:
         ("kd_loss", "core.kd_loss_calculator_native", "KDLossCalculator"),
         ("proxy_aligner", "core.proxy_model_aligner_native", "ProxyModelAligner"),
         ("distill_pipeline", "core.distillation_pipeline_native", "DistillationPipelineManager"),
+        ("prompt_inject", "core.prompt_injection_detector_native", "PromptInjectionDetector"),
+        ("jailbreak", "core.jailbreak_detector_native", "JailbreakDetector"),
+        ("adversarial_scan", "core.adversarial_input_scanner_native", "AdversarialInputScanner"),
+        ("mcp_security", "core.mcp_security_auditor_native", "MCPSecurityAuditor"),
+        ("llm_security", "core.llm_security_framework_native", "LLMSecurityFramework"),
+        ("ai_pentest", "core.ai_pentest_engine_native", "AIPentestEngine"),
     ]
 
     def __init__(self, repo_root: str) -> None:
