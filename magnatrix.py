@@ -692,6 +692,15 @@ class ModuleRegistry:
         ("breakout_briefing_generator", "core.breakout_briefing_generator_native", "BreakoutBriefingGenerator"),
         ("breakout_news_analyzer", "core.breakout_news_analyzer_native", "BreakoutNewsAnalyzer"),
         ("breakout_market_scanner", "core.breakout_market_scanner_native", "BreakoutMarketScanner"),
+        # Crypto Obfuscation domain (Vitalik iO blog post)
+        ("crypto_obfuscator", "core.crypto_obfuscator_native", "CryptoObfuscator"),
+        ("crypto_indistinguishability_io", "core.crypto_indistinguishability_io_native", "CryptoIndistinguishabilityIO"),
+        ("crypto_program_encryption", "core.crypto_program_encryption_native", "CryptoProgramEncryption"),
+        ("crypto_functional_equivalence", "core.crypto_functional_equivalence_native", "CryptoFunctionalEquivalence"),
+        ("crypto_obfuscation_validator", "core.crypto_obfuscation_validator_native", "CryptoObfuscationValidator"),
+        ("crypto_obfuscation_attacker", "core.crypto_obfuscation_attacker_native", "CryptoObfuscationAttacker"),
+        ("crypto_trustless_ttp", "core.crypto_trustless_ttp_native", "CryptoTrustlessTTP"),
+        ("crypto_obfuscation_blockchain", "core.crypto_obfuscation_blockchain_native", "CryptoObfuscationBlockchain"),
     ]
 
     def __init__(self, repo_root: str) -> None:
