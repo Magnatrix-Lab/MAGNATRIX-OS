@@ -683,6 +683,15 @@ class ModuleRegistry:
         ("dlt_activation_analysis", "core.dlt_activation_analysis_native", "DLTActivationAnalysis"),
         ("dlt_gradient_flow", "core.dlt_gradient_flow_native", "DLTGradientFlow"),
         ("dlt_sobolev_approximation", "core.dlt_sobolev_approximation_native", "DLTSobolevApproximation"),
+        # Breakout Analysis domain (BreakoutAnalysis stock alerts)
+        ("breakout_detector", "core.breakout_detector_native", "BreakoutDetector"),
+        ("breakout_screener", "core.breakout_screener_native", "BreakoutScreener"),
+        ("breakout_volume_analyzer", "core.breakout_volume_analyzer_native", "BreakoutVolumeAnalyzer"),
+        ("breakout_alert_engine", "core.breakout_alert_engine_native", "BreakoutAlertEngine"),
+        ("breakout_chart_capture", "core.breakout_chart_capture_native", "BreakoutChartCapture"),
+        ("breakout_briefing_generator", "core.breakout_briefing_generator_native", "BreakoutBriefingGenerator"),
+        ("breakout_news_analyzer", "core.breakout_news_analyzer_native", "BreakoutNewsAnalyzer"),
+        ("breakout_market_scanner", "core.breakout_market_scanner_native", "BreakoutMarketScanner"),
     ]
 
     def __init__(self, repo_root: str) -> None:
