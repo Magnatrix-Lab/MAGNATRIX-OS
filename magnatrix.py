@@ -323,6 +323,12 @@ class ModuleRegistry:
         ("mcp_security", "core.mcp_security_auditor_native", "MCPSecurityAuditor"),
         ("llm_security", "core.llm_security_framework_native", "LLMSecurityFramework"),
         ("ai_pentest", "core.ai_pentest_engine_native", "AIPentestEngine"),
+        ("code_decomp", "core.code_decomposition_engine_native", "CodeDecompositionEngine"),
+        ("reachability", "core.reachability_analyzer_native", "ReachabilityAnalyzer"),
+        ("adv_verify", "core.adversarial_verification_engine_native", "AdversarialVerificationEngine"),
+        ("dyn_verify", "core.dynamic_verification_engine_native", "DynamicVerificationEngine"),
+        ("vuln_discover", "core.vulnerability_discovery_pipeline_native", "VulnerabilityDiscoveryPipeline"),
+        ("sandbox_exploit", "core.sandboxed_exploit_runner_native", "SandboxedExploitRunner"),
     ]
 
     def __init__(self, repo_root: str) -> None:
