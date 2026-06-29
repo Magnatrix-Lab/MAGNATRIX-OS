@@ -463,6 +463,14 @@ class ModuleRegistry:
         ("multimodal_api", "core.multimodal_api_native", "MultimodalAPI"),
         ("api_key_vault", "core.api_key_vault_native", "APIKeyVault"),
         ("provider_health", "core.provider_health_monitor_native", "ProviderHealthMonitor"),
+        ("exploit_archive", "core.exploit_archive_manager_native", "ExploitArchiveManager"),
+        ("cve_tracker", "core.cve_tracker_native", "CVETracker"),
+        ("vuln_fingerprinter", "core.vulnerability_fingerprinter_native", "VulnerabilityFingerprinter"),
+        ("exploit_chain", "core.exploit_chain_analyzer_native", "ExploitChainAnalyzer"),
+        ("poc_validator", "core.poc_validator_native", "PoCValidator"),
+        ("writeup_parser", "core.research_writeup_parser_native", "ResearchWriteupParser"),
+        ("exploit_classifier", "core.exploit_classifier_native", "ExploitClassifier"),
+        ("target_recon", "core.target_reconnaissance_native", "TargetReconnaissance"),
     ]
 
     def __init__(self, repo_root: str) -> None:
