@@ -513,6 +513,14 @@ class ModuleRegistry:
         ("temporal_memory", "core.temporal_memory_native", "TemporalMemory"),
         ("forgetting_decay", "core.forgetting_decay_engine_native", "ForgettingDecayEngine"),
         ("multi_agent_shared", "core.multi_agent_shared_memory_native", "MultiAgentSharedMemory"),
+        ("gjc_workflow", "core.gjc_workflow_engine_native", "GJCWorkflowEngine"),
+        ("tmux_session", "core.tmux_session_manager_native", "TmuxSessionManager"),
+        ("team_coordinator", "core.team_coordinator_native", "TeamCoordinator"),
+        ("image_input", "core.image_input_processor_native", "ImageInputProcessor"),
+        ("mobile_notification", "core.mobile_notification_bridge_native", "MobileNotificationBridge"),
+        ("role_agent_dispatcher", "core.role_agent_dispatcher_native", "RoleAgentDispatcher"),
+        ("research_repl", "core.research_repl_mode_native", "ResearchREPLMode"),
+        ("worktree_isolation", "core.worktree_isolation_manager_native", "WorktreeIsolationManager"),
     ]
 
     def __init__(self, repo_root: str) -> None:
