@@ -281,6 +281,12 @@ class ModuleRegistry:
         ("order_flow", "core.order_flow_controller_native", "OrderFlowController"),
         ("data_recorder", "core.market_data_recorder_native", "MarketDataRecorder"),
         ("loop_engine", "core.loop_engineering_engine_native", "LoopEngineeringEngine"),
+        ("android_device", "core.android_device_controller_native", "AndroidDeviceController"),
+        ("android_screen", "core.android_screen_capture_native", "AndroidScreenCapture"),
+        ("android_input", "core.android_input_simulator_native", "AndroidInputSimulator"),
+        ("android_wireless", "core.android_wireless_manager_native", "AndroidWirelessManager"),
+        ("android_camera", "core.android_camera_stream_native", "AndroidCameraStream"),
+        ("android_auto", "core.android_automation_engine_native", "AndroidAutomationEngine"),
     ]
 
     def __init__(self, repo_root: str) -> None:
