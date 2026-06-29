@@ -353,6 +353,12 @@ class ModuleRegistry:
         ("agent_sync", "core.multi_agent_memory_sync_native", "MultiAgentMemorySync"),
         ("conflict_resolve", "core.memory_conflict_resolver_native", "MemoryConflictResolver"),
         ("memory_export", "core.memory_export_sync_engine_native", "MemoryExportSyncEngine"),
+        ("copilot_agent", "core.copilot_agent_manager_native", "CopilotAgentManager"),
+        ("copilot_skill", "core.copilot_skill_manager_native", "CopilotSkillManager"),
+        ("copilot_instruction", "core.copilot_instruction_engine_native", "CopilotInstructionEngine"),
+        ("copilot_cookbook", "core.copilot_cookbook_engine_native", "CopilotCookbookEngine"),
+        ("copilot_plugin", "core.copilot_plugin_manager_native", "CopilotPluginManager"),
+        ("copilot_workflow", "core.copilot_workflow_automator_native", "CopilotWorkflowAutomator"),
     ]
 
     def __init__(self, repo_root: str) -> None:
