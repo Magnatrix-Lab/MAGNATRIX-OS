@@ -305,6 +305,12 @@ class ModuleRegistry:
         ("entity_extract", "core.entity_extractor_native", "EntityExtractor"),
         ("memory_retrieve", "core.memory_retrieval_engine_native", "MemoryRetrievalEngine"),
         ("brain_prompt", "core.brain_aware_prompt_native", "BrainAwarePromptGenerator"),
+        ("skill_registry", "core.skill_registry_native", "SkillRegistry"),
+        ("skill_translator", "core.skill_translator_native", "SkillTranslator"),
+        ("skill_marketplace", "core.skill_marketplace_native", "SkillMarketplace"),
+        ("skill_loader", "core.skill_loader_native", "SkillLoader"),
+        ("skill_validator", "core.skill_validator_native", "SkillValidator"),
+        ("skill_composer", "core.skill_composer_native", "SkillComposer"),
     ]
 
     def __init__(self, repo_root: str) -> None:
