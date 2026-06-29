@@ -335,6 +335,12 @@ class ModuleRegistry:
         ("aggregator", "core.content_aggregator_native", "ContentAggregator"),
         ("backend_router", "core.multi_backend_router_native", "MultiBackendRouter"),
         ("internet_search", "core.internet_search_engine_native", "InternetSearchEngine"),
+        ("driver_import", "core.driver_import_scanner_native", "DriverImportScanner"),
+        ("ioctl_extract", "core.ioctl_dispatch_extractor_native", "IOCTLDispatchExtractor"),
+        ("byovd_intel", "core.byovd_threat_intel_native", "BYOVDThreatIntel"),
+        ("driver_emulate", "core.driver_emulation_engine_native", "DriverEmulationEngine"),
+        ("driver_blocklist", "core.vulnerable_driver_blocklist_native", "VulnerableDriverBlocklistManager"),
+        ("byovd_hunter", "core.byovd_hunter_pipeline_native", "BYOVDHunterPipeline"),
     ]
 
     def __init__(self, repo_root: str) -> None:
