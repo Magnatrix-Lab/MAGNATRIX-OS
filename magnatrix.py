@@ -311,6 +311,12 @@ class ModuleRegistry:
         ("skill_loader", "core.skill_loader_native", "SkillLoader"),
         ("skill_validator", "core.skill_validator_native", "SkillValidator"),
         ("skill_composer", "core.skill_composer_native", "SkillComposer"),
+        ("proxy_kd", "core.proxy_kd_engine_native", "ProxyKDEngine"),
+        ("teacher_adapter", "core.blackbox_teacher_adapter_native", "BlackBoxTeacherAdapter"),
+        ("student_trainer", "core.student_trainer_native", "StudentTrainer"),
+        ("kd_loss", "core.kd_loss_calculator_native", "KDLossCalculator"),
+        ("proxy_aligner", "core.proxy_model_aligner_native", "ProxyModelAligner"),
+        ("distill_pipeline", "core.distillation_pipeline_native", "DistillationPipelineManager"),
     ]
 
     def __init__(self, repo_root: str) -> None:
