@@ -575,6 +575,15 @@ class ModuleRegistry:
         ("quant_fuser", "core.quantization_layer_fuser_native", "QuantizationLayerFuser"),
         ("quant_kv_cache", "core.quantization_kv_cache_compressor_native", "QuantizationKVCacheCompressor"),
         ("quant_exporter", "core.quantization_model_exporter_native", "QuantizationModelExporter"),
+        # Domain: Squad Multi-Agent Collaboration
+        ("squad_agent_registry", "core.squad_agent_registry_native", "SquadAgentRegistry"),
+        ("squad_message_bus", "core.squad_message_bus_native", "SquadMessageBus"),
+        ("squad_role_dispatcher", "core.squad_role_dispatcher_native", "SquadRoleDispatcher"),
+        ("squad_workspace", "core.squad_workspace_manager_native", "SquadWorkspaceManager"),
+        ("squad_slash_command", "core.squad_slash_command_native", "SquadSlashCommand"),
+        ("squad_terminal", "core.squad_terminal_coordinator_native", "SquadTerminalCoordinator"),
+        ("squad_inspector", "core.squad_inspector_native", "SquadInspector"),
+        ("squad_collaboration_log", "core.squad_collaboration_log_native", "SquadCollaborationLog"),
     ]
 
     def __init__(self, repo_root: str) -> None:
