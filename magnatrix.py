@@ -638,6 +638,15 @@ class ModuleRegistry:
         ("speech_noise_suppressor", "core.speech_noise_suppressor_native", "SpeechNoiseSuppressor"),
         ("speech_synthesis", "core.speech_synthesis_native", "SpeechSynthesis"),
         ("speech_phoneme_extractor", "core.speech_phoneme_extractor_native", "SpeechPhonemeExtractor"),
+        # Google Agents CLI domain
+        ("agents_workflow", "core.agents_workflow_native", "AgentsWorkflow"),
+        ("agents_scaffold", "core.agents_scaffold_native", "AgentsScaffold"),
+        ("agents_eval", "core.agents_eval_native", "AgentsEval"),
+        ("agents_deploy", "core.agents_deploy_native", "AgentsDeploy"),
+        ("agents_publish", "core.agents_publish_native", "AgentsPublish"),
+        ("agents_observability", "core.agents_observability_native", "AgentsObservability"),
+        ("agents_adk_builder", "core.agents_adk_builder_native", "AgentsADKBuilder"),
+        ("agents_model_selector", "core.agents_model_selector_native", "AgentsModelSelector"),
     ]
 
     def __init__(self, repo_root: str) -> None:
