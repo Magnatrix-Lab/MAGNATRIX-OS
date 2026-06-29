@@ -439,6 +439,22 @@ class ModuleRegistry:
         ("post_exploitation", "core.post_exploitation_native", "PostExploitation"),
         ("redteam_planner", "core.redteam_operation_planner_native", "RedTeamOperationPlanner"),
         ("evasion_library", "core.evasion_technique_library_native", "EvasionTechniqueLibrary"),
+        ("medical_kb", "core.medical_knowledge_base_native", "MedicalKnowledgeBase"),
+        ("clinical_reasoning", "core.clinical_reasoning_engine_native", "ClinicalReasoningEngine"),
+        ("medical_qa", "core.medical_qa_system_native", "MedicalQASystem"),
+        ("medical_text", "core.medical_text_processor_native", "MedicalTextProcessor"),
+        ("medical_guideline", "core.medical_guideline_parser_native", "MedicalGuidelineParser"),
+        ("diagnosis_assistant", "core.diagnosis_assistant_native", "DiagnosisAssistant"),
+        ("medical_benchmark", "core.medical_evaluation_benchmark_native", "MedicalEvaluationBenchmark"),
+        ("medical_model", "core.medical_model_adapter_native", "MedicalModelAdapter"),
+        ("clarification", "core.clarification_engine_native", "ClarificationEngine"),
+        ("complexity_assessor", "core.complexity_assessor_native", "ComplexityAssessor"),
+        ("plan_crafter", "core.plan_crafter_native", "PlanCrafter"),
+        ("plan_executor", "core.plan_executor_native", "PlanExecutor"),
+        ("review_validator", "core.review_validator_native", "ReviewValidator"),
+        ("milestone_planner", "core.milestone_planner_native", "MilestonePlanner"),
+        ("implementation_guardrails", "core.implementation_guardrails_native", "ImplementationGuardrails"),
+        ("ai_slop_cleaner", "core.ai_slop_cleaner_native", "AISlopCleaner"),
     ]
 
     def __init__(self, repo_root: str) -> None:
