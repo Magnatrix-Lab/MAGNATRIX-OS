@@ -674,6 +674,15 @@ class ModuleRegistry:
         ("doc_header_footer_stripper", "core.doc_header_footer_stripper_native", "DocHeaderFooterStripper"),
         ("doc_multi_column_merger", "core.doc_multi_column_merger_native", "DocMultiColumnMerger"),
         ("doc_markdown_formatter", "core.doc_markdown_formatter_native", "DocMarkdownFormatter"),
+        # Deep Learning Theory domain (Telgarsky UIUC)
+        ("dlt_approximation_theory", "core.dlt_approximation_theory_native", "DLTApproximationTheory"),
+        ("dlt_neural_tangent_kernel", "core.dlt_neural_tangent_kernel_native", "DLTNeuralTangentKernel"),
+        ("dlt_depth_analysis", "core.dlt_depth_analysis_native", "DLTDepthAnalysis"),
+        ("dlt_optimization_theory", "core.dlt_optimization_theory_native", "DLTOptimizationTheory"),
+        ("dlt_generalization_bounds", "core.dlt_generalization_bounds_native", "DLTGeneralizationBounds"),
+        ("dlt_activation_analysis", "core.dlt_activation_analysis_native", "DLTActivationAnalysis"),
+        ("dlt_gradient_flow", "core.dlt_gradient_flow_native", "DLTGradientFlow"),
+        ("dlt_sobolev_approximation", "core.dlt_sobolev_approximation_native", "DLTSobolevApproximation"),
     ]
 
     def __init__(self, repo_root: str) -> None:
