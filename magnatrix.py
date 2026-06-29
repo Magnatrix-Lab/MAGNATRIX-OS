@@ -656,6 +656,15 @@ class ModuleRegistry:
         ("quant_risk_metrics", "core.quant_risk_metrics_native", "QuantRiskMetrics"),
         ("quant_fixed_income_portfolio", "core.quant_fixed_income_portfolio_native", "QuantFixedIncomePortfolio"),
         ("quant_arbitrage_detector", "core.quant_arbitrage_detector_native", "QuantArbitrageDetector"),
+        # Proxy & Network domain (Proxifly free-proxy-list)
+        ("proxy_validator", "core.proxy_validator_native", "ProxyValidator"),
+        ("proxy_rotator", "core.proxy_rotator_native", "ProxyRotator"),
+        ("proxy_scraper", "core.proxy_scraper_native", "ProxyScraper"),
+        ("proxy_latency_tester", "core.proxy_latency_tester_native", "ProxyLatencyTester"),
+        ("proxy_country_filter", "core.proxy_country_filter_native", "ProxyCountryFilter"),
+        ("proxy_anonymity_checker", "core.proxy_anonymity_checker_native", "ProxyAnonymityChecker"),
+        ("proxy_pool_manager", "core.proxy_pool_manager_native", "ProxyPoolManager"),
+        ("proxy_protocol_router", "core.proxy_protocol_router_native", "ProxyProtocolRouter"),
     ]
 
     def __init__(self, repo_root: str) -> None:
