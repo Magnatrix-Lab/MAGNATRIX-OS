@@ -665,6 +665,15 @@ class ModuleRegistry:
         ("proxy_anonymity_checker", "core.proxy_anonymity_checker_native", "ProxyAnonymityChecker"),
         ("proxy_pool_manager", "core.proxy_pool_manager_native", "ProxyPoolManager"),
         ("proxy_protocol_router", "core.proxy_protocol_router_native", "ProxyProtocolRouter"),
+        # OLMoCR Document Processing domain
+        ("doc_pdf_extractor", "core.doc_pdf_extractor_native", "DocPDFExtractor"),
+        ("doc_page_linearizer", "core.doc_page_linearizer_native", "DocPageLinearizer"),
+        ("doc_table_parser", "core.doc_table_parser_native", "DocTableParser"),
+        ("doc_equation_parser", "core.doc_equation_parser_native", "DocEquationParser"),
+        ("doc_image_ocr", "core.doc_image_ocr_native", "DocImageOCR"),
+        ("doc_header_footer_stripper", "core.doc_header_footer_stripper_native", "DocHeaderFooterStripper"),
+        ("doc_multi_column_merger", "core.doc_multi_column_merger_native", "DocMultiColumnMerger"),
+        ("doc_markdown_formatter", "core.doc_markdown_formatter_native", "DocMarkdownFormatter"),
     ]
 
     def __init__(self, repo_root: str) -> None:
