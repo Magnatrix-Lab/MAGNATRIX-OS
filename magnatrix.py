@@ -375,6 +375,14 @@ class ModuleRegistry:
         ("bayesian_game", "core.bayesian_game_solver_native", "BayesianGameSolver"),
         ("cooperative_game", "core.cooperative_game_native", "CooperativeGame"),
         ("evolutionary_game", "core.evolutionary_game_theory_native", "EvolutionaryGameTheory"),
+        ("kv_cache", "core.kv_cache_manager_native", "KVCacheManager"),
+        ("attention_scorer", "core.attention_scorer_native", "AttentionScorer"),
+        ("cache_eviction", "core.cache_eviction_engine_native", "CacheEvictionEngine"),
+        ("cache_quantization", "core.cache_quantization_engine_native", "CacheQuantizationEngine"),
+        ("rate_distortion", "core.rate_distortion_allocator_native", "RateDistortionAllocator"),
+        ("water_filling", "core.water_filling_optimizer_native", "WaterFillingOptimizer"),
+        ("packed_decode", "core.packed_decode_layout_native", "PackedDecodeLayout"),
+        ("inference_optimizer", "core.inference_memory_optimizer_native", "InferenceMemoryOptimizer"),
     ]
 
     def __init__(self, repo_root: str) -> None:
