@@ -629,6 +629,15 @@ class ModuleRegistry:
         ("db_wal", "core.db_write_ahead_log_native", "DBWriteAheadLog"),
         ("db_mvcc", "core.db_mvcc_engine_native", "DBMVCCengine"),
         ("db_pool", "core.db_connection_pool_native", "DBConnectionPool"),
+        # Voice & Speech domain
+        ("speech_tts", "core.speech_tts_engine_native", "SpeechTTSEngine"),
+        ("speech_asr", "core.speech_asr_engine_native", "SpeechASREngine"),
+        ("speech_vad", "core.speech_vad_native", "SpeechVAD"),
+        ("speech_diarization", "core.speech_diarization_native", "SpeechDiarization"),
+        ("speech_fingerprinting", "core.speech_fingerprinting_native", "SpeechFingerprinting"),
+        ("speech_noise_suppressor", "core.speech_noise_suppressor_native", "SpeechNoiseSuppressor"),
+        ("speech_synthesis", "core.speech_synthesis_native", "SpeechSynthesis"),
+        ("speech_phoneme_extractor", "core.speech_phoneme_extractor_native", "SpeechPhonemeExtractor"),
     ]
 
     def __init__(self, repo_root: str) -> None:
