@@ -287,6 +287,12 @@ class ModuleRegistry:
         ("android_wireless", "core.android_wireless_manager_native", "AndroidWirelessManager"),
         ("android_camera", "core.android_camera_stream_native", "AndroidCameraStream"),
         ("android_auto", "core.android_automation_engine_native", "AndroidAutomationEngine"),
+        ("agent_evolve", "core.agent_evolution_engine_native", "AgentEvolutionEngine"),
+        ("benchmark", "core.benchmark_harness_native", "BenchmarkHarness"),
+        ("mutation", "core.mutation_engine_native", "MutationEngine"),
+        ("fitness", "core.fitness_evaluator_native", "FitnessEvaluator"),
+        ("population", "core.population_manager_native", "PopulationManager"),
+        ("adaptive_harness", "core.adaptive_harness_native", "AdaptiveHarness"),
     ]
 
     def __init__(self, repo_root: str) -> None:
