@@ -347,6 +347,12 @@ class ModuleRegistry:
         ("c2_detect", "core.c2_communications_detector_native", "C2CommunicationsDetector"),
         ("coff_analyze", "core.coff_layout_analyzer_native", "COFFLayoutAnalyzer"),
         ("mythic_detect", "core.mythic_framework_detector_native", "MythicFrameworkDetector"),
+        ("semantic_memory", "core.typed_semantic_memory_native", "TypedSemanticMemoryStore"),
+        ("temporal_query", "core.temporal_memory_query_native", "TemporalMemoryQueryEngine"),
+        ("provenance", "core.memory_provenance_tracker_native", "MemoryProvenanceTracker"),
+        ("agent_sync", "core.multi_agent_memory_sync_native", "MultiAgentMemorySync"),
+        ("conflict_resolve", "core.memory_conflict_resolver_native", "MemoryConflictResolver"),
+        ("memory_export", "core.memory_export_sync_engine_native", "MemoryExportSyncEngine"),
     ]
 
     def __init__(self, repo_root: str) -> None:
