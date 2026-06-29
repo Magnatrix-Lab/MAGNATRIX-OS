@@ -647,6 +647,15 @@ class ModuleRegistry:
         ("agents_observability", "core.agents_observability_native", "AgentsObservability"),
         ("agents_adk_builder", "core.agents_adk_builder_native", "AgentsADKBuilder"),
         ("agents_model_selector", "core.agents_model_selector_native", "AgentsModelSelector"),
+        # Quant Finance domain (arXiv 2606.26815)
+        ("quant_yield_forecaster", "core.quant_yield_curve_forecaster_native", "QuantYieldCurveForecaster"),
+        ("quant_pca_factors", "core.quant_pca_factor_extractor_native", "QuantPCAFactorExtractor"),
+        ("quant_autoencoder_macro", "core.quant_autoencoder_macro_native", "QuantAutoencoderMacro"),
+        ("quant_bond_trading", "core.quant_bond_trading_strategy_native", "QuantBondTradingStrategy"),
+        ("quant_duration_manager", "core.quant_duration_manager_native", "QuantDurationManager"),
+        ("quant_risk_metrics", "core.quant_risk_metrics_native", "QuantRiskMetrics"),
+        ("quant_fixed_income_portfolio", "core.quant_fixed_income_portfolio_native", "QuantFixedIncomePortfolio"),
+        ("quant_arbitrage_detector", "core.quant_arbitrage_detector_native", "QuantArbitrageDetector"),
     ]
 
     def __init__(self, repo_root: str) -> None:
