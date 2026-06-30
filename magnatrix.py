@@ -701,6 +701,11 @@ class ModuleRegistry:
         ("crypto_obfuscation_attacker", "core.crypto_obfuscation_attacker_native", "CryptoObfuscationAttacker"),
         ("crypto_trustless_ttp", "core.crypto_trustless_ttp_native", "CryptoTrustlessTTP"),
         ("crypto_obfuscation_blockchain", "core.crypto_obfuscation_blockchain_native", "CryptoObfuscationBlockchain"),
+        # New modules: Memory, Messaging, Scheduler, Metrics (Build Sprint 2026-07-01)
+        ("vector_memory", "core.vector_memory_native", "VectorMemoryNative"),
+        ("agent_messaging", "core.agent_messaging_native", "AgentMessagingNative"),
+        ("task_scheduler", "core.task_scheduler_native", "TaskSchedulerNative"),
+        ("metrics_collector", "core.metrics_collector_native", "MetricsCollectorNative"),
     ]
 
     def __init__(self, repo_root: str) -> None:
@@ -733,6 +738,8 @@ class ModuleRegistry:
                     sig_args["root"] = str(self.root)
                 if "store_dir" in sig.parameters:
                     sig_args["store_dir"] = str(self.root / "data" / name)
+                if "workspace" in sig.parameters:
+                    sig_args["workspace"] = str(self.root)
             except Exception:
                 pass
             instance = cls(**sig_args) if sig_args else cls()
