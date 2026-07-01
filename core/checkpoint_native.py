@@ -4,7 +4,7 @@ from __future__ import annotations
 import json, shutil, threading, time, uuid
 from dataclasses import dataclass, field, asdict
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Callable
+from typing import Any, Dict, List, Optional
 
 @dataclass
 class Checkpoint:
@@ -133,7 +133,7 @@ class CheckpointNative:
         return CheckpointContext(self, source_path, operation)
 
 class CheckpointContext:
-    def __init__(self, cp: CheckpointNative, source_path: str, operation: str) -> None:
+    def __init__(self, cp: "CheckpointNative", source_path: str, operation: str) -> None:
         self.cp = cp; self.source_path = source_path; self.operation = operation; self.checkpoint_id: Optional[str] = None
     def __enter__(self) -> "CheckpointContext":
         self.checkpoint_id = self.cp.auto_snapshot(self.source_path, self.operation); return self
