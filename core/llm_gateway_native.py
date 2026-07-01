@@ -1,122 +1,139 @@
-"""
-llm_gateway_native.py
-MAGNATRIX-OS — LLM Gateway
-
-Inspired by OmniRoute: One endpoint, 160+ providers, smart routing. Pure stdlib.
-"""
-
-import json
-from pathlib import Path
-from typing import Dict, List, Optional, Any
+#!/usr/bin/env python3
+"""llm_gateway_native.py — MAGNATRIX-OS Unified LLM Provider Abstraction"""
+from __future__ import annotations
+import json, random, threading, time, urllib.error, urllib.request
 from dataclasses import dataclass, field, asdict
-from datetime import datetime
-
+from pathlib import Path
+from typing import Any, Dict, List, Optional
 
 @dataclass
-class ProviderConfig:
-    provider_id: str
-    name: str
-    base_url: str
-    models: List[str]
-    is_free: bool
-    rate_limit_rpm: int
-    api_key_required: bool
-    is_active: bool = True
+class LLMProvider:
+    name: str; base_url: str; api_key: str; model_map: Dict[str, str] = field(default_factory=dict)
+    headers: Dict[str, str] = field(default_factory=lambda:{"Content-Type":"application/json"})
+    timeout: float = 30.0; cost_per_1k: float = 0.0; speed_score: float = 5.0
+    quality_score: float = 5.0; enabled: bool = True; last_error: float = 0.0
+    error_count: int = 0; max_errors: int = 5; cooldown: float = 60.0
 
+@dataclass
+class LLMRequest:
+    model: str; messages: List[Dict[str, str]]; temperature: float = 0.7
+    max_tokens: int = 1024; top_p: float = 1.0; stream: bool = False
+    extra: Dict[str, Any] = field(default_factory=dict)
 
-class LLMGateway:
-    """Multi-provider LLM gateway with unified routing."""
+@dataclass
+class LLMResponse:
+    text: str; model: str; provider: str; usage: Dict[str, int] = field(default_factory=dict)
+    latency: float = 0.0; finish_reason: str = "stop"; raw: Optional[Dict[str, Any]] = None
 
-    BUILT_IN_PROVIDERS = {
-        "openai": {"name": "OpenAI", "base_url": "https://api.openai.com/v1", "models": ["gpt-4o", "gpt-4o-mini"], "is_free": False, "rate_limit_rpm": 60, "api_key_required": True},
-        "anthropic": {"name": "Anthropic", "base_url": "https://api.anthropic.com", "models": ["claude-3-5-sonnet", "claude-3-haiku"], "is_free": False, "rate_limit_rpm": 40, "api_key_required": True},
-        "google": {"name": "Google Gemini", "base_url": "https://generativelanguage.googleapis.com", "models": ["gemini-1.5-pro", "gemini-1.5-flash"], "is_free": True, "rate_limit_rpm": 60, "api_key_required": True},
-        "groq": {"name": "Groq", "base_url": "https://api.groq.com", "models": ["llama-3.1-70b", "mixtral-8x7b"], "is_free": True, "rate_limit_rpm": 30, "api_key_required": True},
-        "mistral": {"name": "Mistral", "base_url": "https://api.mistral.ai", "models": ["mistral-large", "mistral-medium"], "is_free": True, "rate_limit_rpm": 30, "api_key_required": True},
-        "deepseek": {"name": "DeepSeek", "base_url": "https://api.deepseek.com", "models": ["deepseek-chat", "deepseek-coder"], "is_free": True, "rate_limit_rpm": 30, "api_key_required": True},
-        "openrouter": {"name": "OpenRouter", "base_url": "https://openrouter.ai/api/v1", "models": ["*"], "is_free": True, "rate_limit_rpm": 20, "api_key_required": True},
-        "huggingface": {"name": "Hugging Face", "base_url": "https://api-inference.huggingface.co", "models": ["*"], "is_free": True, "rate_limit_rpm": 20, "api_key_required": True},
-    }
-
-    def __init__(self, cache_dir: str = "./llm_gateway"):
-        self.cache_dir = Path(cache_dir)
-        self.cache_dir.mkdir(exist_ok=True)
-        self.providers: Dict[str, ProviderConfig] = {}
-        self.request_log: List[Dict[str, Any]] = []
-        self._load()
-        self._init_builtin()
-
-    def _init_builtin(self) -> None:
-        for pid, info in self.BUILT_IN_PROVIDERS.items():
-            if pid not in self.providers:
-                self.providers[pid] = ProviderConfig(provider_id=pid, **info)
+class LLMGatewayNative:
+    def __init__(self, workspace: str = "./llm_gateway") -> None:
+        self.workspace = Path(workspace); self.workspace.mkdir(parents=True, exist_ok=True)
+        self._providers: Dict[str, LLMProvider] = {}; self._lock = threading.RLock()
+        self._config_path = self.workspace / "providers.json"; self._load()
 
     def _load(self) -> None:
-        file = self.cache_dir / "providers.json"
-        if file.exists():
+        if self._config_path.exists():
             try:
-                with open(file, "r", encoding="utf-8") as f:
+                with open(self._config_path, "r", encoding="utf-8") as f:
                     data = json.load(f)
-                    for pid, pd in data.items():
-                        self.providers[pid] = ProviderConfig(**pd)
-            except Exception:
-                pass
-        log = self.cache_dir / "log.json"
-        if log.exists():
-            try:
-                with open(log, "r", encoding="utf-8") as f:
-                    self.request_log = json.load(f)
-            except Exception:
-                pass
+                for name, pd in data.items(): self._providers[name] = LLMProvider(**pd)
+            except Exception: pass
 
     def _save(self) -> None:
-        with open(self.cache_dir / "providers.json", "w", encoding="utf-8") as f:
-            json.dump({pid: asdict(p) for pid, p in self.providers.items()}, f, indent=2)
-        with open(self.cache_dir / "log.json", "w", encoding="utf-8") as f:
-            json.dump(self.request_log, f, indent=2)
+        with open(self._config_path, "w", encoding="utf-8") as f:
+            json.dump({name: asdict(p) for name, p in self._providers.items()}, f, indent=2, default=str)
 
-    def add_provider(self, provider_id: str, name: str, base_url: str, models: List[str],
-                     is_free: bool, rate_limit_rpm: int, api_key_required: bool) -> ProviderConfig:
-        p = ProviderConfig(
-            provider_id=provider_id, name=name, base_url=base_url, models=models,
-            is_free=is_free, rate_limit_rpm=rate_limit_rpm, api_key_required=api_key_required,
-        )
-        self.providers[provider_id] = p
-        self._save()
-        return p
+    def register_provider(self, name, base_url, api_key, model_map=None, headers=None, cost_per_1k=0.0, speed_score=5.0, quality_score=5.0, timeout=30.0):
+        with self._lock:
+            self._providers[name] = LLMProvider(name=name, base_url=base_url.rstrip("/"), api_key=api_key, model_map=model_map or {}, headers=headers or {"Content-Type":"application/json"}, cost_per_1k=cost_per_1k, speed_score=speed_score, quality_score=quality_score, timeout=timeout)
+            self._save()
 
-    def route(self, model: str, prefer_free: bool = True) -> Optional[ProviderConfig]:
-        """Route a request to the best provider for a model."""
-        candidates = []
-        for p in self.providers.values():
-            if not p.is_active:
-                continue
-            if model in p.models or "*" in p.models:
-                if prefer_free and p.is_free:
-                    candidates.append(p)
-                elif not prefer_free:
-                    candidates.append(p)
-        if not candidates and prefer_free:
-            # Fallback to any provider
-            for p in self.providers.values():
-                if p.is_active and (model in p.models or "*" in p.models):
-                    candidates.append(p)
-        if not candidates:
-            return None
-        # Sort by rate limit (higher = better)
-        candidates.sort(key=lambda x: x.rate_limit_rpm, reverse=True)
-        return candidates[0]
+    def remove_provider(self, name: str) -> bool:
+        with self._lock:
+            if name in self._providers: del self._providers[name]; self._save(); return True
+            return False
 
-    def get_free_providers(self) -> List[ProviderConfig]:
-        return [p for p in self.providers.values() if p.is_free and p.is_active]
+    def list_providers(self) -> List[str]:
+        with self._lock: return [n for n, p in self._providers.items() if p.enabled]
 
-    def get_stats(self) -> Dict[str, Any]:
-        free = sum(1 for p in self.providers.values() if p.is_free)
-        active = sum(1 for p in self.providers.values() if p.is_active)
-        return {"total": len(self.providers), "free": free, "active": active, "paid": len(self.providers) - free}
+    def _is_available(self, provider: LLMProvider) -> bool:
+        if not provider.enabled: return False
+        if provider.error_count >= provider.max_errors:
+            if time.time() - provider.last_error < provider.cooldown: return False
+            provider.error_count = 0
+        return True
 
-    def to_dict(self) -> Dict[str, Any]:
-        return self.get_stats()
+    def _select_provider(self, model, priority="balanced", preferred=None):
+        with self._lock:
+            candidates = []
+            for name, prov in self._providers.items():
+                if not self._is_available(prov): continue
+                supported = [model] + list(prov.model_map.keys())
+                if model not in supported and not prov.model_map: continue
+                candidates.append(prov)
+            if not candidates: return None
+            if preferred:
+                pref = [p for p in candidates if p.name in preferred]
+                if pref: candidates = pref
+            if priority == "cost": candidates.sort(key=lambda p: p.cost_per_1k)
+            elif priority == "speed": candidates.sort(key=lambda p: -p.speed_score)
+            elif priority == "quality": candidates.sort(key=lambda p: -p.quality_score)
+            else:
+                random.shuffle(candidates)
+                candidates.sort(key=lambda p: (p.quality_score + p.speed_score) / (1 + p.cost_per_1k), reverse=True)
+            return candidates[0] if candidates else None
 
+    def _normalize_request(self, req: LLMRequest, provider: LLMProvider):
+        mapped = provider.model_map.get(req.model, req.model)
+        payload = {"model": mapped, "messages": req.messages, "temperature": req.temperature, "max_tokens": req.max_tokens, "top_p": req.top_p, "stream": req.stream}
+        if "anthropic" in provider.base_url.lower() or "claude" in provider.name.lower():
+            payload = {"model": mapped, "messages": req.messages, "max_tokens": req.max_tokens, "temperature": req.temperature, "top_p": req.top_p, "stream": req.stream}
+        return payload
 
-__all__ = ["LLMGateway", "ProviderConfig"]
+    def _parse_response(self, raw: Dict[str, Any], provider: LLMProvider):
+        text = ""
+        if "choices" in raw: text = raw["choices"][0].get("message", {}).get("content", "")
+        elif "content" in raw:
+            if isinstance(raw["content"], list): text = "".join(b.get("text", "") for b in raw["content"] if b.get("type") == "text")
+            else: text = raw["content"]
+        elif "candidates" in raw: text = raw["candidates"][0].get("content", {}).get("parts", [{}])[0].get("text", "")
+        usage = raw.get("usage", {})
+        if isinstance(usage, dict): usage = {"prompt_tokens": usage.get("prompt_tokens", 0), "completion_tokens": usage.get("completion_tokens", 0), "total_tokens": usage.get("total_tokens", 0)}
+        return LLMResponse(text=text, model=raw.get("model", "unknown"), provider=provider.name, usage=usage, finish_reason=raw.get("choices", [{}])[0].get("finish_reason", "stop") if "choices" in raw else "stop", raw=raw)
+
+    def _http_post(self, url, payload, headers, timeout):
+        data = json.dumps(payload).encode("utf-8")
+        req = urllib.request.Request(url, data=data, headers=headers, method="POST")
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            return json.loads(resp.read().decode("utf-8"))
+
+    def chat(self, model, messages, temperature=0.7, max_tokens=1024, top_p=1.0, priority="balanced", preferred=None, max_retries=3):
+        req = LLMRequest(model=model, messages=messages, temperature=temperature, max_tokens=max_tokens, top_p=top_p)
+        last_error = None
+        for attempt in range(max_retries):
+            provider = self._select_provider(model, priority=priority, preferred=preferred)
+            if provider is None: raise RuntimeError("No available LLM providers for model: " + model)
+            start = time.time()
+            try:
+                payload = self._normalize_request(req, provider)
+                headers = dict(provider.headers); headers["Authorization"] = f"Bearer {provider.api_key}"
+                url = f"{provider.base_url}/v1/chat/completions"
+                raw = self._http_post(url, payload, headers, provider.timeout)
+                resp = self._parse_response(raw, provider); resp.latency = time.time() - start
+                return resp
+            except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError) as e:
+                last_error = e
+                with self._lock: provider.error_count += 1; provider.last_error = time.time(); self._save()
+                time.sleep(1.0 * (attempt + 1)); continue
+            except Exception as e: last_error = e; break
+        raise RuntimeError(f"LLM request failed after {max_retries} attempts: {last_error}")
+
+    def quick_chat(self, model, prompt, **kwargs): return self.chat(model=model, messages=[{"role": "user", "content": prompt}], **kwargs).text
+
+    def health_check(self):
+        with self._lock:
+            return {name: {"enabled": p.enabled, "available": self._is_available(p), "errors": p.error_count, "last_error": p.last_error, "cost": p.cost_per_1k, "speed": p.speed_score, "quality": p.quality_score} for name, p in self._providers.items()}
+
+if __name__ == "__main__":
+    gw = LLMGatewayNative()
+    print("LLM Gateway initialized. Providers:", gw.list_providers())
